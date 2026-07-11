@@ -9,7 +9,7 @@ export default async function SettingsPage() {
   const supabase = await createClient()
   const { data: settings } = await supabase
     .from("tenant_settings")
-    .select("currency, timezone, service_charge, packaging_fee, tax_rules, receipt_template")
+    .select("currency, timezone, service_charge, packaging_fee, tax_rules, receipt_template, block_negative_stock")
     .eq("tenant_id", tenant.tenantId)
     .maybeSingle()
 
@@ -43,6 +43,7 @@ export default async function SettingsPage() {
           footer: receipt.footer ?? "",
           terms: receipt.terms ?? "",
         }}
+        blockNegativeStock={Boolean(settings?.block_negative_stock)}
       />
     </PageShell>
   )

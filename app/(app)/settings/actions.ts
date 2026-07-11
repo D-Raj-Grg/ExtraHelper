@@ -52,6 +52,8 @@ export async function updateSettings(
     terms: String(formData.get("receiptTerms") ?? "").trim(),
   }
 
+  const blockNegativeStock = formData.get("blockNegativeStock") === "on"
+
   const supabase = await createClient()
   const { error } = await supabase
     .from("tenant_settings")
@@ -62,6 +64,7 @@ export async function updateSettings(
       packaging_fee: packagingFee,
       tax_rules: taxRules,
       receipt_template: receiptTemplate,
+      block_negative_stock: blockNegativeStock,
     })
     .eq("tenant_id", tenant.tenantId)
   if (error) return { error: error.message }

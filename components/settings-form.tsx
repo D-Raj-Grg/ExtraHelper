@@ -34,6 +34,7 @@ export function SettingsForm({
   packagingFee,
   taxRules,
   receipt,
+  blockNegativeStock,
 }: {
   currency: string
   timezone: string
@@ -41,6 +42,7 @@ export function SettingsForm({
   packagingFee: number
   taxRules: TaxRule[]
   receipt: { header: string; footer: string; terms: string }
+  blockNegativeStock: boolean
 }) {
   const [state, formAction, pending] = useActionState<SettingsState, FormData>(
     updateSettings,
@@ -194,6 +196,17 @@ export function SettingsForm({
             placeholder="No refunds on food. Prices incl. taxes where applicable."
             className={textareaClass}
           />
+        </Field>
+
+        <Field>
+          <label className="flex items-center gap-2 text-sm font-medium">
+            <input type="checkbox" name="blockNegativeStock" defaultChecked={blockNegativeStock} />
+            Block sales below zero stock
+          </label>
+          <FieldDescription>
+            When on, firing an item whose ingredients would go negative is rejected. Off by default —
+            negatives are allowed and flagged as “oversold”.
+          </FieldDescription>
         </Field>
 
         {state && "error" in state ? (
