@@ -4,6 +4,7 @@ import { requireRole } from "@/lib/supabase/guards"
 import { startOrder } from "@/app/(app)/pos/actions"
 import { Button } from "@/components/ui/button"
 import { PageShell, PageHeader } from "@/components/page-header"
+import { RealtimeRefresh } from "@/components/realtime-refresh"
 
 export const dynamic = "force-dynamic"
 
@@ -34,6 +35,7 @@ export default async function PosPage() {
 
   return (
     <PageShell>
+      <RealtimeRefresh channel="pos" tenantId={tenant.tenantId} tables={["orders", "order_items"]} />
       <PageHeader
         title={<>{tenant.name} · POS</>}
         description="Start an order, then fire to the kitchen."

@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server"
 import { requireRole } from "@/lib/supabase/guards"
 import { TablesManager } from "@/components/tables-manager"
 import { PageShell, PageHeader } from "@/components/page-header"
+import { RealtimeRefresh } from "@/components/realtime-refresh"
 
 export default async function TablesPage() {
   const tenant = await requireRole("owner", "manager", "receptionist")
@@ -18,6 +19,7 @@ export default async function TablesPage() {
 
   return (
     <PageShell>
+      <RealtimeRefresh channel="tables" tenantId={tenant.tenantId} tables={["restaurant_tables"]} />
       <PageHeader
         title={<>{tenant.name} · Floors &amp; Tables</>}
         description="Floors, tables, live states and dine-in QR tokens."
