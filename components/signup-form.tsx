@@ -1,9 +1,9 @@
 "use client"
 
-import { useActionState } from "react"
+import { useActionState, useState, useTransition } from "react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
-import { signup, type AuthState } from "@/app/auth/actions"
+import { resendConfirmation, signup, type AuthState } from "@/app/auth/actions"
 import { Button } from "@/components/ui/button"
 import {
   Field,
@@ -24,21 +24,7 @@ export function SignupForm({
   )
 
   if (state && "confirm" in state) {
-    return (
-      <div className={cn("flex flex-col items-center gap-4 text-center", className)} {...props}>
-        <div className="flex size-10 items-center justify-center rounded-full bg-primary/10">
-          <UtensilsCrossedIcon className="size-6" />
-        </div>
-        <h1 className="text-xl font-bold">Check your email</h1>
-        <p className="text-sm text-muted-foreground">
-          We sent a confirmation link to <span className="font-medium">{state.confirm}</span>.
-          Click it to activate your account, then sign in.
-        </p>
-        <Button nativeButton={false} render={<Link href="/login" />}>
-          Back to sign in
-        </Button>
-      </div>
-    )
+    return <ConfirmScreen email={state.confirm} className={className} {...props} />
   }
 
   return (
@@ -103,6 +89,49 @@ export function SignupForm({
         By creating an account, you agree to our{" "}
         <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a>.
       </FieldDescription>
+    </div>
+  )
+}
+
+function ConfirmScreen({
+  email,
+  className,
+  ...props
+}: React.ComponentProps<"div"> & { email: string }) {
+  const [pending, startTransition] = useTransition()
+  const [note, setNote] = useState<string | null>(null)
+
+  function resend() {
+    setNote(null)
+    startTransition(async () => {
+      const res = await resendConfirmation(email)
+      setNote(res && "error" in res ? res.error : "Sent — check your inbox again.")
+    })
+  }
+
+  return (
+    <div className={cn("flex flex-col items-center gap-4 text-center", className)} {...props}>
+      <div className="flex size-10 items-center justify-center rounded-full bg-primary/10">
+        <UtensilsCrossedIcon className="size-6" />
+      </div>
+      <h1 className="text-xl font-bold">Check your email</h1>
+      <p className="text-sm text-muted-foreground">
+        We sent a confirmation link to <span className="font-medium">{email}</span>. Click it to
+        activate your account, then sign in.
+      </p>
+      {note ? (
+        <p className="text-sm text-muted-foreground" role="status">
+          {note}
+        </p>
+      ) : null}
+      <div className="flex flex-col gap-2">
+        <Button variant="outline" disabled={pending} onClick={resend}>
+          {pending ? "Resending…" : "Resend confirmation email"}
+        </Button>
+        <Button nativeButton={false} render={<Link href="/login" />}>
+          Back to sign in
+        </Button>
+      </div>
     </div>
   )
 }

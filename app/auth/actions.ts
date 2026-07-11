@@ -70,6 +70,24 @@ export async function signup(
   redirect("/")
 }
 
+/** Resend the signup confirmation email. */
+export async function resendConfirmation(email: string): Promise<AuthState> {
+  const clean = email.trim()
+  if (!clean) return { error: "Email is required." }
+
+  const origin = (await headers()).get("origin") ?? ""
+  const supabase = await createClient()
+  const { error } = await supabase.auth.resend({
+    type: "signup",
+    email: clean,
+    options: {
+      emailRedirectTo: origin ? `${origin}/auth/confirm?next=/` : undefined,
+    },
+  })
+  if (error) return { error: error.message }
+  return { confirm: clean }
+}
+
 export async function logout() {
   const supabase = await createClient()
   await supabase.auth.signOut()

@@ -26,7 +26,7 @@ export default async function KdsPage() {
           Live tickets · bump when ready. Refresh reflects new fires.
         </p>
       </div>
-      <KdsBoard kots={(kots ?? []) as never} />
+      <KdsBoard kots={(kots ?? []) as never} tenantId={tenant.tenantId} />
     </div>
   )
 }

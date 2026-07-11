@@ -44,7 +44,8 @@ function InventoryRow({ item, currency }: { item: Item; currency: string }) {
   const [pending, startTransition] = useTransition()
   const [delta, setDelta] = useState("")
   const [type, setType] = useState<"purchase" | "wastage" | "adjustment">("purchase")
-  const low = Number(item.current_qty) <= Number(item.reorder_level)
+  const oversold = Number(item.current_qty) < 0
+  const low = !oversold && Number(item.current_qty) <= Number(item.reorder_level)
 
   function apply() {
     const raw = Number(delta)
@@ -62,14 +63,26 @@ function InventoryRow({ item, currency }: { item: Item; currency: string }) {
     <tr className="border-t">
       <td className="px-3 py-2 font-medium">
         {item.name}
-        {low ? (
-          <span className="ml-2 rounded bg-red-500/10 px-1.5 py-0.5 text-xs text-red-600 dark:text-red-400">
+        {oversold ? (
+          <span className="ml-2 rounded bg-red-600/15 px-1.5 py-0.5 text-xs font-medium text-red-700 dark:text-red-400">
+            oversold
+          </span>
+        ) : low ? (
+          <span className="ml-2 rounded bg-amber-500/10 px-1.5 py-0.5 text-xs text-amber-600 dark:text-amber-400">
             low stock
           </span>
         ) : null}
       </td>
       <td className="px-3 py-2 text-muted-foreground">{item.uom}</td>
-      <td className={`px-3 py-2 font-medium ${low ? "text-red-600 dark:text-red-400" : ""}`}>
+      <td
+        className={`px-3 py-2 font-medium ${
+          oversold
+            ? "text-red-700 dark:text-red-400"
+            : low
+              ? "text-amber-600 dark:text-amber-400"
+              : ""
+        }`}
+      >
         {Number(item.current_qty)}
       </td>
       <td className="px-3 py-2 text-muted-foreground">{Number(item.reorder_level)}</td>
@@ -121,14 +134,21 @@ export function InventoryManager({
     addRecipe,
     undefined,
   )
+  const oversoldCount = items.filter((i) => Number(i.current_qty) < 0).length
   const lowCount = items.filter(
-    (i) => Number(i.current_qty) <= Number(i.reorder_level),
+    (i) => Number(i.current_qty) >= 0 && Number(i.current_qty) <= Number(i.reorder_level),
   ).length
 
   return (
     <div className="flex flex-col gap-8">
+      {oversoldCount > 0 ? (
+        <div className="rounded-lg border border-red-600/40 bg-red-600/10 p-3 text-sm font-medium text-red-700 dark:text-red-400">
+          {oversoldCount} item{oversoldCount === 1 ? "" : "s"} oversold (negative stock) — sales
+          exceeded counted stock. Reconcile with a stock count or receive a PO.
+        </div>
+      ) : null}
       {lowCount > 0 ? (
-        <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 text-sm text-red-600 dark:text-red-400">
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-sm text-amber-600 dark:text-amber-400">
           {lowCount} item{lowCount === 1 ? "" : "s"} at or below reorder level — restock soon.
         </div>
       ) : null}

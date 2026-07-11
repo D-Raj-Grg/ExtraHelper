@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { bumpKot } from "@/app/(app)/kds/actions"
+import { createClient } from "@/lib/supabase/client"
 import { KOT_FLOW, type KotStatus } from "@/lib/kds-constants"
 import { Button } from "@/components/ui/button"
 
@@ -35,20 +36,42 @@ function ageLabel(createdAt: string, now: number): string {
   return mins <= 0 ? "just now" : `${mins}m`
 }
 
-export function KdsBoard({ kots }: { kots: Kot[] }) {
+export function KdsBoard({ kots, tenantId }: { kots: Kot[]; tenantId: string }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [now, setNow] = useState(() => Date.now())
 
-  // Near-live: refresh data + re-tick aging. (Supabase Realtime is a TODO.)
+  // Aging tick (1s) + a long safety poll in case the realtime socket drops.
   useEffect(() => {
     const tick = setInterval(() => setNow(Date.now()), 1000)
-    const refresh = setInterval(() => router.refresh(), 8000)
+    const safety = setInterval(() => router.refresh(), 30000)
     return () => {
       clearInterval(tick)
-      clearInterval(refresh)
+      clearInterval(safety)
     }
   }, [router])
+
+  // Live updates: refresh the board on any KOT / KOT-item / order change for
+  // this tenant (new fires, bumps, cancels) via Supabase Realtime.
+  useEffect(() => {
+    const supabase = createClient()
+    const filter = `tenant_id=eq.${tenantId}`
+    const channel = supabase
+      .channel(`kds:${tenantId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "kots", filter }, () =>
+        router.refresh(),
+      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "kot_items", filter }, () =>
+        router.refresh(),
+      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders", filter }, () =>
+        router.refresh(),
+      )
+      .subscribe()
+    return () => {
+      void supabase.removeChannel(channel)
+    }
+  }, [router, tenantId])
 
   const boardRef = useRef<HTMLDivElement>(null)
   const [isFull, setIsFull] = useState(false)
