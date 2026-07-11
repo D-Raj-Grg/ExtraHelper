@@ -22,12 +22,20 @@ const ACTIVE_ORDER_STATES = ["draft", "placed", "in_kitchen", "preparing", "read
 const ACTIVE_KOT_STATES = ["new", "preparing", "ready"]
 const DAY = 86_400_000
 
+const WINDOWS = [7, 14, 30, 90] as const
+
 // Auth + tenant gating + the sidebar shell are handled by app/(app)/layout.tsx.
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ win?: string }>
+}) {
+  const { win } = await searchParams
+  const days = (WINDOWS as readonly number[]).includes(Number(win)) ? Number(win) : 14
   const tenant = await requireTenant()
   const supabase = await createClient()
   const tz = tenant.timezone
-  const since = new Date(Date.now() - 15 * DAY).toISOString()
+  const since = new Date(Date.now() - (days + 1) * DAY).toISOString()
 
   const [paidBills, activeOrders, kots, inventory, reservations, recentBills] = await Promise.all([
     supabase
@@ -82,8 +90,8 @@ export default async function DashboardPage() {
   const avgCents = todayBillCount ? Math.round(todayCents / todayBillCount) : 0
   const deltaPct = yestCents > 0 ? ((todayCents - yestCents) / yestCents) * 100 : null
 
-  const chart = Array.from({ length: 14 }, (_, i) => {
-    const d = new Date(Date.now() - (13 - i) * DAY)
+  const chart = Array.from({ length: days }, (_, i) => {
+    const d = new Date(Date.now() - (days - 1 - i) * DAY)
     return {
       day: new Intl.DateTimeFormat("en-US", { timeZone: tz, month: "short", day: "numeric" }).format(d),
       revenue: Math.round(revByDay.get(dayKey(d.toISOString())) ?? 0) / 100,
@@ -144,7 +152,20 @@ export default async function DashboardPage() {
         />
       </div>
 
-      <DashboardRevenueChart data={chart} currency={tenant.currency} />
+      <div className="flex items-center justify-end gap-1">
+        {WINDOWS.map((w) => (
+          <a
+            key={w}
+            href={`/?win=${w}`}
+            className={`rounded-full px-2.5 py-1 text-xs ${
+              w === days ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-accent"
+            }`}
+          >
+            {w}d
+          </a>
+        ))}
+      </div>
+      <DashboardRevenueChart data={chart} currency={tenant.currency} days={days} />
 
       {/* Two-column: low stock + reservations ---------------------------- */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

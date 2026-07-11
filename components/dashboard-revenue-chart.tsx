@@ -17,9 +17,11 @@ const config = {
 export function DashboardRevenueChart({
   data,
   currency,
+  days = 14,
 }: {
   data: { day: string; revenue: number }[]
   currency: string
+  days?: number
 }) {
   const fmt = (n: number) =>
     new Intl.NumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 0 }).format(n)
@@ -28,7 +30,7 @@ export function DashboardRevenueChart({
     <Card>
       <CardHeader>
         <CardTitle>Revenue trend</CardTitle>
-        <CardDescription>Paid bills per day — last 14 days</CardDescription>
+        <CardDescription>Paid bills per day — last {days} days</CardDescription>
       </CardHeader>
       <CardContent>
         <ChartContainer config={config} className="aspect-auto h-[240px] w-full">
