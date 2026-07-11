@@ -2,6 +2,7 @@ import { redirect } from "next/navigation"
 import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
+import { Toaster } from "@/components/ui/sonner"
 import { TenantProvider } from "@/components/tenant-provider"
 import { PreferencesProvider } from "@/components/preferences-provider"
 import { createClient } from "@/lib/supabase/server"
@@ -64,6 +65,7 @@ export default async function AppLayout({
           <SiteHeader />
           {children}
         </SidebarInset>
+        <Toaster />
       </SidebarProvider>
       </PreferencesProvider>
     </TenantProvider>

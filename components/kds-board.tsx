@@ -1,7 +1,8 @@
 "use client"
 
-import { useEffect, useRef, useState, useTransition } from "react"
+import { useEffect, useOptimistic, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
+import { toast } from "sonner"
 import { bumpKot } from "@/app/(app)/kds/actions"
 import { createClient } from "@/lib/supabase/client"
 import { KOT_FLOW, type KotStatus } from "@/lib/kds-constants"
@@ -40,6 +41,13 @@ export function KdsBoard({ kots, tenantId }: { kots: Kot[]; tenantId: string }) 
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [now, setNow] = useState(() => Date.now())
+
+  // Optimistic bump — ticket advances instantly; realtime/refresh reconciles.
+  const [optKots, applyBump] = useOptimistic(
+    kots,
+    (state: Kot[], patch: { id: string; status: string }) =>
+      state.map((k) => (k.id === patch.id ? { ...k, status: patch.status } : k)),
+  )
 
   // Aging tick (1s) + a long safety poll in case the realtime socket drops.
   useEffect(() => {
@@ -98,11 +106,11 @@ export function KdsBoard({ kots, tenantId }: { kots: Kot[]; tenantId: string }) 
           {isFull ? "Exit fullscreen" : "Fullscreen"}
         </Button>
       </div>
-      {kots.length === 0 ? (
+      {optKots.length === 0 ? (
         <p className="text-sm text-muted-foreground">No active tickets. All caught up.</p>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {kots.map((kot) => {
+          {optKots.map((kot) => {
         const next = nextStatus(kot.status)
         return (
           <div
@@ -138,7 +146,9 @@ export function KdsBoard({ kots, tenantId }: { kots: Kot[]; tenantId: string }) 
                   disabled={pending}
                   onClick={() =>
                     startTransition(async () => {
-                      await bumpKot(kot.id, next)
+                      applyBump({ id: kot.id, status: next })
+                      const res = await bumpKot(kot.id, next)
+                      if (res && "error" in res) toast.error(res.error)
                     })
                   }
                 >

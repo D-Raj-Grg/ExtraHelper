@@ -1,6 +1,7 @@
 "use client"
 
-import { useActionState, useState, useTransition } from "react"
+import { useActionState, useOptimistic, useState, useTransition } from "react"
+import { toast } from "sonner"
 import {
   createFloor,
   createTable,
@@ -62,6 +63,13 @@ export function TablesManager({
   const [pending, startTransition] = useTransition()
   const [qrOpenId, setQrOpenId] = useState<string | null>(null)
 
+  // Optimistic table state — the <select> reflects the change instantly.
+  const [optTables, setOptTable] = useOptimistic(
+    tables,
+    (state: Table[], patch: { id: string; state: string }) =>
+      state.map((t) => (t.id === patch.id ? { ...t, state: patch.state } : t)),
+  )
+
   const groups = [...floors, { id: "__none__", name: "Unassigned" }]
 
   return (
@@ -115,8 +123,8 @@ export function TablesManager({
           groups.map((floor) => {
             const list =
               floor.id === "__none__"
-                ? tables.filter((t) => !t.floor_id)
-                : tables.filter((t) => t.floor_id === floor.id)
+                ? optTables.filter((t) => !t.floor_id)
+                : optTables.filter((t) => t.floor_id === floor.id)
             if (list.length === 0) return null
             return (
               <div key={floor.id}>
@@ -142,11 +150,14 @@ export function TablesManager({
                           className={inputClass}
                           value={t.state}
                           disabled={pending}
-                          onChange={(e) =>
+                          onChange={(e) => {
+                            const next = e.target.value as TableState
                             startTransition(async () => {
-                              await setTableState(t.id, e.target.value as TableState)
+                              setOptTable({ id: t.id, state: next })
+                              const res = await setTableState(t.id, next)
+                              if (res && "error" in res) toast.error(res.error)
                             })
-                          }
+                          }}
                         >
                           {TABLE_STATES.map((s) => (
                             <option key={s} value={s}>
