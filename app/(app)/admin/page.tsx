@@ -3,6 +3,7 @@ import { requirePlatformAdmin } from "@/lib/supabase/guards"
 import { money } from "@/lib/format"
 import { TenantStatusButton } from "@/components/admin-tenant-actions"
 import { AdminPlanSelect } from "@/components/admin-plan-select"
+import { startImpersonation } from "@/app/(app)/admin/actions"
 import { PageShell, PageHeader } from "@/components/page-header"
 
 export const dynamic = "force-dynamic"
@@ -102,8 +103,15 @@ export default async function AdminPage() {
                     <td className="px-4 py-3">
                       <AdminPlanSelect tenantId={t.id} currentCode={plan?.code ?? null} plans={planOpts} />
                     </td>
-                    <td className="px-4 py-3 text-right">
-                      <TenantStatusButton tenantId={t.id} status={t.status} />
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-2">
+                        <form action={startImpersonation.bind(null, t.id)}>
+                          <button type="submit" className="rounded-md border px-2 py-1 text-xs hover:bg-accent">
+                            View as
+                          </button>
+                        </form>
+                        <TenantStatusButton tenantId={t.id} status={t.status} />
+                      </div>
                     </td>
                   </tr>
                 )

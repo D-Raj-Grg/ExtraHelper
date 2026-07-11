@@ -3,6 +3,7 @@ import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { Toaster } from "@/components/ui/sonner"
+import { ImpersonationBanner } from "@/components/impersonation-banner"
 import { TenantProvider } from "@/components/tenant-provider"
 import { PreferencesProvider } from "@/components/preferences-provider"
 import { OfflineSyncProvider } from "@/components/offline-sync-provider"
@@ -64,6 +65,7 @@ export default async function AppLayout({
           activeTenantId={tenant.tenantId}
         />
         <SidebarInset>
+          {tenant.impersonating ? <ImpersonationBanner name={tenant.name} /> : null}
           <SiteHeader />
           {children}
         </SidebarInset>

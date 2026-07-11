@@ -2,6 +2,7 @@ import { cookies } from "next/headers"
 import { createClient } from "@/lib/supabase/server"
 
 export const ACTIVE_TENANT_COOKIE = "active-tenant"
+export const IMPERSONATE_COOKIE = "impersonate-tenant"
 
 export type ActiveTenant = {
   tenantId: string
@@ -10,6 +11,7 @@ export type ActiveTenant = {
   slug: string
   currency: string
   timezone: string
+  impersonating?: boolean
 }
 
 export type TenantMembership = {
@@ -54,10 +56,40 @@ function tenantOf(row: Row) {
  * RLS scopes the query to the caller's own memberships.
  */
 export async function getActiveTenant(): Promise<ActiveTenant | null> {
+  const store = await cookies()
+
+  // Platform-admin impersonation: resolve a tenant the caller need not belong
+  // to (RLS already grants platform admins cross-tenant read).
+  const imp = store.get(IMPERSONATE_COOKIE)?.value
+  if (imp) {
+    const supabase = await createClient()
+    const { data: isAdmin } = await supabase.rpc("is_platform_admin")
+    if (isAdmin) {
+      const { data: t } = await supabase
+        .from("tenants")
+        .select("name, slug, tenant_settings(currency, timezone)")
+        .eq("id", imp)
+        .maybeSingle()
+      if (t) {
+        const s = (Array.isArray(t.tenant_settings) ? t.tenant_settings[0] : t.tenant_settings) as
+          | { currency?: string; timezone?: string }
+          | undefined
+        return {
+          tenantId: imp,
+          role: "owner",
+          name: (t.name as string) ?? "",
+          slug: (t.slug as string) ?? "",
+          currency: s?.currency ?? "USD",
+          timezone: s?.timezone ?? "UTC",
+          impersonating: true,
+        }
+      }
+    }
+  }
+
   const rows = await fetchMemberships()
   if (rows.length === 0) return null
 
-  const store = await cookies()
   const wanted = store.get(ACTIVE_TENANT_COOKIE)?.value
   const row = rows.find((r) => r.tenant_id === wanted) ?? rows[0]
 
