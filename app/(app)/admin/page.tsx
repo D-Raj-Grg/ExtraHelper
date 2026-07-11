@@ -3,7 +3,7 @@ import { requirePlatformAdmin } from "@/lib/supabase/guards"
 import { money } from "@/lib/format"
 import { TenantStatusButton } from "@/components/admin-tenant-actions"
 import { AdminPlanSelect } from "@/components/admin-plan-select"
-import { startImpersonation } from "@/app/(app)/admin/actions"
+import { runDunning, startImpersonation } from "@/app/(app)/admin/actions"
 import { PageShell, PageHeader } from "@/components/page-header"
 
 export const dynamic = "force-dynamic"
@@ -21,7 +21,7 @@ type TenantRow = {
   slug: string
   status: string
   created_at: string
-  subscriptions: { plans: { code: string; name: string } | null }[]
+  subscriptions: { status: string; plans: { code: string; name: string } | null }[]
 }
 
 export default async function AdminPage() {
@@ -31,7 +31,7 @@ export default async function AdminPage() {
   const [{ data: tenants }, { data: plans }, { data: invoices }] = await Promise.all([
     supabase
       .from("tenants")
-      .select("id, name, slug, status, created_at, subscriptions(plans(code, name))")
+      .select("id, name, slug, status, created_at, subscriptions(status, plans(code, name))")
       .order("created_at", { ascending: false }),
     supabase.from("plans").select("code, name").eq("is_active", true).order("price_cents"),
     supabase.from("platform_invoices").select("amount_cents").eq("status", "paid"),
@@ -58,6 +58,13 @@ export default async function AdminPage() {
       <PageHeader
         title="Super Admin"
         description="Platform tenants, plans, and usage."
+        actions={
+          <form action={runDunning}>
+            <button type="submit" className="rounded-md border px-3 py-1.5 text-sm hover:bg-accent">
+              Run dunning now
+            </button>
+          </form>
+        }
       />
 
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-5">
@@ -89,6 +96,7 @@ export default async function AdminPage() {
             ) : (
               rows.map((t) => {
                 const plan = t.subscriptions?.[0]?.plans ?? null
+                const subStatus = t.subscriptions?.[0]?.status ?? null
                 return (
                   <tr key={t.id} className="border-t">
                     <td className="px-4 py-3">
@@ -102,6 +110,11 @@ export default async function AdminPage() {
                     </td>
                     <td className="px-4 py-3">
                       <AdminPlanSelect tenantId={t.id} currentCode={plan?.code ?? null} plans={planOpts} />
+                      {subStatus === "past_due" ? (
+                        <span className="mt-1 inline-flex rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-400">
+                          past due
+                        </span>
+                      ) : null}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-2">

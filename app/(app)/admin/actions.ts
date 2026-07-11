@@ -77,6 +77,14 @@ export async function stopImpersonation(): Promise<void> {
   redirect("/admin")
 }
 
+/** Run subscription dunning now (platform admin) — mark past_due / suspend. */
+export async function runDunning(): Promise<void> {
+  await requirePlatformAdmin()
+  const supabase = await createClient()
+  await supabase.rpc("trigger_dunning")
+  revalidatePath("/admin")
+}
+
 /** Platform admin assigns a plan to a tenant (audited via subscribe path). */
 export async function setTenantPlan(
   tenantId: string,
