@@ -1,10 +1,11 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
+import { headers } from "next/headers"
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 
-export type AuthState = { error: string } | undefined
+export type AuthState = { error: string } | { confirm: string } | undefined
 
 /** Only allow same-origin relative redirects — blocks open-redirect via `next`. */
 function safeNext(raw: string): string {
@@ -49,17 +50,23 @@ export async function signup(
   if (password.length < 8)
     return { error: "Password must be at least 8 characters." }
 
+  const origin = (await headers()).get("origin") ?? ""
   const supabase = await createClient()
-  const { error } = await supabase.auth.signUp({
+  const { data, error } = await supabase.auth.signUp({
     email,
     password,
-    options: { data: { restaurant_name: restaurantName } },
+    options: {
+      data: { restaurant_name: restaurantName },
+      emailRedirectTo: origin ? `${origin}/auth/confirm?next=/` : undefined,
+    },
   })
   if (error) return { error: error.message }
 
+  // Email confirmation enabled → no session yet. Tell the user to check email
+  // instead of bouncing to /login (which looks like a silent failure).
+  if (!data.session) return { confirm: email }
+
   revalidatePath("/", "layout")
-  // If email confirmation is enabled the session isn't active yet; the login
-  // page surfaces that. Otherwise the proxy sends them on to the home page.
   redirect("/")
 }
 

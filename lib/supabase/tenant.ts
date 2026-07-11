@@ -1,4 +1,7 @@
+import { cookies } from "next/headers"
 import { createClient } from "@/lib/supabase/server"
+
+export const ACTIVE_TENANT_COOKIE = "active-tenant"
 
 export type ActiveTenant = {
   tenantId: string
@@ -9,41 +12,81 @@ export type ActiveTenant = {
   timezone: string
 }
 
-/**
- * The current user's active tenant (first membership) joined with tenant +
- * settings, or null if the user hasn't onboarded yet. RLS scopes the query to
- * the caller's own memberships.
- */
-export async function getActiveTenant(): Promise<ActiveTenant | null> {
+export type TenantMembership = {
+  tenantId: string
+  role: string
+  name: string
+  slug: string
+}
+
+type Row = {
+  role: string
+  tenant_id: string
+  tenants:
+    | { name: string; slug: string; tenant_settings: unknown }
+    | { name: string; slug: string; tenant_settings: unknown }[]
+    | null
+}
+
+async function fetchMemberships(): Promise<Row[]> {
   const supabase = await createClient()
   const {
     data: { user },
   } = await supabase.auth.getUser()
-  if (!user) return null
+  if (!user) return []
 
   const { data } = await supabase
     .from("user_tenants")
-    .select(
-      "role, tenant_id, tenants(name, slug, tenant_settings(currency, timezone))",
-    )
+    .select("role, tenant_id, tenants(name, slug, tenant_settings(currency, timezone))")
     .eq("user_id", user.id)
-    .limit(1)
-    .maybeSingle()
+    .order("tenant_id", { ascending: true }) // stable ordering for "first"
 
-  if (!data) return null
+  return (data ?? []) as Row[]
+}
 
-  // Supabase returns embedded relations as objects (or arrays); normalize.
-  const tenant = Array.isArray(data.tenants) ? data.tenants[0] : data.tenants
-  const settings = Array.isArray(tenant?.tenant_settings)
-    ? tenant?.tenant_settings[0]
-    : tenant?.tenant_settings
+function tenantOf(row: Row) {
+  return Array.isArray(row.tenants) ? row.tenants[0] : row.tenants
+}
+
+/**
+ * The current user's active tenant — the one selected via the `active-tenant`
+ * cookie (tenant switcher), else their first membership. Null if not onboarded.
+ * RLS scopes the query to the caller's own memberships.
+ */
+export async function getActiveTenant(): Promise<ActiveTenant | null> {
+  const rows = await fetchMemberships()
+  if (rows.length === 0) return null
+
+  const store = await cookies()
+  const wanted = store.get(ACTIVE_TENANT_COOKIE)?.value
+  const row = rows.find((r) => r.tenant_id === wanted) ?? rows[0]
+
+  const tenant = tenantOf(row)
+  const settingsRaw = (tenant as { tenant_settings?: unknown })?.tenant_settings
+  const settings = (Array.isArray(settingsRaw) ? settingsRaw[0] : settingsRaw) as
+    | { currency?: string; timezone?: string }
+    | undefined
 
   return {
-    tenantId: data.tenant_id as string,
-    role: data.role as string,
-    name: (tenant?.name as string) ?? "",
-    slug: (tenant?.slug as string) ?? "",
-    currency: (settings?.currency as string) ?? "USD",
-    timezone: (settings?.timezone as string) ?? "UTC",
+    tenantId: row.tenant_id,
+    role: row.role,
+    name: tenant?.name ?? "",
+    slug: tenant?.slug ?? "",
+    currency: settings?.currency ?? "USD",
+    timezone: settings?.timezone ?? "UTC",
   }
+}
+
+/** All tenants the current user belongs to — for the tenant switcher. */
+export async function getTenantMemberships(): Promise<TenantMembership[]> {
+  const rows = await fetchMemberships()
+  return rows.map((r) => {
+    const tenant = tenantOf(r)
+    return {
+      tenantId: r.tenant_id,
+      role: r.role,
+      name: tenant?.name ?? "",
+      slug: tenant?.slug ?? "",
+    }
+  })
 }

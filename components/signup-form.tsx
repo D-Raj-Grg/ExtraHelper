@@ -23,6 +23,24 @@ export function SignupForm({
     undefined,
   )
 
+  if (state && "confirm" in state) {
+    return (
+      <div className={cn("flex flex-col items-center gap-4 text-center", className)} {...props}>
+        <div className="flex size-10 items-center justify-center rounded-full bg-primary/10">
+          <UtensilsCrossedIcon className="size-6" />
+        </div>
+        <h1 className="text-xl font-bold">Check your email</h1>
+        <p className="text-sm text-muted-foreground">
+          We sent a confirmation link to <span className="font-medium">{state.confirm}</span>.
+          Click it to activate your account, then sign in.
+        </p>
+        <Button nativeButton={false} render={<Link href="/login" />}>
+          Back to sign in
+        </Button>
+      </div>
+    )
+  }
+
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
       <form action={formAction}>
@@ -69,7 +87,7 @@ export function SignupForm({
             />
             <FieldDescription>At least 8 characters.</FieldDescription>
           </Field>
-          {state?.error ? (
+          {state && "error" in state ? (
             <p className="text-sm text-destructive" role="alert">
               {state.error}
             </p>

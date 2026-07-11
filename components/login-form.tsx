@@ -17,8 +17,9 @@ import { UtensilsCrossedIcon } from "lucide-react"
 export function LoginForm({
   className,
   next,
+  notice,
   ...props
-}: React.ComponentProps<"div"> & { next?: string }) {
+}: React.ComponentProps<"div"> & { next?: string; notice?: string }) {
   const [state, formAction, pending] = useActionState<AuthState, FormData>(
     login,
     undefined,
@@ -60,7 +61,12 @@ export function LoginForm({
               required
             />
           </Field>
-          {state?.error ? (
+          {notice ? (
+            <p className="text-sm text-muted-foreground" role="status">
+              {notice}
+            </p>
+          ) : null}
+          {state && "error" in state ? (
             <p className="text-sm text-destructive" role="alert">
               {state.error}
             </p>

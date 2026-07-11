@@ -5,7 +5,7 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { TenantProvider } from "@/components/tenant-provider"
 import { PreferencesProvider } from "@/components/preferences-provider"
 import { createClient } from "@/lib/supabase/server"
-import { getActiveTenant } from "@/lib/supabase/tenant"
+import { getActiveTenant, getTenantMemberships } from "@/lib/supabase/tenant"
 import { getUserPreferences } from "@/lib/supabase/preferences"
 
 /**
@@ -28,7 +28,10 @@ export default async function AppLayout({
   const tenant = await getActiveTenant()
   if (!tenant) redirect("/onboarding")
 
-  const prefs = await getUserPreferences()
+  const [prefs, memberships] = await Promise.all([
+    getUserPreferences(),
+    getTenantMemberships(),
+  ])
 
   const sidebarUser = {
     name:
@@ -51,7 +54,12 @@ export default async function AppLayout({
           } as React.CSSProperties
         }
       >
-        <AppSidebar variant="inset" user={sidebarUser} />
+        <AppSidebar
+          variant="inset"
+          user={sidebarUser}
+          tenants={memberships}
+          activeTenantId={tenant.tenantId}
+        />
         <SidebarInset>
           <SiteHeader />
           {children}

@@ -6,6 +6,8 @@ import { NavDocuments } from "@/components/nav-documents"
 import { NavMain } from "@/components/nav-main"
 import { NavSecondary } from "@/components/nav-secondary"
 import { NavUser } from "@/components/nav-user"
+import { TenantSwitcher } from "@/components/tenant-switcher"
+import type { TenantMembership } from "@/lib/supabase/tenant"
 import {
   Sidebar,
   SidebarContent,
@@ -209,24 +211,35 @@ const data = {
 }
 export function AppSidebar({
   user,
+  tenants,
+  activeTenantId,
   ...props
 }: React.ComponentProps<typeof Sidebar> & {
   user?: { name: string; email: string; avatar: string }
+  tenants?: TenantMembership[]
+  activeTenantId?: string
 }) {
+  const multiTenant = (tenants?.length ?? 0) > 1
   return (
     <Sidebar collapsible="offcanvas" {...props}>
       <SidebarHeader>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              className="data-[slot=sidebar-menu-button]:p-1.5!"
-              render={<a href="/" />}
-            >
-              <CommandIcon className="size-5!" />
-              <span className="text-base font-semibold">ExtraHelper</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
+        {multiTenant && activeTenantId ? (
+          <TenantSwitcher tenants={tenants!} activeId={activeTenantId} />
+        ) : (
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                className="data-[slot=sidebar-menu-button]:p-1.5!"
+                render={<a href="/" />}
+              >
+                <CommandIcon className="size-5!" />
+                <span className="text-base font-semibold">
+                  {tenants?.[0]?.name ?? "ExtraHelper"}
+                </span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        )}
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={data.navMain} />

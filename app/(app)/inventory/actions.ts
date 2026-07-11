@@ -45,31 +45,20 @@ export async function adjustStock(
   type: "purchase" | "wastage" | "adjustment",
   reason: string,
 ): Promise<InvState> {
-  const tenant = await requireRole(...INV_ROLES)
+  await requireRole(...INV_ROLES)
   if (!Number.isFinite(deltaQty) || deltaQty === 0)
     return { error: "Enter a non-zero quantity." }
 
   const supabase = await createClient()
-  const { data: item, error: readErr } = await supabase
-    .from("inventory_items")
-    .select("current_qty")
-    .eq("id", itemId)
-    .single()
-  if (readErr || !item) return { error: "Item not found." }
-
-  const { error: updErr } = await supabase
-    .from("inventory_items")
-    .update({ current_qty: Number(item.current_qty) + deltaQty })
-    .eq("id", itemId)
-  if (updErr) return { error: updErr.message }
-
-  await supabase.from("stock_movements").insert({
-    tenant_id: tenant.tenantId,
-    inventory_item_id: itemId,
-    type,
-    qty: deltaQty,
-    reference: reason || null,
+  // Atomic: current_qty = current_qty + delta (+ movement log) in one statement,
+  // so concurrent adjusts can't clobber each other. RLS + role enforced inside.
+  const { error } = await supabase.rpc("adjust_inventory", {
+    _item: itemId,
+    _delta: deltaQty,
+    _type: type,
+    _reason: reason || "",
   })
+  if (error) return { error: error.message }
 
   revalidatePath("/inventory")
   return { ok: true }
