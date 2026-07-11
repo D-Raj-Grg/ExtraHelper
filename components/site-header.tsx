@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation"
 import { AppearanceControls } from "@/components/appearance-controls"
+import { OfflineBadge } from "@/components/offline-badge"
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 
@@ -45,7 +46,8 @@ export function SiteHeader() {
           className="mx-2 h-4 data-vertical:self-auto"
         />
         <h1 className="text-base font-medium">{titleFor(pathname)}</h1>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          <OfflineBadge />
           <AppearanceControls />
         </div>
       </div>

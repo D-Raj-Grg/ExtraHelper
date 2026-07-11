@@ -5,6 +5,7 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { Toaster } from "@/components/ui/sonner"
 import { TenantProvider } from "@/components/tenant-provider"
 import { PreferencesProvider } from "@/components/preferences-provider"
+import { OfflineSyncProvider } from "@/components/offline-sync-provider"
 import { createClient } from "@/lib/supabase/server"
 import { getActiveTenant, getTenantMemberships } from "@/lib/supabase/tenant"
 import { getUserPreferences } from "@/lib/supabase/preferences"
@@ -47,6 +48,7 @@ export default async function AppLayout({
   return (
     <TenantProvider tenant={tenant}>
       <PreferencesProvider initialTheme={prefs.theme} initialScale={prefs.scale}>
+      <OfflineSyncProvider>
       <SidebarProvider
         style={
           {
@@ -67,6 +69,7 @@ export default async function AppLayout({
         </SidebarInset>
         <Toaster />
       </SidebarProvider>
+      </OfflineSyncProvider>
       </PreferencesProvider>
     </TenantProvider>
   )

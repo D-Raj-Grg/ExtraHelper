@@ -1,0 +1,13 @@
+{
+  "name": "ExtraHelper",
+  "short_name": "ExtraHelper",
+  "description": "Restaurant management — POS, KDS, billing, inventory.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0a0a0a",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

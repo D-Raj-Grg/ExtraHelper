@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { SwRegister } from "@/components/sw-register";
 import {
   SCALE_COOKIE,
   SCALE_PX,
@@ -16,6 +17,12 @@ const figtree = Figtree({ subsets: ["latin"], variable: "--font-sans" });
 export const metadata: Metadata = {
   title: "ExtraHelper",
   description: "Restaurant management platform",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: { capable: true, title: "ExtraHelper", statusBarStyle: "default" },
+};
+
+export const viewport = {
+  themeColor: "#0a0a0a",
 };
 
 export default async function RootLayout({
@@ -41,7 +48,7 @@ export default async function RootLayout({
       )}
       style={{ fontSize: `${SCALE_PX[scale]}px` }}
     >
-      <TooltipProvider><body className="min-h-full flex flex-col">{children}</body></TooltipProvider>
+      <TooltipProvider><body className="min-h-full flex flex-col">{children}<SwRegister /></body></TooltipProvider>
     </html>
   );
 }

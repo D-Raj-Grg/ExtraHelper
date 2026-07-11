@@ -71,6 +71,34 @@ export async function removeItem(orderId: string, orderItemId: string): Promise<
   return { ok: true }
 }
 
+/**
+ * Place a full order (table + items) atomically with a client-supplied
+ * idempotency key. This is the offline-queue replay path — dedups on
+ * orders.unique(tenant_id, idempotency_key). Returns the order id.
+ */
+export async function placeStaffOrder(
+  idempotencyKey: string,
+  tableId: string | null,
+  items: { item_id: string; qty: number }[],
+): Promise<{ error: string } | { ok: true; orderId: string }> {
+  const tenant = await requireRole(...ORDER_ROLES)
+  if (!idempotencyKey) return { error: "Missing idempotency key." }
+  if (!items?.length) return { error: "No items." }
+
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc("place_staff_order", {
+    _tenant: tenant.tenantId,
+    _idempotency_key: idempotencyKey,
+    _table_id: tableId,
+    _order_type: tableId ? "dine_in" : "pickup",
+    _items: items,
+  })
+  if (error) return { error: error.message }
+
+  revalidatePath("/pos")
+  return { ok: true, orderId: data as string }
+}
+
 /** Fire the order to the kitchen — splits into per-station KOTs (trusted fn). */
 export async function fireOrder(orderId: string): Promise<PosState> {
   await requireRole(...ORDER_ROLES)

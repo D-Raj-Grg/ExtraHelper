@@ -4,6 +4,7 @@ import { useState, useTransition } from "react"
 import Link from "next/link"
 import { applyDiscount, payByCard, refundBill, takePayment, voidLine } from "@/app/(app)/bill/actions"
 import { money } from "@/lib/format"
+import { useOffline } from "@/components/offline-sync-provider"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
@@ -44,6 +45,7 @@ export function BillView({
 }) {
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
+  const { online, enqueuePayment } = useOffline()
   const due = Math.max(0, bill.total_cents - paidCents)
   const [amount, setAmount] = useState<string>((due / 100).toFixed(2))
   // Re-sync the payment amount when the due changes (e.g. after a discount).
@@ -112,6 +114,14 @@ export function BillView({
       return
     }
     setError(null)
+    // Offline → queue (idempotency key travels with it, replays on reconnect).
+    if (!online) {
+      const label = bill.restaurant_tables?.label
+        ? `Table ${bill.restaurant_tables.label}`
+        : "Takeaway"
+      void enqueuePayment({ billId: bill.id, method, amountCents: cents, label })
+      return
+    }
     startTransition(async () => {
       const res = await takePayment(bill.id, method, cents)
       if (res && "error" in res) setError(res.error)
@@ -122,6 +132,10 @@ export function BillView({
     const cents = Math.round(Number(amount) * 100)
     if (!Number.isFinite(cents) || cents <= 0) {
       setError("Enter a valid amount.")
+      return
+    }
+    if (!online) {
+      setError("Card payment needs a connection. Use cash, or reconnect.")
       return
     }
     setError(null)

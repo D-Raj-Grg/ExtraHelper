@@ -129,17 +129,20 @@ export async function takePayment(
   billId: string,
   method: "cash" | "card" | "online" | "wallet" | "points",
   amountCents: number,
+  idempotencyKey?: string,
 ): Promise<BillState> {
   await requireRole(...BILL_ROLES)
   if (!Number.isInteger(amountCents) || amountCents <= 0)
     return { error: "Amount must be a positive number." }
 
   const supabase = await createClient()
+  // Client-supplied key when present (offline queue replay → dedup via
+  // record_payment's on-conflict); otherwise a fresh server key.
   const { error } = await supabase.rpc("record_payment", {
     _bill_id: billId,
     _method: method,
     _amount_cents: amountCents,
-    _idempotency_key: randomUUID(),
+    _idempotency_key: idempotencyKey || randomUUID(),
   })
   if (error) return { error: error.message }
 
