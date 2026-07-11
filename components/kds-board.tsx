@@ -1,8 +1,8 @@
 "use client"
 
-import { useEffect, useState, useTransition } from "react"
+import { useEffect, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { bumpKot } from "@/app/kds/actions"
+import { bumpKot } from "@/app/(app)/kds/actions"
 import { KOT_FLOW, type KotStatus } from "@/lib/kds-constants"
 import { Button } from "@/components/ui/button"
 
@@ -50,15 +50,36 @@ export function KdsBoard({ kots }: { kots: Kot[] }) {
     }
   }, [router])
 
-  if (kots.length === 0) {
-    return (
-      <p className="text-sm text-muted-foreground">No active tickets. All caught up.</p>
-    )
+  const boardRef = useRef<HTMLDivElement>(null)
+  const [isFull, setIsFull] = useState(false)
+
+  useEffect(() => {
+    const onChange = () => setIsFull(Boolean(document.fullscreenElement))
+    document.addEventListener("fullscreenchange", onChange)
+    return () => document.removeEventListener("fullscreenchange", onChange)
+  }, [])
+
+  function toggleFullscreen() {
+    if (document.fullscreenElement) void document.exitFullscreen()
+    else void boardRef.current?.requestFullscreen()
   }
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-      {kots.map((kot) => {
+    <div
+      ref={boardRef}
+      className="flex flex-col gap-3 bg-background data-[full=true]:h-screen data-[full=true]:overflow-auto data-[full=true]:p-4"
+      data-full={isFull}
+    >
+      <div className="flex justify-end">
+        <Button size="sm" variant="outline" onClick={toggleFullscreen}>
+          {isFull ? "Exit fullscreen" : "Fullscreen"}
+        </Button>
+      </div>
+      {kots.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No active tickets. All caught up.</p>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {kots.map((kot) => {
         const next = nextStatus(kot.status)
         return (
           <div
@@ -104,7 +125,9 @@ export function KdsBoard({ kots }: { kots: Kot[] }) {
             </div>
           </div>
         )
-      })}
+          })}
+        </div>
+      )}
     </div>
   )
 }

@@ -1,7 +1,7 @@
 "use client"
 
 import { useActionState } from "react"
-import { updateSettings, type SettingsState } from "@/app/settings/actions"
+import { updateSettings, type SettingsState } from "@/app/(app)/settings/actions"
 import { Button } from "@/components/ui/button"
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"

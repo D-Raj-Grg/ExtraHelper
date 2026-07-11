@@ -1,14 +1,15 @@
 "use client"
 
-import { useActionState, useTransition } from "react"
+import { useActionState, useState, useTransition } from "react"
 import {
   createFloor,
   createTable,
   deleteTable,
   setTableState,
   type TablesState,
-} from "@/app/tables/actions"
+} from "@/app/(app)/tables/actions"
 import { TABLE_STATES, type TableState } from "@/lib/table-constants"
+import { TableQr } from "@/components/table-qr"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
@@ -59,11 +60,7 @@ export function TablesManager({
     undefined,
   )
   const [pending, startTransition] = useTransition()
-
-  function copyQr(token: string) {
-    const url = `${window.location.origin}/t/${token}`
-    void navigator.clipboard?.writeText(url)
-  }
+  const [qrOpenId, setQrOpenId] = useState<string | null>(null)
 
   const groups = [...floors, { id: "__none__", name: "Unassigned" }]
 
@@ -159,9 +156,9 @@ export function TablesManager({
                         </select>
                         <Button
                           size="sm"
-                          variant="outline"
-                          onClick={() => copyQr(t.qr_token)}
-                          title="Copy dine-in QR link"
+                          variant={qrOpenId === t.id ? "default" : "outline"}
+                          onClick={() => setQrOpenId(qrOpenId === t.id ? null : t.id)}
+                          title="Show dine-in QR"
                         >
                           QR
                         </Button>
@@ -178,6 +175,9 @@ export function TablesManager({
                           Delete
                         </Button>
                       </div>
+                      {qrOpenId === t.id ? (
+                        <TableQr token={t.qr_token} label={t.label} />
+                      ) : null}
                     </div>
                   ))}
                 </div>

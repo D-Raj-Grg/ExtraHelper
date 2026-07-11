@@ -2,7 +2,7 @@
 
 import { useTransition } from "react"
 import { Button } from "@/components/ui/button"
-import { setTenantStatus } from "@/app/admin/actions"
+import { setTenantStatus } from "@/app/(app)/admin/actions"
 
 export function TenantStatusButton({
   tenantId,

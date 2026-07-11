@@ -1,7 +1,7 @@
 "use client"
 
 import { useTransition } from "react"
-import { setTenantPlan } from "@/app/admin/actions"
+import { setTenantPlan } from "@/app/(app)/admin/actions"
 
 export function AdminPlanSelect({
   tenantId,

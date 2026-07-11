@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useTransition } from "react"
-import { adjustPoints } from "@/app/loyalty/actions"
+import { adjustPoints } from "@/app/(app)/loyalty/actions"
 import { formatDateTime } from "@/lib/format"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"

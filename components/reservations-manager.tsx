@@ -5,7 +5,7 @@ import {
   createReservation,
   setReservationStatus,
   type ResvState,
-} from "@/app/reservations/actions"
+} from "@/app/(app)/reservations/actions"
 import { type ResvStatus } from "@/lib/reservation-constants"
 import { formatDateTime } from "@/lib/format"
 import { Button } from "@/components/ui/button"

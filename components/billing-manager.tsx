@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useTransition } from "react"
-import { subscribe, type BillingState } from "@/app/billing/actions"
+import { subscribe, type BillingState } from "@/app/(app)/billing/actions"
 import { money, formatDateTime } from "@/lib/format"
 import { Button } from "@/components/ui/button"
 

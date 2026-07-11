@@ -1,7 +1,7 @@
 "use client"
 
 import { useActionState } from "react"
-import { closeSession, openSession, type CashState } from "@/app/cash/actions"
+import { closeSession, openSession, type CashState } from "@/app/(app)/cash/actions"
 import { formatDateTime, money } from "@/lib/format"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"

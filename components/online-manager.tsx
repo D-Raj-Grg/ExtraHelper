@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useTransition } from "react"
-import { dispatchDelivery, setOnlineStatus } from "@/app/online/actions"
+import { dispatchDelivery, setOnlineStatus } from "@/app/(app)/online/actions"
 import { type OnlineStatus } from "@/lib/online-constants"
 import { money, formatDateTime } from "@/lib/format"
 import { Button } from "@/components/ui/button"

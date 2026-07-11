@@ -6,7 +6,7 @@ import {
   adjustStock,
   createInventoryItem,
   type InvState,
-} from "@/app/inventory/actions"
+} from "@/app/(app)/inventory/actions"
 import { money } from "@/lib/format"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"

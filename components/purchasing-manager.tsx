@@ -7,7 +7,7 @@ import {
   createSupplier,
   receivePO,
   type PurchState,
-} from "@/app/purchasing/actions"
+} from "@/app/(app)/purchasing/actions"
 import { money } from "@/lib/format"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"

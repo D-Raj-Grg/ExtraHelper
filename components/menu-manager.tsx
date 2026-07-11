@@ -8,7 +8,7 @@ import {
   deleteItem,
   toggleItem86,
   type MenuState,
-} from "@/app/menu/actions"
+} from "@/app/(app)/menu/actions"
 import { money } from "@/lib/format"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"

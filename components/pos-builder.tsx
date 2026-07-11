@@ -2,8 +2,8 @@
 
 import { useTransition } from "react"
 import Link from "next/link"
-import { addItem, fireOrder, removeItem, type PosState } from "@/app/pos/actions"
-import { generateBill } from "@/app/bill/actions"
+import { addItem, fireOrder, removeItem, type PosState } from "@/app/(app)/pos/actions"
+import { generateBill } from "@/app/(app)/bill/actions"
 import { money } from "@/lib/format"
 import { Button } from "@/components/ui/button"
 
