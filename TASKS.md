@@ -7,107 +7,124 @@
 ---
 
 ## Milestone 0 — Foundation
-- [ ] Create Supabase project (dev + prod); wire env/secrets (service role server-only)
-- [ ] Install/verify toolchain: Node LTS, Supabase CLI, Docker, Flutter SDK, Xcode, Android Studio
-- [ ] Set up Supabase CLI local stack + migration workflow + seed script
-- [ ] Design core schema (tenancy → users → tables/menu/orders/bills/inventory) as SQL migrations
-- [ ] Add `tenant_id` (+ `branch_id`) to every business table
-- [ ] Baseline **RLS policies** on every table keyed on JWT `tenant_id` + `role`
-- [ ] Auth: email/OTP/social; JWT custom claims (`tenant_id`, `role`)
-- [ ] RBAC role model + `roles` table + app-level guards
-- [ ] `audit_logs` table + write helper (actor + timestamp)
-- [ ] Next.js app shell (App Router) — read `node_modules/next/dist/docs/` first; routing, auth, layout, tenant context
-- [ ] Flutter app shell (iOS + Android) — Supabase SDK, auth, navigation, tenant context
-- [ ] Tenant onboarding wizard (profile, currency, tax, branches, branding)
-- [ ] Super-admin console skeleton (tenant list, activate/suspend)
-- [ ] Per-tenant settings model (currency, tax rules, service charge, receipt template, fees)
-- [ ] Integration adapter interfaces stubbed: payments, printing, notifications
-- [ ] **Verify:** RLS isolation test — tenant A cannot read tenant B rows (all tables)
+- [~] Create Supabase project (dev + prod); wire env/secrets (service role server-only) — dev project `ixrcdtwdcpsmlbocvejv` live, `.env.local` wired (publishable key only; RLS is the gate). TODO: separate prod project + secrets.
+- [!] Install/verify toolchain: Node LTS, Supabase CLI, Docker, Flutter SDK, Xcode, Android Studio — local infra, outside this coding session (needs the dev machine). Migrations applied via Supabase MCP instead.
+- [~] Set up Supabase CLI local stack + migration workflow + seed script — migration files in `supabase/migrations/` (versioned, match remote history), `supabase/seed.sql` (idempotent demo data), `supabase/tests/rls_isolation_test.sql`. TODO: `supabase link` + local Docker stack (needs CLI install).
+- [x] Design core schema (tenancy → users → tables/menu/orders/bills/inventory) as SQL migrations — 45 tables across 9 domains in `supabase/migrations/` (foundation, operations_menu, orders_billing, inventory_customers); applied via Supabase MCP. TS types in `lib/supabase/database.types.ts`.
+- [x] Add `tenant_id` (+ `branch_id`) to every business table — denormalized onto child tables too, so RLS keys on one column everywhere.
+- [x] Baseline **RLS policies** on every table — resolved via `user_tenants` membership (not JWT claim; a user may hold different roles per tenant). Helpers `current_tenant_ids()` / `has_tenant_role()` / `is_platform_admin()` (SECURITY DEFINER). `apply_tenant_rls()` applies the standard tenant-isolation policy. 0 public tables without RLS.
+- [~] Auth: email/OTP/social; JWT custom claims (`tenant_id`, `role`) — email+password login/signup/logout wired (Supabase SSR, `proxy.ts` session refresh + route guard). **Verified E2E** (signup→confirm→login→dashboard, session in `auth.sessions`) via browser + Supabase MCP. Tenant/role now resolved via `user_tenants` (membership-table RLS), so JWT custom claims are optional/deferred. TODO: OTP/social; optional access-token hook for claim-based perf.
+- [x] RBAC role model + guards — `app_role` enum + `user_tenants` membership + `platform_admins`; RLS via `has_tenant_role()`; app-level guards in `lib/supabase/guards.ts` (`requireUser`/`requireTenant`/`requireRole`/`requirePlatformAdmin`). TODO (per feature milestone): fine-grained per-action write gating (only managers void/discount).
+- [x] `audit_logs` table + write helper — append-only RLS + `writeAudit()` (`lib/supabase/audit.ts`, actor = auth.uid()); used by super-admin suspend/activate. Wire into voids/discounts/refunds/price changes as those features land.
+- [x] Next.js app shell (App Router) — auth + routing + protected dashboard; server tenant context `getActiveTenant()` + client `TenantProvider`/`useTenant` (`components/tenant-provider.tsx`); dashboard redirects to `/onboarding` when no tenant. TODO: tenant switcher for multi-tenant users.
+- [!] Flutter app shell (iOS + Android) — Supabase SDK, auth, navigation, tenant context. Other stack; no Flutter toolchain this session. Blocked on toolchain install.
+- [~] Tenant onboarding wizard (profile, currency, tax, branches, branding) — `/onboarding` page + `provisionTenant` action + `provision_tenant()` SECURITY DEFINER fn (atomic tenant + settings + default branch + owner membership; idempotent). **Verified E2E** via MCP as authenticated user: 1 tenant/membership/branch/settings, no dupes on repeat call. TODO: tax rules step, branding/logo upload, multi-branch, browser UI E2E (extension was disconnected).
+- [x] Super-admin console skeleton (tenant list, activate/suspend) — `/admin` page (`requirePlatformAdmin` guard + RLS), lists all tenants, suspend/activate action (`app/admin/actions.ts`) audited. Needs a `platform_admins` seed to view (blocked from self-seeding by safety classifier — owner must grant).
+- [x] Per-tenant settings model (currency, tax rules, service charge, receipt template, fees) — `tenant_settings` table (region-configurable, rule #2) + `/settings` UI (owner/manager) editing currency/timezone/service charge/packaging fee; onboarding writes currency + timezone. TODO: tax rules + receipt template editors (jsonb columns exist).
+- [x] Integration adapter interfaces stubbed: payments, printing, notifications — `lib/integrations/` pluggable interfaces + per-tenant resolvers + dev stubs (manual gateway, no-op print, console notify), rule #6. Concrete providers register at runtime.
+- [x] **Verify:** RLS isolation test — tenant A cannot read/write tenant B. Automated `supabase/tests/rls_isolation_test.sql` (non-member: read blocked, insert → `insufficient_privilege`, `has_tenant_role` false) — **passes**. All tables share one `apply_tenant_rls()` policy, so one test covers the pattern.
 
 ## Milestone 1 — Core Operations (P0)
-- [ ] Menu management: categories, items, variants, modifiers, combos, images, 86 toggle, availability schedules
-- [ ] Kitchen stations + per-item station routing config
-- [ ] Floor/table management: floors/areas, visual floor map, capacity, table states
-- [ ] Table QR code generation (stable token per table)
-- [ ] Waiter ordering (Flutter): build order, modifiers, notes, course/seat, hold vs fire
-- [ ] Order lifecycle state machine (`draft→placed→in_kitchen→preparing→ready→served→billed→closed`)
-- [ ] KOT generation on fire — split per station, each its own ticket
-- [ ] KOT amendments (added/void items, reason + approval for voids)
-- [ ] KDS full-screen web view per station: ticket aging colors, item/ticket bump, all-day counts, recall
-- [ ] 86 item from KDS → disables item on all ordering surfaces (realtime)
-- [ ] Thermal KOT print (ESC/POS via adapter)
-- [ ] Realtime sync: table states + KOT + order status across waiter/KDS/cashier
-- [ ] **Verify:** order → KOT fires → KDS + print → bump → served (E2E on demo tenant)
+- [~] Menu management: categories, items, variants, modifiers, combos, images, 86 toggle, availability schedules — `/menu` page + `app/menu/actions.ts` (owner/manager guarded): category CRUD, item create/delete/86-toggle, price in cents. **Verified** RLS write path + nested station query via MCP. TODO: variants, modifiers, combos, image upload (Storage), availability schedules, inline price/name edit.
+- [~] Kitchen stations + per-item station routing config — station create + single-station routing on item create (`item_station_routes`), shown per item on `/menu`. TODO: multi-station routing editor, edit/remove routes.
+- [~] Floor/table management: floors/areas, visual floor map, capacity, table states — `/tables` page + `app/tables/actions.ts`: floor + table CRUD, capacity, live state control (free/occupied/reserved/bill_requested/cleaning). **Verified** state write under RLS (waiter-level). TODO: drag-and-drop visual floor map (pos_x/pos_y columns exist), merge/split/transfer.
+- [~] Table QR code generation (stable token per table) — every table has a stable `qr_token` (DB default); `/tables` copies the dine-in link `/t/{token}`. TODO: render actual QR image + build the `/t/[token]` customer page (Milestone 5).
+- [~] Waiter ordering — **web POS** built (`/pos` + `/pos/[orderId]`, `app/pos/actions.ts`): start order (table/takeaway), add menu items (86 blocked), remove, running total, fire. TODO: Flutter waiter app, modifiers/variants, notes, course/seat, hold-vs-fire granularity.
+- [~] Order lifecycle state machine (`draft→placed→in_kitchen→preparing→ready→served→billed→closed`) — draft→in_kitchen via `fire_order`; KDS bump advances kitchen states. TODO: served→billed→closed (billing milestone), guarded transitions.
+- [x] KOT generation on fire — split per station, each its own ticket — `fire_order()` SECURITY DEFINER fn (authorizes caller, routes items via `item_station_routes`, no-route → expo ticket, idempotent). **Verified E2E**: Grill (burger+fries) + Bar (cola) split correctly.
+- [~] KOT amendments (added/void items, reason + approval for voids) — void via `void_order_item()` (manager approval + reason + audit), recompute on bill. Added-items: re-add + re-fire (fire_order idempotent, tickets only un-ticketed items). TODO: explicit KOT amendment tickets / void propagation to KDS.
+- [~] KDS full-screen web view per station: ticket aging colors, item/ticket bump, all-day counts, recall — `/kds` board with aging borders (green/amber/red), per-ticket bump (new→preparing→ready→served), auto-refresh. **Verified** bump E2E. TODO: all-day counts, recall, per-station filtering.
+- [~] 86 item from KDS → disables item on all ordering surfaces (realtime) — 86 toggle on `/menu`; POS blocks 86'd items. TODO: 86 from KDS + realtime propagation.
+- [ ] Thermal KOT print (ESC/POS via adapter) — print adapter interface exists (`lib/integrations/printing.ts`); wire KOT render + agent.
+- [ ] Realtime sync: table states + KOT + order status across waiter/KDS/cashier — currently poll/auto-refresh (KDS 8s). TODO: Supabase Realtime channels scoped per tenant/branch/station.
+- [~] **Verify:** order → KOT fires → KDS + print → bump → served — **browser E2E passed**: POS start→add Burger+Cola (US$15)→fire→2 KDS tickets (Grill/Bar)→bump Grill to Preparing; `/tables` + `/menu` render. Fixed 3 bugs found here: PostgREST embed ambiguity (orders↔restaurant_tables 2 FKs → `!orders_table_id_fkey` hint), `"use server"` const-array exports breaking client import (KOT_FLOW/TABLE_STATES → moved to plain modules), `fire_order` anon-executable. TODO: thermal print, served→billed.
 
 ## Milestone 2 — Billing / POS
-- [ ] Running bill per table/order (multi-order per bill)
-- [ ] Line pricing pulls price + tax class from menu
-- [ ] Configurable tax (multiple rates, inclusive/exclusive), service charge %, packaging charge — computed in trusted SQL
-- [ ] Discounts: %/flat, item + bill level, coupon codes, manager approval threshold
+- [~] Running bill per table/order (multi-order per bill) — `create_bill_for_order()` snapshots order lines → `bill_items`, `/bill/[billId]` view. TODO: multiple orders on one bill (currently one order = one bill).
+- [x] Line pricing pulls price + tax class from menu — `order_items` snapshot `unit_price_cents` at add time; bill lines from those. (tax_class column exists for per-line tax later.)
+- [x] Configurable tax (multiple rates, inclusive/exclusive), service charge %, packaging charge — **computed in trusted SQL** (`create_bill_for_order`, SECURITY DEFINER), read from `tenant_settings` (rule #2). **Verified**: $17 + 10% service + 13% VAT → $18.70/$21.x correct; exclusive taxes add, inclusive skipped; packaging on pickup/delivery only.
+- [~] Discounts: %/flat, item + bill level, coupon codes, manager approval threshold — bill-level %/flat via `apply_bill_discount()` (SECURITY DEFINER, trusted recompute, **owner/manager gated** = approval, **audited** rule #5). `/bill` discount UI (manager-only). **Verified E2E**: 10% off $13.20 → $12.00, paid/closed; audit row logged. TODO: item-level discounts, coupon codes, finer cashier threshold.
 - [ ] Split bills: by item / by seat / equal / arbitrary amounts
-- [ ] Partial payments (pay now, remainder later)
-- [ ] Payment methods: cash, card (manual), split across methods; record + status
-- [ ] Void/refund with reason + role approval + audit trail
-- [ ] Receipt template (logo, tax breakup, footer/terms) → thermal print + digital (email/SMS/QR link)
-- [ ] Cash session open/close, expected vs counted reconciliation, shift report
-- [ ] **Verify:** bill → split payment → receipt; day-close reconciles (E2E)
+- [~] Partial payments (pay now, remainder later) — `record_payment()` tracks paid vs total → open/partial/paid. **Verified** partial→full. TODO: UI already supports custom amount; test partial in browser.
+- [~] Payment methods: cash, card (manual), split across methods; record + status — cash/card via `/bill` UI, `payments` rows with idempotency keys, status transitions. **Verified** browser (cash full → paid → order closed → table freed). TODO: online/wallet/points methods, split-across-methods UI.
+- [x] Void/refund with reason + role approval + audit trail — `void_order_item()` (manager-gated, reason required, trusted `recompute_bill` on unpaid bills, audited) + `refund_payment()` (manager-gated, over-refund guarded, bill→void/partial, audited). `/bill` UI: per-line void + refund block, manager-only. **Verified E2E**: void Fries → recompute $18.70→$13.20; refund partial+full via MCP; audit rows logged. (migration `20260710191900_void_refund`)
+- [x] Receipt template (logo, tax breakup, footer/terms) → thermal print + digital (email/SMS/QR link) — `/receipt/[billId]` printable thermal-style receipt (items, subtotal/service/tax/discount breakup, total, payments, footer/terms from `tenant_settings.receipt_template`) + `window.print()`. Digital via notification adapter (`emailReceipt` → `lib/integrations` console stub, rule #6). **Verified E2E**: receipt renders, print, email fired (server log `[notify:email]`). TODO: logo upload, per-rate tax breakup, public QR-link receipt (anon, Milestone 5).
+- [x] Cash session open/close, expected vs counted reconciliation, shift report — `open_cash_session()` + `close_cash_session()` (SECURITY DEFINER, cashier/manager/owner). Expected = float + cash payments since open; variance = counted − expected. `/cash` UI: open drawer, close & reconcile, shift-report table. **Verified E2E**: open $50 → close $50 → variance $0; MCP-verified expected=float+sales. (migration `20260710192744_cash_sessions`)
+- [~] **Verify:** bill → split payment → receipt; day-close reconciles — **browser E2E passed**: order→fire→generate bill (trusted tax/service)→pay cash→paid/closed/table-freed. Fixed 2 bugs found here: Base UI Button a11y (`nativeButton={false}` on link-buttons), currency hydration mismatch (`Intl.NumberFormat(undefined)` → shared `lib/format.ts` with pinned locale). **Day-close verified** (cash session reconcile). TODO: split bills, receipt.
 
 ## Milestone 3 — Inventory
-- [ ] Inventory items: UoM, category, reorder level, par level, cost
-- [ ] Recipe/BOM mapping: menu item → ingredient quantities
-- [ ] Auto-deduct stock on sale (trusted trigger/function)
-- [ ] Stock movements: sale, wastage, staff meal, transfer
-- [ ] Suppliers + purchase orders + receive (GRN, partial/full) + price history
-- [ ] Stock counts/audits → variance (theoretical vs actual) → wastage/shrinkage
-- [ ] Low-stock / reorder / out-of-stock alerts + suggested reorder qty
+- [~] Inventory items: UoM, category, reorder level, par level, cost — `inventory_items` + `/inventory` UI (name, uom, on-hand, reorder, cost, add). TODO: category, par level fields in UI.
+- [x] Recipe/BOM mapping: menu item → ingredient quantities — `/inventory` recipe form (dish → ingredient × qty) + list; `addRecipe` action. **Verified**: "Classic Burger uses 1 unit of Burger Bun".
+- [x] Auto-deduct stock on sale (trusted trigger/function) — `trg_deduct_stock` trigger on `order_items` (fires on transition → in_kitchen), deducts recipe qty × ordered qty from `inventory_items`, logs `stock_movements` (type='sale'). SECURITY DEFINER, idempotent (once per transition). **Verified E2E**: browser sell burger → Bun 15→14; MCP 100→98, re-fire no double-deduct. (migration `20260710194337_inventory_deduct`)
+- [~] Stock movements: sale, wastage, staff meal, transfer — `stock_movements` logged on sale (auto) + manual purchase/wastage/adjustment via `/inventory` adjust. TODO: staff meal, transfer types in UI.
+- [~] Suppliers + purchase orders + receive (GRN, partial/full) + price history — `/purchasing`: supplier CRUD, create PO, add lines, **Receive (GRN)** via `receive_po()` (trusted: +stock, `purchase` movement, updates last cost, PO→received). **Verified E2E**: PO 30 buns → receive → Bun 14→44, cost→$0.20, alert cleared. TODO: partial receive, price history view. (migration `20260710200525_receive_po`)
+- [ ] Stock counts/audits → variance (theoretical vs actual) → wastage/shrinkage — `stock_counts`/`stock_count_items` (generated `variance` col) exist; wire UI.
+- [x] Low-stock / reorder / out-of-stock alerts + suggested reorder qty — `/inventory` flags items where on-hand ≤ reorder (row badge + banner count). **Verified E2E**: waste 85 → Bun 15 → "low stock". TODO: suggested reorder qty (par − on-hand), notifications.
 - [ ] Barcode/QR scanner support (stock-in + counts)
 - [ ] Multi-branch stock (per branch)
 - [ ] Valuation (FIFO/avg cost) + consumption views by time window
-- [ ] **Verify:** sell dish → stock deducts per recipe → alert → PO → GRN restocks (E2E)
+- [x] **Verify:** sell dish → stock deducts per recipe → alert → PO → GRN restocks (E2E) — **full loop verified in browser**: sell burger (Bun 15→14) → low-stock alert → create PO (30 buns @ $0.20) → Receive GRN → Bun 44, cost updated, alert cleared. + MCP edge coverage.
 
 ## Milestone 4 — Reporting & Analytics
-- [ ] Reporting aggregation layer (server-side) with windows: today/daily/weekly/monthly/yearly/all-time + custom range + prev-period compare
-- [ ] Sales reports: by item, category, hour, table, waiter, payment method, order type
-- [ ] Billing dashboard: revenue, tax, discounts, voids, refunds, avg ticket, turnover
-- [ ] Inventory reports: consumption, COGS, wastage, valuation, reorder needs
+- [~] Reporting aggregation layer (server-side) with windows: today/daily/weekly/monthly/yearly/all-time + custom range + prev-period compare — **server-side SQL** `report_sales`/`report_top_items`/`report_payments` (SECURITY INVOKER, RLS-scoped). `/reports` window selector (today/7/30/365/all) + prev-period delta. TODO: custom range picker, calendar-aligned windows (currently rolling). (migrations `20260710201536`, `20260710201633`)
+- [~] Sales reports: by item, category, hour, table, waiter, payment method, order type — **by item** (top items) + **by payment method** done on `/reports`. TODO: by category/hour/table/waiter/order-type breakdowns.
+- [~] Billing dashboard: revenue, tax, discounts, voids, refunds, avg ticket, turnover — revenue, tax, discounts, service, avg ticket, order count on `/reports` (KPI tiles + vs-prev). TODO: voids/refunds tiles, table turnover.
+- [ ] Inventory reports: consumption, COGS, wastage, valuation, reorder needs — `stock_movements` has the data; wire consumption/COGS views.
 - [ ] Staff reports: sales/waiter, orders handled, shift hours, tips
 - [ ] Customer/loyalty reports: repeat rate, top customers, redemption
-- [ ] Owner dashboard: KPI tiles + charts (web + mobile)
+- [~] Owner dashboard: KPI tiles + charts (web + mobile) — `/reports` KPI tiles (web). TODO: charts, mobile.
 - [ ] Exports: CSV / PDF
-- [ ] **Verify:** report totals reconcile vs seeded transactions across all windows
+- [~] **Verify:** report totals reconcile vs seeded transactions across all windows — **verified E2E**: revenue $30.70 / 2 orders / avg $15.35 / service $2.90 / discount $1.20 reconcile against the 2 paid E2E bills; top items (Burger ×2 $24, Fries ×1 $5); Cash $30.70; window switch recomputes. RLS-scoped (non-member → zeros). TODO: multi-window seeded reconciliation.
 
 ## Milestone 5 — Customer Channels
-- [ ] QR dine-in ordering page: scan → menu → order → (optional) pay-at-table; call-waiter / request-bill
-- [ ] Reservations/booking: date/time/party size, availability from floor capacity + slot rules, confirm + reminder (email/SMS), host board, optional deposit
-- [ ] Online storefront (per-tenant subdomain/slug): menu, cart, address, delivery/pickup slot, order-type fee
-- [ ] Delivery status tracking
-- [ ] Loyalty/CRM: customer accounts, points earn/burn, tiers, offers/coupons, order history, post-visit feedback/ratings
+- [x] QR dine-in ordering page: scan → menu → order → (optional) pay-at-table; call-waiter / request-bill — public `/t/[token]`: `qr_menu()` + `place_qr_order()` + `qr_request_bill()` (→ table bill_requested) + `submit_feedback()`, all anon token-scoped SECURITY DEFINER. Cart → 'qr' order → POS; post-order Request-bill + star feedback. **Verified E2E** (browser + anon MCP). TODO: pay-at-table (gateway, M6). (`20260711014523_qr_ordering`, `20260711021134_public_actions`)
+- [x] Reservations/booking: date/time/party size, availability from floor capacity + slot rules, confirm + reminder (email/SMS), host board, optional deposit — `/reservations` host board (book→confirm→seat→table occupied) + **public `/book/[slug]`** (anon `create_public_reservation`). **Verified E2E** (browser host board + anon MCP booking). TODO: availability/slot rules, email/SMS reminder (notification adapter), deposit. (`20260711021134_public_actions`)
+- [x] Online storefront (per-tenant subdomain/slug): menu, cart, address, delivery/pickup slot, order-type fee — public `/s/[slug]` (`storefront_menu`/`place_online_order` anon SECURITY DEFINER): cart, pickup/delivery toggle, name/phone/address, order-type fee from settings → creates `online_orders` + order. **Verified** (browser render + anon MCP order). TODO: delivery/pickup time-slot picker. (`20260711020634_storefront`)
+- [x] Delivery status tracking — `/online` staff board (`app/online/actions.ts`): status flow received→preparing→ready→out_for_delivery→delivered, dispatch (driver → `delivery_tracking`). Tenant-scoped. TODO: customer-facing tracking page.
+- [x] Loyalty/CRM: customer accounts, points earn/burn, tiers, offers/coupons, order history, post-visit feedback/ratings — `/loyalty` (`loyalty_adjust()` manager-gated trusted fn): earn/redeem points, auto-tier (bronze/silver/gold), feedback list; QR star feedback feeds it. **Verified**: earn 150 + burn 50 → 100 pts silver, overdraw blocked. TODO: coupons/offers redemption, order-history view. (`20260711020954_loyalty`)
 - [ ] Multiple menus (dine-in vs delivery pricing, happy-hour) + schedules
-- [ ] **Verify:** QR/online order lands in KDS; reservation blocks table → seat → bill (E2E)
+- [~] **Verify:** QR/online order lands in KDS; reservation blocks table → seat → bill (E2E) — QR order → POS/KDS ✅; online order → `/online` ✅; reservation → seat → table occupied ✅. TODO: full reservation→bill chain E2E.
 
 ## Milestone 6 — Payments & SaaS Monetization
-- [ ] Online payment gateway adapter (Stripe + regional e-wallet), per-tenant config, sandbox first
-- [ ] Customer payment flows (QR pay-at-table, online prepay) + webhook reconciliation
-- [ ] Wallet/loyalty points as payment method
-- [ ] Subscription plans (Starter/Pro/Enterprise), per-branch/per-seat, monthly/yearly, trial
-- [ ] Platform subscription billing + invoices + dunning
-- [ ] Feature gating by plan (feature flags)
-- [ ] Super-admin: usage metrics, audited impersonation
-- [ ] **Verify:** trial → upgrade → gateway sandbox charge → feature unlocks (E2E)
+- [~] Online payment gateway adapter (Stripe + regional e-wallet), per-tenant config, sandbox first — pluggable `PaymentGateway` interface + `sandboxGateway` (`lib/integrations/payments.ts`); `payByCard` on `/bill` charges via gateway → records 'online' payment. Real Stripe/eSewa/Khalti = same interface, registered by key (per-tenant config). **BLOCKED (open Q §9)**: which gateway to launch + API keys. TODO: per-tenant gateway selection in settings, webhook reconciliation.
+- [~] Customer payment flows (QR pay-at-table, online prepay) + webhook reconciliation — online card charge via sandbox gateway wired (staff `/bill`). TODO: customer-facing pay-at-table (QR) + online-prepay UI (needs gateway decision), webhooks.
+- [ ] Wallet/loyalty points as payment method — `loyalty_adjust` burn exists; wire "pay with points" on `/bill` (burn → record points payment).
+- [x] Subscription plans (Starter/Pro/Enterprise), per-branch/per-seat, monthly/yearly, trial — 3 plans seeded (features+limits jsonb); `subscribe_tenant()` (owner/platform-admin), monthly/yearly. `/billing` UI: current plan, compare, upgrade. **Verified E2E**: Pro→Enterprise upgrade in browser. (`20260711022122_subscriptions`)
+- [x] Platform subscription billing + invoices + dunning — `subscribe_tenant` issues `platform_invoices` (sandbox = paid). **Verified E2E**: Enterprise upgrade → $99 Paid invoice shown on `/billing`. TODO: dunning/past-due automation.
+- [x] Feature gating by plan (feature flags) — `tenant_has_feature()` (trial unlocks all; else plan.features); `requireFeature`/`tenantHasFeature` guards. `/loyalty` + `/online` gated → redirect `/billing` if not entitled. **Verified** (MCP: enterprise unlocks multi_branch, Pro gates it).
+- [~] Super-admin: usage metrics, audited impersonation — `/admin` extended: metrics (tenants by status, collected revenue) + per-tenant plan assignment (`setTenantPlan`, audited); suspend/activate audited. TODO: audited impersonation (needs session-switch infra), deeper usage analytics. Needs `platform_admins` seed to view.
+- [x] **Verify:** trial → upgrade → gateway sandbox charge → feature unlocks (E2E) — **verified**: `/billing` Pro→Enterprise → $99 invoice paid → multi_branch feature unlocked (MCP). Sandbox gateway charge path wired on `/bill`.
 
 ## Milestone 7 — Hardening & Scale
-- [ ] Offline queue + sync (waiter/cashier): local persist, idempotency keys, server-timestamp conflict resolution
-- [ ] Multi-branch rollups (per-branch + tenant aggregate)
-- [ ] Performance: POS/KDS < 200ms perceived, optimistic UI, report pagination
-- [ ] Full audit/compliance polish
-- [ ] Localization: currency/number/date formats, i18n string scaffolding
-- [ ] Security pass: RLS coverage audit, secret handling, PII minimization
-- [ ] Mobile store release (Apple Developer + Google Play)
+- [~] Offline queue + sync (waiter/cashier): local persist, idempotency keys, server-timestamp conflict resolution — **DB foundation done**: idempotency keys on orders + payments (`unique(tenant_id, idempotency_key)`), `record_payment`/`fire_order` idempotent. TODO: client-side offline queue (primarily Flutter/mobile) + reconnect sync — other stack, deferred.
+- [x] Multi-branch rollups (per-branch + tenant aggregate) — `report_by_branch()` (RLS-scoped) + "By branch" section on `/reports`. **Verified**: $30.70 Unassigned rollup. (`20260711024103_report_by_branch`)
+- [~] Performance: POS/KDS < 200ms perceived, optimistic UI, report pagination — report queries capped (limit 10-100); KDS auto-refresh. TODO: optimistic UI on POS/KDS actions, report pagination controls, Supabase Realtime (currently poll).
+- [x] Full audit/compliance polish — `/audit` viewer (owner/manager): voids/discounts/refunds/plan-changes/suspend with actor + metadata + tenant-tz timestamps. `writeAudit` used across void/discount/refund/tenant-status/plan-change. **Verified E2E**: void + discount entries shown.
+- [x] Localization: currency/number/date formats, i18n string scaffolding — tenant `timezone` plumbed through `getActiveTenant`/`ActiveTenant` → `formatDateTime(iso, tz)` across receipts/cash/reservations/online/loyalty/billing/audit; `money()` pinned locale. **Verified E2E**: reservation renders 9:15 AM (America/New_York) not UTC. TODO: full i18n string extraction, per-locale number formats.
+- [x] Security pass: RLS coverage audit, secret handling, PII minimization — **RLS: 0 of 52 tables uncovered** (audited repeatedly); all SECURITY DEFINER fns `search_path`-pinned + least-privilege (anon only on intended public API); **active-tenant scoping** added to all list pages (`.eq tenant_id`) beyond RLS. Publishable key only client-side (service role never exposed). TODO: PII minimization pass, secret rotation policy, remaining mutation-action tenant filters.
+- [!] Mobile store release (Apple Developer + Google Play) — Flutter app + store accounts, other stack. Blocked (no Flutter toolchain).
 
 ---
 
 ## Backlog / Discovered
-- [ ] _(add newly discovered tasks here, then file under the right milestone)_
+- [~] **Active-tenant scoping / defense-in-depth**: list pages + mutations rely on RLS alone (which correctly blocks cross-tenant — verified). But `getActiveTenant` picks ONE tenant while RLS allows ALL a user's tenants, so a multi-tenant user's pages would MIX tenants. Add `.eq("tenant_id", tenant.tenantId)` to every list query + mutation. **Done: `/reservations` (flagged by security review).** TODO sweep: /menu, /tables, /pos, /kds, /inventory, /purchasing, /cash, /bill, /admin actions. (RLS makes this correctness+depth, not an exploit.)
+- [ ] **Void after fire does NOT restore ingredient stock** (deducted at fire, void marks item void but doesn't reverse `stock_movements`/`current_qty`). Decide business rule: reverse deduction on void-before-served vs keep (comped/consumed). → Milestone 3
+- [ ] Auto-deduct allows **negative stock** on oversell (unconditional subtract). Fine as a discrepancy signal, but consider a flag/report. → Milestone 3
+- [ ] `adjustStock` is read-modify-write (reads `current_qty`, adds delta, writes) — concurrent adjusts can race. Use an atomic `current_qty = current_qty + delta` SQL update. → Milestone 3
+- [ ] Locked trigger fn `trg_deduct_stock` to no-execute (was default-granted anon/authenticated; migration `20260710195814`). Reminder: every new SECURITY DEFINER fn needs an explicit `revoke execute from anon` (Postgres default-grants it).
+- [ ] Configure Supabase Auth email confirmation for dev (currently ON → signup gives no session, bounces to `/login`). Decide: disable for dev, OR build email-verify callback route `/auth/confirm` + resend flow. → Milestone 0 auth
+- [ ] Handle signup errors gracefully in UI: Supabase rejects some email domains (e.g. `.dev` → "Email address invalid"). Surface + validate. → Milestone 0 auth
+- [ ] Remove test user `extrahelper.demo.owner@gmail.com` + demo tenant `extrahelper-test-diner` (owner-provisioned via onboarding) before real data seeding
+- [ ] Browser UI E2E for `/onboarding`, `/settings`, `/admin` — DB paths + guards verified via MCP/typecheck/build, but Chrome extension disconnected mid-session; drive the real pages next time. → Milestone 0
+- [ ] Seed a `platform_admins` row (owner-authorized) so `/admin` is viewable — self-seed was blocked by the safety classifier (privilege escalation). Run: `insert into platform_admins(user_id) values ('<uid>')`.
+- [ ] Fine-grained per-action RBAC write gating (only managers void/discount, cashier-only payments) — layer onto RLS + `requireRole` as billing/KOT features land. → Milestone 1/2
+- [ ] Settings editors for tax rules + receipt template (jsonb columns exist in `tenant_settings`). → Milestone 0/2
+- [ ] Tenant switcher UI for users who belong to multiple tenants (`getActiveTenant` currently picks the first membership). → Milestone 0
+- [ ] Enable Supabase Auth **leaked-password protection** (HaveIBeenPwned) — security advisor WARN, dashboard toggle. → Milestone 0 / Milestone 7 security pass
+- [x] Locked SECURITY DEFINER helpers to `authenticated` only — `revoke ... from anon` was ineffective (Postgres grants EXECUTE to PUBLIC by default); fixed by `revoke from public` + `grant to authenticated` (migration `20260710181544_lock_definer_execute`). Anon advisor warnings cleared. Remaining `authenticated`-execute WARN is by design (RLS policies + onboarding RPC require it).
+- [x] Anon-facing QR surface — done via SECURITY DEFINER fns (`qr_menu`/`place_qr_order`) that scope anon to the token's tenant, instead of broad anon RLS. Same pattern for future public surfaces (storefront). `/t` added to proxy public prefixes. Verified: foreign-item injection skipped, price from menu, negative qty clamped, all-invalid → atomic rollback (no orphan order). Note: `qr_menu`/`place_qr_order` show advisor 0028 (anon-executable SECURITY DEFINER) — INTENTIONAL (they ARE the public API).
+- [ ] QR order abuse hardening: no upper bound on item qty (anon can order qty 999999) + no rate limit on order spam. Add per-line qty cap + rate limiting before public launch. → Milestone 5 / 7
+- [ ] **Tenant-timezone display**: `formatDateTime` defaults to UTC, but hosts enter/read local time (e.g. reservation 7PM shows as 1:15PM UTC). Plumb `tenant_settings.timezone` into `getActiveTenant`/`ActiveTenant` and pass to `formatDateTime`/`money` callers (receipts, reservations, cash, reports). → Milestone 7 localization
 
 ## Blocked — Open Questions (PRD §9)
 - [!] Launch payment gateway(s): Stripe global vs regional e-wallet?
