@@ -4,7 +4,8 @@ import { NextResponse, type NextRequest } from "next/server"
 /** Public routes without a session: /t QR dine-in, /s storefront, /book reservations. */
 const PUBLIC_PREFIXES = ["/login", "/signup", "/auth", "/t", "/s", "/book"]
 // `/` is the app home (dashboard) — auth-required, not public.
-const PUBLIC_EXACT: string[] = []
+// PWA static files must be fetchable without a session (install + SW register).
+const PUBLIC_EXACT: string[] = ["/manifest.webmanifest", "/sw.js", "/icon.svg", "/favicon.ico"]
 
 function isPublic(pathname: string) {
   if (PUBLIC_EXACT.includes(pathname)) return true
