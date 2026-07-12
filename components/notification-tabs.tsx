@@ -90,6 +90,46 @@ export function NotificationTabs({
     }
   }, [tenantId, refetch])
 
+  // Activity tab — also live (audit_logs realtime; RLS delivers only to
+  // owner/manager, so only subscribe when the tab is available).
+  const [liveActivity, setLiveActivity] = useState<ActivityRow[]>(activity ?? [])
+  useEffect(() => setLiveActivity(activity ?? []), [activity])
+
+  const refetchActivity = useCallback(async () => {
+    const supabase = createClient()
+    const { data } = await supabase
+      .from("audit_logs")
+      .select("id, action, entity_type, metadata, created_at")
+      .eq("tenant_id", tenantId)
+      .order("created_at", { ascending: false })
+      .limit(100)
+    if (data) setLiveActivity(data as unknown as ActivityRow[])
+  }, [tenantId])
+
+  useEffect(() => {
+    if (!canSeeActivity) return
+    const supabase = createClient()
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const ping = () => {
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => void refetchActivity(), 200)
+    }
+    const channel = supabase
+      .channel(`notif-activity:${tenantId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "audit_logs", filter: `tenant_id=eq.${tenantId}` },
+        ping,
+      )
+      .subscribe()
+    const safety = setInterval(() => void refetchActivity(), 45000)
+    return () => {
+      if (timer) clearTimeout(timer)
+      clearInterval(safety)
+      void supabase.removeChannel(channel)
+    }
+  }, [tenantId, canSeeActivity, refetchActivity])
+
   return (
     <div>
       {/* Tabs */}
@@ -156,7 +196,7 @@ export function NotificationTabs({
           </ul>
         )
       ) : (
-        <ActivityList activity={activity ?? []} timezone={timezone} />
+        <ActivityList activity={liveActivity} timezone={timezone} />
       )}
     </div>
   )

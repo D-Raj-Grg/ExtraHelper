@@ -15,8 +15,11 @@ type OrderRow = { status?: string }
  * incl. QR self-orders). New order → badge + toast; opening/firing it (status
  * advances) auto-clears. Realtime off the shared authed socket.
  */
+const ALLOWED = ["owner", "manager", "cashier", "waiter"]
+
 export function NotificationBell() {
-  const { tenantId } = useRequiredTenant()
+  const { tenantId, role } = useRequiredTenant()
+  const allowed = ALLOWED.includes(role)
   const [count, setCount] = useState(0)
 
   const refetch = useCallback(async () => {
@@ -30,10 +33,11 @@ export function NotificationBell() {
   }, [tenantId])
 
   useEffect(() => {
-    void refetch()
-  }, [refetch])
+    if (allowed) void refetch()
+  }, [allowed, refetch])
 
   useEffect(() => {
+    if (!allowed) return
     const supabase = createClient()
     let timer: ReturnType<typeof setTimeout> | null = null
     const ping = () => {
@@ -46,9 +50,14 @@ export function NotificationBell() {
         "postgres_changes",
         { event: "*", schema: "public", table: "orders", filter: `tenant_id=eq.${tenantId}` },
         (payload: RealtimePostgresChangesPayload<OrderRow>) => {
-          if (payload.eventType === "INSERT" && (payload.new as OrderRow)?.status === "placed") {
-            toast("New order received")
-          }
+          const n = payload.new as OrderRow
+          const o = payload.old as OrderRow
+          // Toast when an order enters 'placed' — a QR insert, or a draft that
+          // gets placed.
+          const enteredPlaced =
+            (payload.eventType === "INSERT" && n?.status === "placed") ||
+            (payload.eventType === "UPDATE" && n?.status === "placed" && o?.status !== "placed")
+          if (enteredPlaced) toast("New order received")
           ping()
         },
       )
@@ -59,7 +68,9 @@ export function NotificationBell() {
       clearInterval(safety)
       void supabase.removeChannel(channel)
     }
-  }, [tenantId, refetch])
+  }, [tenantId, allowed, refetch])
+
+  if (!allowed) return null
 
   return (
     <Link
