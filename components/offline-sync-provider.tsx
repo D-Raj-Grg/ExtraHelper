@@ -25,25 +25,33 @@ import {
 type OfflineCtx = {
   online: boolean
   pending: number
-  enqueuePayment: (p: Extract<QueueEntry, { kind: "payment" }>["payload"]) => Promise<void>
-  enqueueOrder: (p: Extract<QueueEntry, { kind: "order" }>["payload"]) => Promise<void>
+  enqueuePayment: (p: Extract<QueueEntry, { kind: "payment" }>["payload"], key?: string) => Promise<void>
+  enqueueOrder: (p: Extract<QueueEntry, { kind: "order" }>["payload"], key?: string) => Promise<void>
   syncNow: () => Promise<void>
 }
 
 const Ctx = createContext<OfflineCtx | null>(null)
 
-async function replay(entry: QueueEntry): Promise<boolean> {
-  if (entry.kind === "payment") {
-    const res = await takePayment(
-      entry.payload.billId,
-      entry.payload.method,
-      entry.payload.amountCents,
-      entry.key,
-    )
-    return !res || !("error" in res)
+// "ok" = applied, "reject" = server refused (validation → count toward drop),
+// "retry" = transient/network (leave in queue, do NOT burn an attempt).
+type ReplayResult = "ok" | "reject" | "retry"
+
+async function replay(entry: QueueEntry): Promise<ReplayResult> {
+  try {
+    if (entry.kind === "payment") {
+      const res = await takePayment(
+        entry.payload.billId,
+        entry.payload.method,
+        entry.payload.amountCents,
+        entry.key,
+      )
+      return res && "error" in res ? "reject" : "ok"
+    }
+    const res = await placeStaffOrder(entry.key, entry.payload.tableId, entry.payload.items)
+    return "ok" in res ? "ok" : "reject"
+  } catch {
+    return "retry" // network/throw — don't count against the attempt cap
   }
-  const res = await placeStaffOrder(entry.key, entry.payload.tableId, entry.payload.items)
-  return "ok" in res
 }
 
 /**
@@ -68,23 +76,22 @@ export function OfflineSyncProvider({ children }: { children: React.ReactNode })
       let ok = 0
       let dropped = 0
       for (const entry of entries) {
-        let success = false
-        try {
-          success = await replay(entry)
-        } catch {
-          success = false
-        }
-        if (success) {
+        if (typeof navigator !== "undefined" && !navigator.onLine) break // went offline mid-sync
+        const r = await replay(entry)
+        if (r === "ok") {
           await removeEntry(entry.id)
           ok++
-        } else {
-          // Failed replay — give up after MAX_ATTEMPTS so a permanently-bad
-          // entry (e.g. an item that got 86'd) doesn't retry forever.
+        } else if (r === "reject") {
+          // Definitive server refusal (e.g. all items 86'd) — give up after
+          // MAX_ATTEMPTS so it doesn't retry forever. Transient errors ("retry")
+          // never reach here, so flaky Wi-Fi can't burn the cap.
           const attempts = await bumpAttempt(entry.id)
           if (attempts >= MAX_ATTEMPTS) {
             await removeEntry(entry.id)
             dropped++
           }
+        } else {
+          break // transient — stop, retry the whole batch on next reconnect
         }
       }
       await refreshCount()
@@ -118,16 +125,16 @@ export function OfflineSyncProvider({ children }: { children: React.ReactNode })
   }, [refreshCount, syncNow])
 
   const enqueuePayment = useCallback<OfflineCtx["enqueuePayment"]>(
-    async (p) => {
-      await enqueue({ kind: "payment", payload: p })
+    async (p, key) => {
+      await enqueue({ kind: "payment", payload: p, key })
       await refreshCount()
       toast.message("Payment queued — will sync when back online.")
     },
     [refreshCount],
   )
   const enqueueOrder = useCallback<OfflineCtx["enqueueOrder"]>(
-    async (p) => {
-      await enqueue({ kind: "order", payload: p })
+    async (p, key) => {
+      await enqueue({ kind: "order", payload: p, key })
       await refreshCount()
       toast.message("Order queued — will sync when back online.")
     },

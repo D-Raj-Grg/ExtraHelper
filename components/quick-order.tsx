@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useTransition } from "react"
+import { useEffect, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { placeStaffOrder } from "@/app/(app)/pos/actions"
@@ -54,6 +54,13 @@ export function QuickOrder({
 
   const [tableId, setTableId] = useState<string>("")
   const [cart, setCart] = useState<Record<string, number>>({})
+  // One idempotency key per submission, reused across retries until it succeeds,
+  // so a timed-out-but-committed placement can't create a duplicate order.
+  const submitKey = useRef<string | null>(null)
+  const newKey = () =>
+    typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.round(Math.random() * 1e9)}`
 
   const add = (id: string) => setCart((c) => ({ ...c, [id]: (c[id] ?? 0) + 1 }))
   const dec = (id: string) =>
@@ -74,32 +81,46 @@ export function QuickOrder({
   const total = lines.reduce((s, l) => s + l.cents * l.qty, 0)
   const count = lines.reduce((s, l) => s + l.qty, 0)
 
+  function clear() {
+    submitKey.current = null
+    setCart({})
+    setTableId("")
+  }
+
   function place() {
     const payloadItems = lines.map((l) => ({ item_id: l.id, qty: l.qty }))
     if (payloadItems.length === 0) return
     const label = tableOpts.find((t) => t.id === tableId)?.label
     const labelText = label ? `Table ${label}` : "Takeaway"
+    const payload = { tableId: tableId || null, items: payloadItems, label: labelText }
 
-    if (!online) {
-      void enqueueOrder({ tableId: tableId || null, items: payloadItems, label: labelText })
-      setCart({})
-      setTableId("")
+    // Decide from live connectivity (the `online` state can lag the event).
+    const offlineNow = typeof navigator !== "undefined" ? !navigator.onLine : !online
+    if (offlineNow) {
+      void enqueueOrder(payload)
+      clear()
       return
     }
 
+    if (!submitKey.current) submitKey.current = newKey()
+    const key = submitKey.current
+
     startTransition(async () => {
-      const key =
-        typeof crypto !== "undefined" && crypto.randomUUID
-          ? crypto.randomUUID()
-          : `${Date.now()}-${Math.round(Math.random() * 1e9)}`
-      const res = await placeStaffOrder(key, tableId || null, payloadItems)
-      if ("error" in res) {
-        toast.error(res.error)
-        return
+      try {
+        const res = await placeStaffOrder(key, tableId || null, payloadItems)
+        if ("error" in res) {
+          toast.error(res.error) // keep cart + key so a retry reuses the key
+          return
+        }
+        const id = res.orderId
+        clear()
+        router.push(`/pos/${id}`)
+      } catch {
+        // Network failure (maybe committed, maybe not) — queue with the SAME key
+        // so replay dedups against any partial commit. Never silently lost.
+        await enqueueOrder(payload, key)
+        clear()
       }
-      setCart({})
-      setTableId("")
-      router.push(`/pos/${res.orderId}`)
     })
   }
 

@@ -8,6 +8,7 @@ const PUBLIC_PREFIXES = ["/login", "/signup", "/auth", "/t", "/s", "/book"]
 const PUBLIC_EXACT: string[] = [
   "/manifest.webmanifest",
   "/sw.js",
+  "/offline.html",
   "/icon.svg",
   "/icon-192.png",
   "/icon-512.png",

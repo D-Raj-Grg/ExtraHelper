@@ -35,10 +35,13 @@ function uuid(): string {
 }
 
 export async function enqueue(
-  entry: { kind: "order"; payload: Extract<QueueEntry, { kind: "order" }>["payload"] }
-    | { kind: "payment"; payload: Extract<QueueEntry, { kind: "payment" }>["payload"] },
+  entry:
+    | { kind: "order"; payload: Extract<QueueEntry, { kind: "order" }>["payload"]; key?: string }
+    | { kind: "payment"; payload: Extract<QueueEntry, { kind: "payment" }>["payload"]; key?: string },
 ): Promise<QueueEntry> {
-  const full = { ...entry, id: uuid(), key: uuid(), createdAt: Date.now(), attempts: 0 } as QueueEntry
+  // A caller may pass an existing key (e.g. an online call that already tried
+  // the server with that key and timed out) so replay dedups instead of dupes.
+  const full = { ...entry, id: uuid(), key: entry.key ?? uuid(), createdAt: Date.now(), attempts: 0 } as QueueEntry
   await store.setItem(full.id, full)
   return full
 }

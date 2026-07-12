@@ -1,9 +1,15 @@
-// Minimal service worker: network-first navigations (cache fallback when
-// offline), cache-first static assets. Same-origin GET only. Never caches API
-// or Supabase calls. Registered in production only.
-const CACHE = "eh-v1"
+// Service worker. IMPORTANT: never cache authenticated navigation (HTML)
+// responses — on a shared POS tablet that would leak one user's page to the
+// next. Navigations are network-only with a STATIC offline fallback. Only
+// public static assets are cached. Same-origin GET only; POST/RSC untouched.
+const CACHE = "eh-v3"
+const OFFLINE_URL = "/offline.html"
+const PRECACHE = [OFFLINE_URL, "/icon.svg", "/icon-192.png", "/icon-512.png", "/manifest.webmanifest"]
 
-self.addEventListener("install", () => self.skipWaiting())
+self.addEventListener("install", (event) => {
+  event.waitUntil(caches.open(CACHE).then((c) => c.addAll(PRECACHE)))
+  self.skipWaiting()
+})
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
@@ -20,20 +26,19 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(req.url)
   if (url.origin !== self.location.origin) return
 
+  // Navigations: network-only, fall back to a generic offline page. Never cache
+  // per-user HTML.
   if (req.mode === "navigate") {
-    event.respondWith(
-      fetch(req)
-        .then((res) => {
-          const copy = res.clone()
-          caches.open(CACHE).then((c) => c.put(req, copy))
-          return res
-        })
-        .catch(() => caches.match(req).then((m) => m || caches.match("/"))),
-    )
+    event.respondWith(fetch(req).catch(() => caches.match(OFFLINE_URL)))
     return
   }
 
-  if (url.pathname.startsWith("/_next/static") || url.pathname.startsWith("/icon")) {
+  // Public static assets: cache-first.
+  if (
+    url.pathname.startsWith("/_next/static") ||
+    url.pathname.startsWith("/icon") ||
+    url.pathname === "/manifest.webmanifest"
+  ) {
     event.respondWith(
       caches.match(req).then(
         (m) =>

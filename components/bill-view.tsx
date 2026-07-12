@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import Link from "next/link"
 import { applyDiscount, payByCard, refundBill, takePayment, voidLine } from "@/app/(app)/bill/actions"
 import { money } from "@/lib/format"
@@ -46,6 +46,21 @@ export function BillView({
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const { online, enqueuePayment } = useOffline()
+  // Stable idempotency key per (amount) so a timed-out cash payment that the
+  // cashier retries can't record twice. New amount → new key.
+  const payKey = useRef<{ key: string; cents: number } | null>(null)
+  const keyFor = (cents: number) => {
+    if (!payKey.current || payKey.current.cents !== cents) {
+      payKey.current = {
+        key:
+          typeof crypto !== "undefined" && crypto.randomUUID
+            ? crypto.randomUUID()
+            : `${Date.now()}-${Math.round(Math.random() * 1e9)}`,
+        cents,
+      }
+    }
+    return payKey.current.key
+  }
   const due = Math.max(0, bill.total_cents - paidCents)
   const [amount, setAmount] = useState<string>((due / 100).toFixed(2))
   // Re-sync the payment amount when the due changes (e.g. after a discount).
@@ -114,17 +129,29 @@ export function BillView({
       return
     }
     setError(null)
+    const label = bill.restaurant_tables?.label
+      ? `Table ${bill.restaurant_tables.label}`
+      : "Takeaway"
+    const payload = { billId: bill.id, method, amountCents: cents, label }
+
     // Offline → queue (idempotency key travels with it, replays on reconnect).
-    if (!online) {
-      const label = bill.restaurant_tables?.label
-        ? `Table ${bill.restaurant_tables.label}`
-        : "Takeaway"
-      void enqueuePayment({ billId: bill.id, method, amountCents: cents, label })
+    const offlineNow = typeof navigator !== "undefined" ? !navigator.onLine : !online
+    if (offlineNow) {
+      void enqueuePayment(payload)
       return
     }
+    const key = keyFor(cents)
     startTransition(async () => {
-      const res = await takePayment(bill.id, method, cents)
-      if (res && "error" in res) setError(res.error)
+      try {
+        const res = await takePayment(bill.id, method, cents, key)
+        if (res && "error" in res) setError(res.error)
+        else payKey.current = null
+      } catch {
+        // Network failure → queue with the SAME key so replay dedups (no double
+        // charge if it actually committed).
+        await enqueuePayment(payload, key)
+        payKey.current = null
+      }
     })
   }
 
