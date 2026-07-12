@@ -29,12 +29,12 @@ export function NavMain({
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
-              tooltip="New Order"
+              tooltip="Quick Order"
               className="min-w-8 bg-primary text-primary-foreground duration-200 ease-linear hover:bg-primary/90 hover:text-primary-foreground active:bg-primary/90 active:text-primary-foreground"
               render={<a href="/pos" />}
             >
               <PlusIcon />
-              <span>New Order</span>
+              <span>Quick Order</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

@@ -16,6 +16,9 @@ export async function startOrder(formData: FormData): Promise<void> {
   const orderType = tableId ? "dine_in" : "pickup"
 
   const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
   const { data, error } = await supabase
     .from("orders")
     .insert({
@@ -23,6 +26,7 @@ export async function startOrder(formData: FormData): Promise<void> {
       table_id: tableId,
       order_type: orderType,
       status: "draft",
+      waiter_id: user?.id ?? null,
     })
     .select("id")
     .single()
