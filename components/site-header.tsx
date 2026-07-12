@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation"
 import { AppearanceControls } from "@/components/appearance-controls"
 import { OfflineBadge } from "@/components/offline-badge"
+import { NotificationBell } from "@/components/notification-bell"
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 
@@ -22,6 +23,7 @@ const TITLES: [prefix: string, label: string][] = [
   ["/cash", "Cash Drawer"],
   ["/billing", "Billing"],
   ["/bill", "Bill"],
+  ["/notifications", "Notifications"],
   ["/audit", "Audit Log"],
   ["/settings", "Settings"],
   ["/admin", "Super Admin"],
@@ -47,6 +49,7 @@ export function SiteHeader() {
         />
         <h1 className="text-base font-medium">{titleFor(pathname)}</h1>
         <div className="ml-auto flex items-center gap-2">
+          <NotificationBell />
           <OfflineBadge />
           <AppearanceControls />
         </div>
