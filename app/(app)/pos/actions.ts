@@ -104,11 +104,20 @@ export async function placeStaffOrder(
 }
 
 /** Fire the order to the kitchen — splits into per-station KOTs (trusted fn). */
-export async function fireOrder(orderId: string): Promise<PosState> {
-  await requireRole(...ORDER_ROLES)
+export async function fireOrder(
+  orderId: string,
+): Promise<{ error: string } | { ok: true; kotIds: string[] }> {
+  const tenant = await requireRole(...ORDER_ROLES)
   const supabase = await createClient()
   const { error } = await supabase.rpc("fire_order", { _order_id: orderId })
   if (error) return { error: error.message }
+  // Re-query the freshly created (unbumped) tickets so the client can print them.
+  const { data: kots } = await supabase
+    .from("kots")
+    .select("id")
+    .eq("tenant_id", tenant.tenantId)
+    .eq("order_id", orderId)
+    .eq("status", "new")
   revalidatePath(`/pos/${orderId}`)
-  return { ok: true }
+  return { ok: true, kotIds: (kots ?? []).map((k) => k.id) }
 }

@@ -29,6 +29,19 @@ export async function bumpKot(kotId: string, status: KotStatus): Promise<KdsStat
   return { ok: true }
 }
 
+/** Stamp a KOT as printed (fed by the browser print view). Idempotent-ish. */
+export async function markKotPrinted(kotId: string): Promise<KdsState> {
+  const tenant = await requireRole("owner", "manager", "kitchen", "waiter", "cashier")
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from("kots")
+    .update({ printed_at: new Date().toISOString() })
+    .eq("id", kotId)
+    .eq("tenant_id", tenant.tenantId)
+  if (error) return { error: error.message }
+  return { ok: true }
+}
+
 /** Recall a bumped ticket back onto the board (served/ready → preparing). */
 export async function recallKot(kotId: string): Promise<KdsState> {
   const tenant = await requireRole("owner", "manager", "kitchen")

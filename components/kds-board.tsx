@@ -240,10 +240,19 @@ export function KdsBoard({
                     </li>
                   ))}
                 </ul>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium capitalize">
                     {kot.status}
                   </span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      title="Print ticket"
+                      onClick={() => window.open(`/kot/${kot.id}`, "_blank", "noopener")}
+                      className="rounded border px-2 py-1 text-xs hover:bg-muted"
+                    >
+                      Print
+                    </button>
                   {next ? (
                     <Button
                       size="sm"
@@ -259,6 +268,7 @@ export function KdsBoard({
                       {next === "preparing" ? "Start" : next === "ready" ? "Ready" : "Bump"}
                     </Button>
                   ) : null}
+                  </div>
                 </div>
               </div>
             )

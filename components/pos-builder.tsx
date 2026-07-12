@@ -148,7 +148,17 @@ export function PosBuilder({
                 onClick={() =>
                   startTransition(async () => {
                     const res = await fireOrder(order.id)
-                    if (res && "error" in res) toast.error(res.error)
+                    if ("error" in res) {
+                      toast.error(res.error)
+                    } else {
+                      // Open a print view per station ticket (blocked popups can
+                      // still be printed from the KDS board).
+                      res.kotIds.forEach((id) =>
+                        window.open(`/kot/${id}`, "_blank", "noopener"),
+                      )
+                      if (res.kotIds.length)
+                        toast.success(`Fired · printing ${res.kotIds.length} ticket(s)`)
+                    }
                   })
                 }
               >
