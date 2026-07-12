@@ -5,8 +5,10 @@ export function toCsv(rows: Record<string, unknown>[], columns?: CsvColumn[]): s
   if (rows.length === 0) return ""
   const cols = columns ?? Object.keys(rows[0]).map((k) => ({ key: k, label: k }))
   const esc = (v: unknown) => {
-    const s = v == null ? "" : String(v)
-    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+    let s = v == null ? "" : String(v)
+    // Neutralize spreadsheet formula injection (=, +, -, @, tab, CR leading).
+    if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`
+    return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
   }
   const head = cols.map((c) => esc(c.label)).join(",")
   const body = rows.map((r) => cols.map((c) => esc(r[c.key])).join(",")).join("\n")

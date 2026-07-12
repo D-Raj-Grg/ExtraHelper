@@ -67,13 +67,13 @@
 
 ## Milestone 4 — Reporting & Analytics
 - [~] Reporting aggregation layer (server-side) with windows: today/daily/weekly/monthly/yearly/all-time + custom range + prev-period compare — **server-side SQL** `report_sales`/`report_top_items`/`report_payments` (SECURITY INVOKER, RLS-scoped). `/reports` window selector (today/7/30/365/all) + prev-period delta. TODO: custom range picker, calendar-aligned windows (currently rolling). (migrations `20260710201536`, `20260710201633`)
-- [~] Sales reports: by item, category, hour, table, waiter, payment method, order type — **by item** (top items) + **by payment method** done on `/reports`. TODO: by category/hour/table/waiter/order-type breakdowns.
-- [~] Billing dashboard: revenue, tax, discounts, voids, refunds, avg ticket, turnover — revenue, tax, discounts, service, avg ticket, order count on `/reports` (KPI tiles + vs-prev). TODO: voids/refunds tiles, table turnover.
-- [ ] Inventory reports: consumption, COGS, wastage, valuation, reorder needs — `stock_movements` has the data; wire consumption/COGS views.
-- [ ] Staff reports: sales/waiter, orders handled, shift hours, tips
-- [ ] Customer/loyalty reports: repeat rate, top customers, redemption
+- [x] Sales reports: by item, category, hour, table, waiter, payment method, order type — `/reports` Sales tab: **by item, category, order-type, hour, table, branch, payment method** (waiter under Staff tab). tz-aware. (`report_sales_by_bill`/`report_sales_by_category`, `20260712110000`)
+- [x] Billing dashboard: revenue, tax, discounts, voids, refunds, avg ticket, turnover — all tiles on `/reports` Sales tab incl. **voids, refunds, table turnover** (`report_extras`).
+- [x] Inventory reports: consumption, COGS, wastage, valuation, reorder needs — `/reports` Inventory tab (`report_inventory`): per-item consumed/wasted/COGS/valuation/reorder-qty + COGS & valuation totals. CSV export.
+- [x] Staff reports: sales/waiter, orders handled, shift hours, tips — `/reports` Staff tab (`report_staff`, DEFINER owner/manager): revenue+orders per waiter (orders now record `waiter_id`), tips + shift hours from `staff_shifts`. CSV export.
+- [x] Customer/loyalty reports: repeat rate, top customers, redemption — `/reports` Customers tab (`report_customers`): orders/spend per customer, points redeemed, **repeat rate**. CSV export.
 - [~] Owner dashboard: KPI tiles + charts (web + mobile) — `/reports` KPI tiles (web). TODO: charts, mobile.
-- [ ] Exports: CSV / PDF
+- [x] Exports: CSV / PDF — `ExportButtons` (CSV download via `lib/csv` + Print/PDF via browser print, `print:hidden` chrome) on every report table.
 - [~] **Verify:** report totals reconcile vs seeded transactions across all windows — **verified E2E**: revenue $30.70 / 2 orders / avg $15.35 / service $2.90 / discount $1.20 reconcile against the 2 paid E2E bills; top items (Burger ×2 $24, Fries ×1 $5); Cash $30.70; window switch recomputes. RLS-scoped (non-member → zeros). TODO: multi-window seeded reconciliation.
 
 ## Milestone 5 — Customer Channels
