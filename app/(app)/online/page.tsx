@@ -1,13 +1,13 @@
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
-import { requireRole, tenantHasFeature } from "@/lib/supabase/guards"
+import { requirePermission, tenantHasFeature } from "@/lib/supabase/guards"
 import { OnlineManager } from "@/components/online-manager"
 import { PageShell, PageHeader } from "@/components/page-header"
 
 export const dynamic = "force-dynamic"
 
 export default async function OnlinePage() {
-  const tenant = await requireRole("owner", "manager", "cashier")
+  const tenant = await requirePermission("online.view")
   if (!(await tenantHasFeature(tenant.tenantId, "online_store"))) redirect("/billing")
   const supabase = await createClient()
 

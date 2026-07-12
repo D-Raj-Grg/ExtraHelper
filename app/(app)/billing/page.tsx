@@ -1,12 +1,12 @@
 import { createClient } from "@/lib/supabase/server"
-import { requireRole } from "@/lib/supabase/guards"
+import { requirePermission } from "@/lib/supabase/guards"
 import { BillingManager } from "@/components/billing-manager"
 import { PageShell, PageHeader } from "@/components/page-header"
 
 export const dynamic = "force-dynamic"
 
 export default async function BillingPage() {
-  const tenant = await requireRole("owner")
+  const tenant = await requirePermission("billing.view")
   const supabase = await createClient()
 
   const [{ data: sub }, { data: plans }, { data: invoices }] = await Promise.all([

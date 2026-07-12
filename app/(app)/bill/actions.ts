@@ -4,16 +4,14 @@ import { randomUUID } from "crypto"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
-import { requireRole } from "@/lib/supabase/guards"
+import { requirePermission } from "@/lib/supabase/guards"
 import { getGateway } from "@/lib/integrations"
 
 export type BillState = { error: string } | { ok: true } | undefined
 
-const BILL_ROLES = ["owner", "manager", "cashier"] as const
-
 /** Generate (or reuse) the bill for an order, then open it. */
 export async function generateBill(orderId: string): Promise<void> {
-  await requireRole(...BILL_ROLES)
+  await requirePermission("checkout.view")
   const supabase = await createClient()
   const { data, error } = await supabase.rpc("create_bill_for_order", {
     _order_id: orderId,
@@ -29,7 +27,7 @@ export async function applyDiscount(
   value: number,
   reason: string,
 ): Promise<BillState> {
-  await requireRole("owner", "manager")
+  await requirePermission("order.discount")
   if (!Number.isFinite(value) || value <= 0)
     return { error: "Discount must be a positive number." }
 
@@ -52,7 +50,7 @@ export async function voidLine(
   billId: string,
   reason: string,
 ): Promise<BillState> {
-  await requireRole("owner", "manager")
+  await requirePermission("order.void")
   if (!reason.trim()) return { error: "Void reason is required." }
 
   const supabase = await createClient()
@@ -72,7 +70,7 @@ export async function refundBill(
   amountCents: number,
   reason: string,
 ): Promise<BillState> {
-  await requireRole("owner", "manager")
+  await requirePermission("payment.refund")
   if (!Number.isInteger(amountCents) || amountCents <= 0)
     return { error: "Refund amount must be a positive number." }
 
@@ -96,7 +94,7 @@ export async function payByCard(
   billId: string,
   amountCents: number,
 ): Promise<BillState> {
-  const tenant = await requireRole(...BILL_ROLES)
+  const tenant = await requirePermission("payment.take")
   if (!Number.isInteger(amountCents) || amountCents <= 0)
     return { error: "Amount must be a positive number." }
 
@@ -131,7 +129,7 @@ export async function takePayment(
   amountCents: number,
   idempotencyKey?: string,
 ): Promise<BillState> {
-  await requireRole(...BILL_ROLES)
+  await requirePermission("payment.take")
   if (!Number.isInteger(amountCents) || amountCents <= 0)
     return { error: "Amount must be a positive number." }
 

@@ -1,12 +1,12 @@
 import { createClient } from "@/lib/supabase/server"
-import { requireRole } from "@/lib/supabase/guards"
+import { requirePermission } from "@/lib/supabase/guards"
 import { ReservationsManager } from "@/components/reservations-manager"
 import { PageShell, PageHeader } from "@/components/page-header"
 
 export const dynamic = "force-dynamic"
 
 export default async function ReservationsPage() {
-  const tenant = await requireRole("owner", "manager", "receptionist")
+  const tenant = await requirePermission("reservations.view")
   const supabase = await createClient()
 
   const [{ data: reservations }, { data: tables }] = await Promise.all([

@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
-import { requireRole } from "@/lib/supabase/guards"
+import { requirePermission } from "@/lib/supabase/guards"
 import { PosBuilder } from "@/components/pos-builder"
 import { PageShell } from "@/components/page-header"
 
@@ -12,7 +12,7 @@ export default async function OrderBuilderPage({
   params: Promise<{ orderId: string }>
 }) {
   const { orderId } = await params
-  const tenant = await requireRole("owner", "manager", "cashier", "waiter")
+  const tenant = await requirePermission("order.view")
   const supabase = await createClient()
 
   const [{ data: order }, { data: items }, { data: menu }] = await Promise.all([

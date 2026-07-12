@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server"
-import { requireRole } from "@/lib/supabase/guards"
+import { requirePermission } from "@/lib/supabase/guards"
 import { PageShell, PageHeader } from "@/components/page-header"
 import { PosActiveOrders } from "@/components/pos-active-orders"
 import { QuickOrder } from "@/components/quick-order"
@@ -7,7 +7,7 @@ import { QuickOrder } from "@/components/quick-order"
 export const dynamic = "force-dynamic"
 
 export default async function PosPage() {
-  const tenant = await requireRole("owner", "manager", "cashier", "waiter")
+  const tenant = await requirePermission("order.view")
   const supabase = await createClient()
 
   const [{ data: tables }, { data: menu }, { data: orders }] = await Promise.all([

@@ -7,7 +7,29 @@ import { NavMain } from "@/components/nav-main"
 import { NavSecondary } from "@/components/nav-secondary"
 import { NavUser } from "@/components/nav-user"
 import { TenantSwitcher } from "@/components/tenant-switcher"
+import { usePermissions } from "@/components/permission-provider"
 import type { TenantMembership } from "@/lib/supabase/tenant"
+
+// nav item title → permission key required to see it (missing → always visible).
+const NAV_PERM: Record<string, string> = {
+  Dashboard: "dashboard.view",
+  Notifications: "notifications.view",
+  POS: "order.view",
+  "Kitchen (KDS)": "kds.view",
+  "Online Orders": "online.view",
+  "Cash Drawer": "cash.view",
+  Inventory: "inventory.view",
+  Purchasing: "purchasing.view",
+  Reports: "reports.view",
+  Loyalty: "loyalty.view",
+  Menu: "menu.view",
+  "Floors & Tables": "tables.view",
+  Reservations: "reservations.view",
+  Team: "staff.view",
+  Billing: "billing.view",
+  "Audit Log": "audit.view",
+  Settings: "settings.view",
+}
 import {
   Sidebar,
   SidebarContent,
@@ -93,7 +115,7 @@ const data = {
     },
     {
       title: "Team",
-      url: "#",
+      url: "/team",
       icon: <UsersIcon />,
     },
   ],
@@ -224,6 +246,13 @@ export function AppSidebar({
   tenants?: TenantMembership[]
   activeTenantId?: string
 }) {
+  const perms = usePermissions()
+  const canSee = (title: string) => {
+    const p = NAV_PERM[title]
+    return !p || perms.has(p)
+  }
+  const navMain = data.navMain.filter((i) => canSee(i.title))
+  const navSecondary = data.navSecondary.filter((i) => canSee(i.title))
   const multiTenant = (tenants?.length ?? 0) > 1
   return (
     <Sidebar collapsible="offcanvas" {...props}>
@@ -247,9 +276,9 @@ export function AppSidebar({
         )}
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={data.navMain} />
+        <NavMain items={navMain} />
         <NavDocuments items={data.documents} />
-        <NavSecondary items={data.navSecondary} className="mt-auto" />
+        <NavSecondary items={navSecondary} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>
         <NavUser user={user ?? data.user} />

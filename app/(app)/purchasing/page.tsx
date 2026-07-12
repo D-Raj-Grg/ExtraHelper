@@ -1,12 +1,12 @@
 import { createClient } from "@/lib/supabase/server"
-import { requireRole } from "@/lib/supabase/guards"
+import { requirePermission } from "@/lib/supabase/guards"
 import { PurchasingManager } from "@/components/purchasing-manager"
 import { PageShell, PageHeader } from "@/components/page-header"
 
 export const dynamic = "force-dynamic"
 
 export default async function PurchasingPage() {
-  const tenant = await requireRole("owner", "manager", "inventory")
+  const tenant = await requirePermission("purchasing.view")
   const supabase = await createClient()
 
   const [{ data: suppliers }, { data: items }, { data: pos }] = await Promise.all([

@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server"
-import { requireRole } from "@/lib/supabase/guards"
+import { requirePermission } from "@/lib/supabase/guards"
 import { formatDateTime } from "@/lib/format"
 import { ACTION_STYLES } from "@/lib/audit-constants"
 import { PageShell, PageHeader } from "@/components/page-header"
@@ -15,7 +15,7 @@ type Row = {
 }
 
 export default async function AuditPage() {
-  const tenant = await requireRole("owner", "manager")
+  const tenant = await requirePermission("audit.view")
   const supabase = await createClient()
 
   const { data } = await supabase

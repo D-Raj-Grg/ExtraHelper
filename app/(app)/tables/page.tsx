@@ -1,10 +1,10 @@
 import { createClient } from "@/lib/supabase/server"
-import { requireRole } from "@/lib/supabase/guards"
+import { requirePermission } from "@/lib/supabase/guards"
 import { TablesManager } from "@/components/tables-manager"
 import { PageShell, PageHeader } from "@/components/page-header"
 
 export default async function TablesPage() {
-  const tenant = await requireRole("owner", "manager", "receptionist")
+  const tenant = await requirePermission("tables.view")
   const supabase = await createClient()
 
   const [{ data: floors }, { data: tables }] = await Promise.all([

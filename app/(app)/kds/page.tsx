@@ -1,12 +1,12 @@
 import { createClient } from "@/lib/supabase/server"
-import { requireRole } from "@/lib/supabase/guards"
+import { requirePermission } from "@/lib/supabase/guards"
 import { KdsBoard } from "@/components/kds-board"
 
 // KDS should reflect the kitchen live; don't cache.
 export const dynamic = "force-dynamic"
 
 export default async function KdsPage() {
-  const tenant = await requireRole("owner", "manager", "kitchen")
+  const tenant = await requirePermission("kds.view")
   const supabase = await createClient()
 
   const { data: kots } = await supabase

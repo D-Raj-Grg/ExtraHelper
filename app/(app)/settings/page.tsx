@@ -1,10 +1,10 @@
 import { createClient } from "@/lib/supabase/server"
-import { requireRole } from "@/lib/supabase/guards"
+import { requirePermission } from "@/lib/supabase/guards"
 import { SettingsForm } from "@/components/settings-form"
 import { PageShell, PageHeader } from "@/components/page-header"
 
 export default async function SettingsPage() {
-  const tenant = await requireRole("owner", "manager")
+  const tenant = await requirePermission("settings.view")
 
   const supabase = await createClient()
   const { data: settings } = await supabase

@@ -11,6 +11,8 @@ import { RealtimeAuth } from "@/components/realtime-auth"
 import { createClient } from "@/lib/supabase/server"
 import { getActiveTenant, getTenantMemberships } from "@/lib/supabase/tenant"
 import { getUserPreferences } from "@/lib/supabase/preferences"
+import { getMyPermissions } from "@/lib/supabase/permissions"
+import { PermissionProvider } from "@/components/permission-provider"
 
 /**
  * Shared shell for all authenticated staff pages: sidebar + header. Auth is
@@ -32,9 +34,10 @@ export default async function AppLayout({
   const tenant = await getActiveTenant()
   if (!tenant) redirect("/onboarding")
 
-  const [prefs, memberships] = await Promise.all([
+  const [prefs, memberships, permissions] = await Promise.all([
     getUserPreferences(),
     getTenantMemberships(),
+    getMyPermissions(tenant.tenantId),
   ])
 
   const sidebarUser = {
@@ -50,6 +53,7 @@ export default async function AppLayout({
   return (
     <TenantProvider tenant={tenant}>
       <PreferencesProvider initialTheme={prefs.theme} initialScale={prefs.scale}>
+      <PermissionProvider permissions={permissions}>
       <OfflineSyncProvider>
       <RealtimeAuth />
       <SidebarProvider
@@ -74,6 +78,7 @@ export default async function AppLayout({
         <Toaster />
       </SidebarProvider>
       </OfflineSyncProvider>
+      </PermissionProvider>
       </PreferencesProvider>
     </TenantProvider>
   )

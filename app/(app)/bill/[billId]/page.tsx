@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
-import { requireRole } from "@/lib/supabase/guards"
+import { requirePermission } from "@/lib/supabase/guards"
 import { BillView } from "@/components/bill-view"
 import { PageShell } from "@/components/page-header"
 
@@ -12,7 +12,7 @@ export default async function BillPage({
   params: Promise<{ billId: string }>
 }) {
   const { billId } = await params
-  const tenant = await requireRole("owner", "manager", "cashier")
+  const tenant = await requirePermission("checkout.view")
   const supabase = await createClient()
 
   const [{ data: bill }, { data: items }, { data: payments }] = await Promise.all([

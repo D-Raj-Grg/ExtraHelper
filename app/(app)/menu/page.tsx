@@ -1,10 +1,10 @@
 import { createClient } from "@/lib/supabase/server"
-import { requireRole } from "@/lib/supabase/guards"
+import { requirePermission } from "@/lib/supabase/guards"
 import { MenuManager } from "@/components/menu-manager"
 import { PageShell, PageHeader } from "@/components/page-header"
 
 export default async function MenuPage() {
-  const tenant = await requireRole("owner", "manager")
+  const tenant = await requirePermission("menu.view")
   const supabase = await createClient()
 
   const [{ data: categories }, { data: items }, { data: stations }] =

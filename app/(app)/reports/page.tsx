@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/server"
-import { requireRole } from "@/lib/supabase/guards"
+import { requirePermission } from "@/lib/supabase/guards"
 import { money } from "@/lib/format"
 import { PageShell, PageHeader } from "@/components/page-header"
 
@@ -73,7 +73,7 @@ export default async function ReportsPage({
 }) {
   const sp = await searchParams
   const window: WindowKey = (WINDOWS.find((x) => x.key === sp.window)?.key ?? "today") as WindowKey
-  const tenant = await requireRole("owner", "manager")
+  const tenant = await requirePermission("reports.view")
   const supabase = await createClient()
   const tz = tenant.timezone
   const now = new Date()

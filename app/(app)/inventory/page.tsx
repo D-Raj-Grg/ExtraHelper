@@ -1,12 +1,12 @@
 import { createClient } from "@/lib/supabase/server"
-import { requireRole } from "@/lib/supabase/guards"
+import { requirePermission } from "@/lib/supabase/guards"
 import { InventoryManager } from "@/components/inventory-manager"
 import { PageShell, PageHeader } from "@/components/page-header"
 
 export const dynamic = "force-dynamic"
 
 export default async function InventoryPage() {
-  const tenant = await requireRole("owner", "manager", "inventory")
+  const tenant = await requirePermission("inventory.view")
   const supabase = await createClient()
 
   const [{ data: items }, { data: menu }, { data: recipes }] = await Promise.all([

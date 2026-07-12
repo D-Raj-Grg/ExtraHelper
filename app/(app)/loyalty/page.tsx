@@ -1,13 +1,13 @@
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
-import { requireRole, tenantHasFeature } from "@/lib/supabase/guards"
+import { requirePermission, tenantHasFeature } from "@/lib/supabase/guards"
 import { LoyaltyManager } from "@/components/loyalty-manager"
 import { PageShell, PageHeader } from "@/components/page-header"
 
 export const dynamic = "force-dynamic"
 
 export default async function LoyaltyPage() {
-  const tenant = await requireRole("owner", "manager")
+  const tenant = await requirePermission("loyalty.view")
   if (!(await tenantHasFeature(tenant.tenantId, "loyalty"))) redirect("/billing")
   const supabase = await createClient()
 

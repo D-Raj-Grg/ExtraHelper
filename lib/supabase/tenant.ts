@@ -41,6 +41,7 @@ async function fetchMemberships(): Promise<Row[]> {
     .from("user_tenants")
     .select("role, tenant_id, tenants(name, slug, tenant_settings(currency, timezone))")
     .eq("user_id", user.id)
+    .eq("status", "active") // pending (unapproved) memberships don't grant access
     .order("tenant_id", { ascending: true }) // stable ordering for "first"
 
   return (data ?? []) as Row[]

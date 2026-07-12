@@ -51,6 +51,22 @@ export async function requireRole(
   return tenant
 }
 
+/**
+ * Require the active tenant membership to hold permission `key` (custom role or
+ * base-role default). Redirects home on deny. Returns the tenant. This refines
+ * within the base role — RLS remains the security floor.
+ */
+export async function requirePermission(key: string): Promise<ActiveTenant> {
+  const tenant = await requireTenant()
+  const supabase = await createClient()
+  const { data } = await supabase.rpc("has_permission", {
+    _tenant: tenant.tenantId,
+    _key: key,
+  })
+  if (data !== true) redirect("/")
+  return tenant
+}
+
 /** Is the signed-in user a platform super admin? */
 export async function isPlatformAdmin(): Promise<boolean> {
   const supabase = await createClient()

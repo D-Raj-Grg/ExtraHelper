@@ -1,12 +1,12 @@
 import { createClient } from "@/lib/supabase/server"
-import { requireRole } from "@/lib/supabase/guards"
+import { requirePermission } from "@/lib/supabase/guards"
 import { PageShell, PageHeader } from "@/components/page-header"
 import { NotificationTabs } from "@/components/notification-tabs"
 
 export const dynamic = "force-dynamic"
 
 export default async function NotificationsPage() {
-  const tenant = await requireRole("owner", "manager", "cashier", "waiter")
+  const tenant = await requirePermission("notifications.view")
   const supabase = await createClient()
   const canSeeActivity = tenant.role === "owner" || tenant.role === "manager"
 
