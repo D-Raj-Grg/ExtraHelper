@@ -2,19 +2,47 @@
 
 import * as React from "react"
 
-import { NavDocuments } from "@/components/nav-documents"
 import { NavMain } from "@/components/nav-main"
 import { NavSecondary } from "@/components/nav-secondary"
 import { NavUser } from "@/components/nav-user"
 import { TenantSwitcher } from "@/components/tenant-switcher"
 import { usePermissions } from "@/components/permission-provider"
 import type { TenantMembership } from "@/lib/supabase/tenant"
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+} from "@/components/ui/sidebar"
+import {
+  LayoutDashboardIcon,
+  BellIcon,
+  ReceiptIcon,
+  ChefHatIcon,
+  ShoppingBagIcon,
+  WalletIcon,
+  CalendarCheckIcon,
+  LayoutGridIcon,
+  BookOpenIcon,
+  PackageIcon,
+  TruckIcon,
+  ChartBarIcon,
+  HeartIcon,
+  UsersIcon,
+  CreditCardIcon,
+  ScrollTextIcon,
+  Settings2Icon,
+  CommandIcon,
+} from "lucide-react"
 
 // nav item title → permission key required to see it (missing → always visible).
 const NAV_PERM: Record<string, string> = {
   Dashboard: "dashboard.view",
   Notifications: "notifications.view",
-  POS: "order.view",
+  "New Order": "order.view",
   "Kitchen (KDS)": "kds.view",
   "Online Orders": "online.view",
   "Cash Drawer": "cash.view",
@@ -30,212 +58,56 @@ const NAV_PERM: Record<string, string> = {
   "Audit Log": "audit.view",
   Settings: "settings.view",
 }
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarFooter,
-  SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-} from "@/components/ui/sidebar"
-import { LayoutDashboardIcon, ListIcon, ChartBarIcon, FolderIcon, UsersIcon, CameraIcon, FileTextIcon, Settings2Icon, CircleHelpIcon, SearchIcon, DatabaseIcon, FileChartColumnIcon, FileIcon, CommandIcon, BellIcon } from "lucide-react"
 
 const data = {
   user: {
-    name: "shadcn",
-    email: "m@example.com",
-    avatar: "/avatars/shadcn.jpg",
+    name: "",
+    email: "",
+    avatar: "",
   },
-  navMain: [
-    {
-      title: "Dashboard",
-      url: "/",
-      icon: <LayoutDashboardIcon />,
-    },
-    {
-      title: "Notifications",
-      url: "/notifications",
-      icon: <BellIcon />,
-    },
-    {
-      title: "POS",
-      url: "/pos",
-      icon: <ChartBarIcon />,
-    },
-    {
-      title: "Kitchen (KDS)",
-      url: "/kds",
-      icon: <CameraIcon />,
-    },
-    {
-      title: "Online Orders",
-      url: "/online",
-      icon: <FileIcon />,
-    },
-    {
-      title: "Cash Drawer",
-      url: "/cash",
-      icon: <FileTextIcon />,
-    },
-    {
-      title: "Inventory",
-      url: "/inventory",
-      icon: <DatabaseIcon />,
-    },
-    {
-      title: "Purchasing",
-      url: "/purchasing",
-      icon: <FileChartColumnIcon />,
-    },
-    {
-      title: "Reports",
-      url: "/reports",
-      icon: <ChartBarIcon />,
-    },
-    {
-      title: "Loyalty",
-      url: "/loyalty",
-      icon: <UsersIcon />,
-    },
-    {
-      title: "Menu",
-      url: "/menu",
-      icon: <ListIcon />,
-    },
-    {
-      title: "Floors & Tables",
-      url: "/tables",
-      icon: <FolderIcon />,
-    },
-    {
-      title: "Reservations",
-      url: "/reservations",
-      icon: <ListIcon />,
-    },
-    {
-      title: "Team",
-      url: "/team",
-      icon: <UsersIcon />,
-    },
+  // Shown ungrouped at the top of the sidebar.
+  navTop: [
+    { title: "Dashboard", url: "/", icon: <LayoutDashboardIcon /> },
+    { title: "Notifications", url: "/notifications", icon: <BellIcon /> },
   ],
-  navClouds: [
+  // Labeled sections, in order.
+  navGroups: [
     {
-      title: "Capture",
-      icon: (
-        <CameraIcon
-        />
-      ),
-      isActive: true,
-      url: "#",
+      label: "Operations",
       items: [
-        {
-          title: "Active Proposals",
-          url: "#",
-        },
-        {
-          title: "Archived",
-          url: "#",
-        },
+        { title: "New Order", url: "/pos", icon: <ReceiptIcon /> },
+        { title: "Kitchen (KDS)", url: "/kds", icon: <ChefHatIcon /> },
+        { title: "Online Orders", url: "/online", icon: <ShoppingBagIcon /> },
+        { title: "Cash Drawer", url: "/cash", icon: <WalletIcon /> },
+        { title: "Reservations", url: "/reservations", icon: <CalendarCheckIcon /> },
+        { title: "Floors & Tables", url: "/tables", icon: <LayoutGridIcon /> },
       ],
     },
     {
-      title: "Proposal",
-      icon: (
-        <FileTextIcon
-        />
-      ),
-      url: "#",
+      label: "Catalog",
       items: [
-        {
-          title: "Active Proposals",
-          url: "#",
-        },
-        {
-          title: "Archived",
-          url: "#",
-        },
+        { title: "Menu", url: "/menu", icon: <BookOpenIcon /> },
+        { title: "Inventory", url: "/inventory", icon: <PackageIcon /> },
+        { title: "Purchasing", url: "/purchasing", icon: <TruckIcon /> },
       ],
     },
     {
-      title: "Prompts",
-      icon: (
-        <FileTextIcon
-        />
-      ),
-      url: "#",
+      label: "Insights",
       items: [
-        {
-          title: "Active Proposals",
-          url: "#",
-        },
-        {
-          title: "Archived",
-          url: "#",
-        },
+        { title: "Reports", url: "/reports", icon: <ChartBarIcon /> },
+        { title: "Loyalty", url: "/loyalty", icon: <HeartIcon /> },
       ],
     },
   ],
+  // Admin cluster, pinned to the bottom.
   navSecondary: [
-    {
-      title: "Billing",
-      url: "/billing",
-      icon: <FileTextIcon />,
-    },
-    {
-      title: "Audit Log",
-      url: "/audit",
-      icon: <FileTextIcon />,
-    },
-    {
-      title: "Settings",
-      url: "/settings",
-      icon: <Settings2Icon />,
-    },
-    {
-      title: "Get Help",
-      url: "#",
-      icon: (
-        <CircleHelpIcon
-        />
-      ),
-    },
-    {
-      title: "Search",
-      url: "#",
-      icon: (
-        <SearchIcon
-        />
-      ),
-    },
-  ],
-  documents: [
-    {
-      name: "Data Library",
-      url: "#",
-      icon: (
-        <DatabaseIcon
-        />
-      ),
-    },
-    {
-      name: "Reports",
-      url: "#",
-      icon: (
-        <FileChartColumnIcon
-        />
-      ),
-    },
-    {
-      name: "Word Assistant",
-      url: "#",
-      icon: (
-        <FileIcon
-        />
-      ),
-    },
+    { title: "Team", url: "/team", icon: <UsersIcon /> },
+    { title: "Billing", url: "/billing", icon: <CreditCardIcon /> },
+    { title: "Audit Log", url: "/audit", icon: <ScrollTextIcon /> },
+    { title: "Settings", url: "/settings", icon: <Settings2Icon /> },
   ],
 }
+
 export function AppSidebar({
   user,
   tenants,
@@ -251,7 +123,10 @@ export function AppSidebar({
     const p = NAV_PERM[title]
     return !p || perms.has(p)
   }
-  const navMain = data.navMain.filter((i) => canSee(i.title))
+  const navTop = data.navTop.filter((i) => canSee(i.title))
+  const navGroups = data.navGroups
+    .map((g) => ({ ...g, items: g.items.filter((i) => canSee(i.title)) }))
+    .filter((g) => g.items.length > 0)
   const navSecondary = data.navSecondary.filter((i) => canSee(i.title))
   const multiTenant = (tenants?.length ?? 0) > 1
   return (
@@ -276,8 +151,7 @@ export function AppSidebar({
         )}
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={navMain} />
-        <NavDocuments items={data.documents} />
+        <NavMain items={navTop} groups={navGroups} />
         <NavSecondary items={navSecondary} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>
