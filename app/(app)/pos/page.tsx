@@ -1,10 +1,9 @@
-import Link from "next/link"
 import { createClient } from "@/lib/supabase/server"
 import { requireRole } from "@/lib/supabase/guards"
 import { startOrder } from "@/app/(app)/pos/actions"
 import { Button } from "@/components/ui/button"
 import { PageShell, PageHeader } from "@/components/page-header"
-import { RealtimeRefresh } from "@/components/realtime-refresh"
+import { PosActiveOrders } from "@/components/pos-active-orders"
 
 export const dynamic = "force-dynamic"
 
@@ -35,7 +34,6 @@ export default async function PosPage() {
 
   return (
     <PageShell>
-      <RealtimeRefresh channel="pos" tenantId={tenant.tenantId} tables={["orders", "order_items"]} />
       <PageHeader
         title={<>{tenant.name} · POS</>}
         description="Start an order, then fire to the kitchen."
@@ -62,33 +60,7 @@ export default async function PosPage() {
 
       <section>
         <h2 className="mb-2 text-lg font-semibold">Active orders</h2>
-        {orderRows.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No active orders.</p>
-        ) : (
-          <div className="overflow-x-auto rounded-lg border">
-            <table className="w-full text-sm">
-              <tbody>
-                {orderRows.map((o) => (
-                  <tr key={o.id} className="border-b last:border-0">
-                    <td className="px-4 py-2 font-medium">
-                      {o.restaurant_tables?.label
-                        ? `Table ${o.restaurant_tables.label}`
-                        : "Takeaway"}
-                    </td>
-                    <td className="px-4 py-2 capitalize text-muted-foreground">
-                      {o.status.replace("_", " ")}
-                    </td>
-                    <td className="px-4 py-2 text-right">
-                      <Button size="sm" variant="outline" nativeButton={false} render={<Link href={`/pos/${o.id}`} />}>
-                        Open
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <PosActiveOrders initial={orderRows} tenantId={tenant.tenantId} />
       </section>
     </PageShell>
   )

@@ -7,6 +7,7 @@ import { ImpersonationBanner } from "@/components/impersonation-banner"
 import { TenantProvider } from "@/components/tenant-provider"
 import { PreferencesProvider } from "@/components/preferences-provider"
 import { OfflineSyncProvider } from "@/components/offline-sync-provider"
+import { RealtimeAuth } from "@/components/realtime-auth"
 import { createClient } from "@/lib/supabase/server"
 import { getActiveTenant, getTenantMemberships } from "@/lib/supabase/tenant"
 import { getUserPreferences } from "@/lib/supabase/preferences"
@@ -50,6 +51,7 @@ export default async function AppLayout({
     <TenantProvider tenant={tenant}>
       <PreferencesProvider initialTheme={prefs.theme} initialScale={prefs.scale}>
       <OfflineSyncProvider>
+      <RealtimeAuth />
       <SidebarProvider
         style={
           {

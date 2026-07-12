@@ -1,12 +1,15 @@
 "use client"
 
-import { useEffect, useOptimistic, useRef, useState, useTransition } from "react"
-import { useRouter } from "next/navigation"
+import { useCallback, useEffect, useOptimistic, useRef, useState, useTransition } from "react"
 import { toast } from "sonner"
 import { bumpKot } from "@/app/(app)/kds/actions"
 import { createClient } from "@/lib/supabase/client"
 import { KOT_FLOW, type KotStatus } from "@/lib/kds-constants"
 import { Button } from "@/components/ui/button"
+
+const KDS_SELECT =
+  "id, status, created_at, station_id, kitchen_stations(name), orders(table_id, restaurant_tables!orders_table_id_fkey(label)), kot_items(id, qty, status, order_items(name_snapshot))"
+const ACTIVE = ["new", "preparing", "ready"]
 
 type Kot = {
   id: string
@@ -38,48 +41,62 @@ function ageLabel(createdAt: string, now: number): string {
 }
 
 export function KdsBoard({ kots, tenantId }: { kots: Kot[]; tenantId: string }) {
-  const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [now, setNow] = useState(() => Date.now())
 
-  // Optimistic bump — ticket advances instantly; realtime/refresh reconciles.
+  // Live board state, seeded from the server. Realtime + a safety poll keep it
+  // fresh with a scoped refetch (joins mean a full row merge isn't enough).
+  const [liveKots, setLiveKots] = useState<Kot[]>(kots)
+  useEffect(() => setLiveKots(kots), [kots])
+
+  const refetch = useCallback(async () => {
+    const supabase = createClient()
+    const { data } = await supabase
+      .from("kots")
+      .select(KDS_SELECT)
+      .eq("tenant_id", tenantId)
+      .in("status", ACTIVE)
+      .order("created_at", { ascending: true })
+    if (data) setLiveKots(data as unknown as Kot[])
+  }, [tenantId])
+
+  // Optimistic bump — ticket advances instantly; the refetch reconciles.
   const [optKots, applyBump] = useOptimistic(
-    kots,
+    liveKots,
     (state: Kot[], patch: { id: string; status: string }) =>
       state.map((k) => (k.id === patch.id ? { ...k, status: patch.status } : k)),
   )
 
-  // Aging tick (1s) + a long safety poll in case the realtime socket drops.
+  // Aging tick (1s) + a long safety refetch in case the realtime socket drops.
   useEffect(() => {
     const tick = setInterval(() => setNow(Date.now()), 1000)
-    const safety = setInterval(() => router.refresh(), 30000)
+    const safety = setInterval(() => void refetch(), 45000)
     return () => {
       clearInterval(tick)
       clearInterval(safety)
     }
-  }, [router])
+  }, [refetch])
 
-  // Live updates: refresh the board on any KOT / KOT-item / order change for
-  // this tenant (new fires, bumps, cancels) via Supabase Realtime.
+  // Live: debounced scoped refetch on any KOT / KOT-item / order change.
   useEffect(() => {
     const supabase = createClient()
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const ping = () => {
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => void refetch(), 150)
+    }
     const filter = `tenant_id=eq.${tenantId}`
     const channel = supabase
       .channel(`kds:${tenantId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "kots", filter }, () =>
-        router.refresh(),
-      )
-      .on("postgres_changes", { event: "*", schema: "public", table: "kot_items", filter }, () =>
-        router.refresh(),
-      )
-      .on("postgres_changes", { event: "*", schema: "public", table: "orders", filter }, () =>
-        router.refresh(),
-      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "kots", filter }, ping)
+      .on("postgres_changes", { event: "*", schema: "public", table: "kot_items", filter }, ping)
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders", filter }, ping)
       .subscribe()
     return () => {
+      if (timer) clearTimeout(timer)
       void supabase.removeChannel(channel)
     }
-  }, [router, tenantId])
+  }, [tenantId, refetch])
 
   const boardRef = useRef<HTMLDivElement>(null)
   const [isFull, setIsFull] = useState(false)

@@ -1,7 +1,9 @@
 "use client"
 
-import { useActionState, useOptimistic, useState, useTransition } from "react"
+import { useActionState, useEffect, useOptimistic, useState, useTransition } from "react"
 import { toast } from "sonner"
+import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js"
+import { createClient } from "@/lib/supabase/client"
 import {
   createFloor,
   createTable,
@@ -48,9 +50,11 @@ function FormError({ state }: { state: TablesState }) {
 export function TablesManager({
   floors,
   tables,
+  tenantId,
 }: {
   floors: Floor[]
   tables: Table[]
+  tenantId: string
 }) {
   const [floorState, floorAction, floorPending] = useActionState<TablesState, FormData>(
     createFloor,
@@ -63,9 +67,40 @@ export function TablesManager({
   const [pending, startTransition] = useTransition()
   const [qrOpenId, setQrOpenId] = useState<string | null>(null)
 
+  // Live base state, seeded from the server + kept fresh by Realtime (merge the
+  // changed row in place — no refetch). Resync if the server data changes.
+  const [liveTables, setLiveTables] = useState<Table[]>(tables)
+  useEffect(() => setLiveTables(tables), [tables])
+
+  useEffect(() => {
+    const supabase = createClient()
+    const channel = supabase
+      .channel(`tables:${tenantId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "restaurant_tables", filter: `tenant_id=eq.${tenantId}` },
+        (payload: RealtimePostgresChangesPayload<Table>) => {
+          setLiveTables((prev) => {
+            if (payload.eventType === "DELETE") {
+              const oldId = (payload.old as { id?: string })?.id
+              return prev.filter((t) => t.id !== oldId)
+            }
+            const row = payload.new as Table
+            const idx = prev.findIndex((t) => t.id === row.id)
+            if (idx === -1) return [...prev, row]
+            return prev.map((t) => (t.id === row.id ? { ...t, ...row } : t))
+          })
+        },
+      )
+      .subscribe()
+    return () => {
+      void supabase.removeChannel(channel)
+    }
+  }, [tenantId])
+
   // Optimistic table state — the <select> reflects the change instantly.
   const [optTables, setOptTable] = useOptimistic(
-    tables,
+    liveTables,
     (state: Table[], patch: { id: string; state: string }) =>
       state.map((t) => (t.id === patch.id ? { ...t, state: patch.state } : t)),
   )
