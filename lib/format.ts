@@ -31,3 +31,36 @@ export function formatDateTime(iso: string, timeZone = "UTC"): string {
     return new Date(iso).toISOString()
   }
 }
+
+/** Displacement (ms) of `date` when rendered in `timeZone` vs UTC. */
+function tzOffsetMs(date: Date, timeZone: string): number {
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      hour12: false,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    })
+      .formatToParts(date)
+      .map((x) => [x.type, x.value]),
+  )
+  const hour = p.hour === "24" ? "00" : p.hour
+  const asUtc = Date.UTC(+p.year, +p.month - 1, +p.day, +hour, +p.minute, +p.second)
+  return asUtc - date.getTime()
+}
+
+/**
+ * Interpret a timezone-less wall-clock string (a `datetime-local` value like
+ * "2026-07-12T19:00") as local time in `timeZone`, returning the matching UTC
+ * instant. Without this, `new Date(wall)` parses in the SERVER's zone (UTC in
+ * prod), so a host entering 7pm is stored hours off for e.g. Asia/Kolkata.
+ */
+export function zonedTimeToUtc(wall: string, timeZone: string): Date {
+  const guess = new Date(`${wall}Z`)
+  if (Number.isNaN(guess.getTime())) return new Date(NaN)
+  return new Date(guess.getTime() - tzOffsetMs(guess, timeZone))
+}

@@ -9,7 +9,7 @@ import { Field, FieldLabel } from "@/components/ui/field"
 const inputClass =
   "border-input dark:bg-input/30 h-9 w-full rounded-md border bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
 
-export function BookForm({ slug }: { slug: string }) {
+export function BookForm({ slug, timezone }: { slug: string; timezone: string }) {
   const action = bookPublic.bind(null, slug)
   const [state, formAction, pending] = useActionState<BookState, FormData>(action, undefined)
 
@@ -28,6 +28,7 @@ export function BookForm({ slug }: { slug: string }) {
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
+      <input type="hidden" name="tz" value={timezone} />
       <Field>
         <FieldLabel htmlFor="name">Your name</FieldLabel>
         <Input id="name" name="name" required />

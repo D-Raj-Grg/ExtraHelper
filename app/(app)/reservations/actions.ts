@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
 import { requireRole } from "@/lib/supabase/guards"
 import { RESV_STATES, type ResvStatus } from "@/lib/reservation-constants"
+import { zonedTimeToUtc } from "@/lib/format"
 
 export type ResvState = { error: string } | { ok: true } | undefined
 
@@ -24,7 +25,9 @@ export async function createReservation(
   if (!name) return { error: "Guest name is required." }
   if (!Number.isInteger(party) || party < 1) return { error: "Party size must be at least 1." }
   if (!when) return { error: "Pick a date and time." }
-  const reservedAt = new Date(when)
+  // The datetime-local value is a naive wall time; interpret it in the tenant's
+  // timezone (not the server's UTC) so 7pm entered = 7pm shown.
+  const reservedAt = zonedTimeToUtc(when, tenant.timezone)
   if (Number.isNaN(reservedAt.getTime())) return { error: "Invalid date/time." }
 
   const supabase = await createClient()
