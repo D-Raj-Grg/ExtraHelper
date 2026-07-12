@@ -111,13 +111,15 @@ export async function fireOrder(
   const supabase = await createClient()
   const { error } = await supabase.rpc("fire_order", { _order_id: orderId })
   if (error) return { error: error.message }
-  // Re-query the freshly created (unbumped) tickets so the client can print them.
+  // Re-query the freshly created tickets so the client can print them. Scope to
+  // unprinted + unbumped so a re-fire (added items) won't reprint earlier KOTs.
   const { data: kots } = await supabase
     .from("kots")
     .select("id")
     .eq("tenant_id", tenant.tenantId)
     .eq("order_id", orderId)
     .eq("status", "new")
+    .is("printed_at", null)
   revalidatePath(`/pos/${orderId}`)
   return { ok: true, kotIds: (kots ?? []).map((k) => k.id) }
 }
