@@ -5,7 +5,16 @@ import { NextResponse, type NextRequest } from "next/server"
 const PUBLIC_PREFIXES = ["/login", "/signup", "/auth", "/t", "/s", "/book"]
 // `/` is the app home (dashboard) — auth-required, not public.
 // PWA static files must be fetchable without a session (install + SW register).
-const PUBLIC_EXACT: string[] = ["/manifest.webmanifest", "/sw.js", "/icon.svg", "/favicon.ico"]
+const PUBLIC_EXACT: string[] = [
+  "/manifest.webmanifest",
+  "/sw.js",
+  "/icon.svg",
+  "/icon-192.png",
+  "/icon-512.png",
+  "/apple-touch-icon.png",
+  "/favicon.ico",
+  "/favicon.png",
+]
 
 function isPublic(pathname: string) {
   if (PUBLIC_EXACT.includes(pathname)) return true

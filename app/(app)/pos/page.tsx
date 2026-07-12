@@ -1,9 +1,8 @@
 import { createClient } from "@/lib/supabase/server"
 import { requireRole } from "@/lib/supabase/guards"
-import { startOrder } from "@/app/(app)/pos/actions"
-import { Button } from "@/components/ui/button"
 import { PageShell, PageHeader } from "@/components/page-header"
 import { PosActiveOrders } from "@/components/pos-active-orders"
+import { QuickOrder } from "@/components/quick-order"
 
 export const dynamic = "force-dynamic"
 
@@ -11,12 +10,18 @@ export default async function PosPage() {
   const tenant = await requireRole("owner", "manager", "cashier", "waiter")
   const supabase = await createClient()
 
-  const [{ data: tables }, { data: orders }] = await Promise.all([
+  const [{ data: tables }, { data: menu }, { data: orders }] = await Promise.all([
     supabase
       .from("restaurant_tables")
       .select("id, label, state")
       .eq("tenant_id", tenant.tenantId)
       .order("label"),
+    supabase
+      .from("menu_items")
+      .select("id, name, base_price_cents, is_86")
+      .eq("tenant_id", tenant.tenantId)
+      .eq("is_active", true)
+      .order("name"),
     supabase
       .from("orders")
       .select("id, order_type, status, created_at, restaurant_tables!orders_table_id_fkey(label)")
@@ -36,26 +41,11 @@ export default async function PosPage() {
     <PageShell>
       <PageHeader
         title={<>{tenant.name} · POS</>}
-        description="Start an order, then fire to the kitchen."
+        description="Build an order (works offline — queues and syncs on reconnect)."
       />
 
       <section className="mb-8">
-        <h2 className="mb-2 text-lg font-semibold">New order</h2>
-        <form action={startOrder} className="flex flex-wrap items-center gap-2">
-          <select
-            name="tableId"
-            defaultValue=""
-            className="border-input dark:bg-input/30 h-9 rounded-md border bg-transparent px-3 text-sm shadow-xs"
-          >
-            <option value="">Takeaway / pickup</option>
-            {(tables ?? []).map((t) => (
-              <option key={t.id} value={t.id}>
-                Table {t.label} ({t.state})
-              </option>
-            ))}
-          </select>
-          <Button type="submit">Start order</Button>
-        </form>
+        <QuickOrder menu={menu ?? []} tables={tables ?? []} currency={tenant.currency} />
       </section>
 
       <section>

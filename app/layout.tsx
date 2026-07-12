@@ -19,6 +19,13 @@ export const metadata: Metadata = {
   description: "Restaurant management platform",
   manifest: "/manifest.webmanifest",
   appleWebApp: { capable: true, title: "ExtraHelper", statusBarStyle: "default" },
+  icons: {
+    icon: [
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon.svg", type: "image/svg+xml" },
+    ],
+    apple: "/apple-touch-icon.png",
+  },
 };
 
 export const viewport = {

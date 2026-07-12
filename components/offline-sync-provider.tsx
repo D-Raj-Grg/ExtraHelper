@@ -13,6 +13,8 @@ import { toast } from "sonner"
 import { placeStaffOrder } from "@/app/(app)/pos/actions"
 import { takePayment } from "@/app/(app)/bill/actions"
 import {
+  MAX_ATTEMPTS,
+  bumpAttempt,
   enqueue,
   listQueue,
   queueCount,
@@ -64,20 +66,34 @@ export function OfflineSyncProvider({ children }: { children: React.ReactNode })
     try {
       const entries = await listQueue()
       let ok = 0
+      let dropped = 0
       for (const entry of entries) {
+        let success = false
         try {
-          if (await replay(entry)) {
-            await removeEntry(entry.id)
-            ok++
-          }
+          success = await replay(entry)
         } catch {
-          /* keep in queue, retry next reconnect */
+          success = false
+        }
+        if (success) {
+          await removeEntry(entry.id)
+          ok++
+        } else {
+          // Failed replay — give up after MAX_ATTEMPTS so a permanently-bad
+          // entry (e.g. an item that got 86'd) doesn't retry forever.
+          const attempts = await bumpAttempt(entry.id)
+          if (attempts >= MAX_ATTEMPTS) {
+            await removeEntry(entry.id)
+            dropped++
+          }
         }
       }
       await refreshCount()
       if (ok > 0) {
         toast.success(`Synced ${ok} offline ${ok === 1 ? "action" : "actions"}.`)
         router.refresh()
+      }
+      if (dropped > 0) {
+        toast.error(`Dropped ${dropped} offline ${dropped === 1 ? "action" : "actions"} that couldn't sync.`)
       }
     } finally {
       syncing.current = false

@@ -11,6 +11,7 @@ export type QueueEntry =
       kind: "order"
       key: string
       createdAt: number
+      attempts: number
       payload: { tableId: string | null; items: { item_id: string; qty: number }[]; label: string }
     }
   | {
@@ -18,8 +19,12 @@ export type QueueEntry =
       kind: "payment"
       key: string
       createdAt: number
+      attempts: number
       payload: { billId: string; method: PaymentMethod; amountCents: number; label: string }
     }
+
+/** Give up on a stuck entry after this many failed replays. */
+export const MAX_ATTEMPTS = 5
 
 const store = localforage.createInstance({ name: "extrahelper", storeName: "sync_queue" })
 
@@ -33,9 +38,18 @@ export async function enqueue(
   entry: { kind: "order"; payload: Extract<QueueEntry, { kind: "order" }>["payload"] }
     | { kind: "payment"; payload: Extract<QueueEntry, { kind: "payment" }>["payload"] },
 ): Promise<QueueEntry> {
-  const full = { ...entry, id: uuid(), key: uuid(), createdAt: Date.now() } as QueueEntry
+  const full = { ...entry, id: uuid(), key: uuid(), createdAt: Date.now(), attempts: 0 } as QueueEntry
   await store.setItem(full.id, full)
   return full
+}
+
+/** Record a failed replay; returns the new attempt count. */
+export async function bumpAttempt(id: string): Promise<number> {
+  const e = await store.getItem<QueueEntry>(id)
+  if (!e) return MAX_ATTEMPTS
+  const next = { ...e, attempts: (e.attempts ?? 0) + 1 }
+  await store.setItem(id, next)
+  return next.attempts
 }
 
 export async function listQueue(): Promise<QueueEntry[]> {
