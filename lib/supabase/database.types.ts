@@ -1625,6 +1625,27 @@ export type Database = {
           },
         ]
       }
+      permissions: {
+        Row: {
+          grp: string
+          key: string
+          label: string
+          sort: number
+        }
+        Insert: {
+          grp: string
+          key: string
+          label: string
+          sort?: number
+        }
+        Update: {
+          grp?: string
+          key?: string
+          label?: string
+          sort?: number
+        }
+        Relationships: []
+      }
       plans: {
         Row: {
           code: string
@@ -2086,6 +2107,122 @@ export type Database = {
           },
         ]
       }
+      role_permissions: {
+        Row: {
+          permission_key: string
+          role_id: string
+        }
+        Insert: {
+          permission_key: string
+          role_id: string
+        }
+        Update: {
+          permission_key?: string
+          role_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "role_permissions_permission_key_fkey"
+            columns: ["permission_key"]
+            isOneToOne: false
+            referencedRelation: "permissions"
+            referencedColumns: ["key"]
+          },
+          {
+            foreignKeyName: "role_permissions_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "roles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      roles: {
+        Row: {
+          base_role: Database["public"]["Enums"]["app_role"]
+          color: string
+          created_at: string
+          description: string | null
+          id: string
+          is_system: boolean
+          name: string
+          tenant_id: string
+        }
+        Insert: {
+          base_role: Database["public"]["Enums"]["app_role"]
+          color?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_system?: boolean
+          name: string
+          tenant_id: string
+        }
+        Update: {
+          base_role?: Database["public"]["Enums"]["app_role"]
+          color?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_system?: boolean
+          name?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "roles_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      staff_invites: {
+        Row: {
+          base_role: Database["public"]["Enums"]["app_role"]
+          created_at: string
+          email: string
+          id: string
+          invited_by: string | null
+          role_id: string | null
+          tenant_id: string
+        }
+        Insert: {
+          base_role: Database["public"]["Enums"]["app_role"]
+          created_at?: string
+          email: string
+          id?: string
+          invited_by?: string | null
+          role_id?: string | null
+          tenant_id: string
+        }
+        Update: {
+          base_role?: Database["public"]["Enums"]["app_role"]
+          created_at?: string
+          email?: string
+          id?: string
+          invited_by?: string | null
+          role_id?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "staff_invites_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "roles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "staff_invites_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       staff_shifts: {
         Row: {
           branch_id: string | null
@@ -2400,9 +2537,11 @@ export type Database = {
       }
       tenant_settings: {
         Row: {
+          block_negative_stock: boolean
           currency: string
           order_type_fees: Json
           packaging_fee: number
+          points_value_cents: number
           receipt_template: Json
           service_charge: number
           tax_rules: Json
@@ -2411,9 +2550,11 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          block_negative_stock?: boolean
           currency?: string
           order_type_fees?: Json
           packaging_fee?: number
+          points_value_cents?: number
           receipt_template?: Json
           service_charge?: number
           tax_rules?: Json
@@ -2422,9 +2563,11 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          block_negative_stock?: boolean
           currency?: string
           order_type_fees?: Json
           packaging_fee?: number
+          points_value_cents?: number
           receipt_template?: Json
           service_charge?: number
           tax_rules?: Json
@@ -2469,12 +2612,35 @@ export type Database = {
         }
         Relationships: []
       }
+      user_preferences: {
+        Row: {
+          text_scale: number
+          theme: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          text_scale?: number
+          theme?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          text_scale?: number
+          theme?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_tenants: {
         Row: {
           branch_id: string | null
           created_at: string
           id: string
           role: Database["public"]["Enums"]["app_role"]
+          role_id: string | null
+          status: string
           tenant_id: string
           user_id: string
         }
@@ -2483,6 +2649,8 @@ export type Database = {
           created_at?: string
           id?: string
           role: Database["public"]["Enums"]["app_role"]
+          role_id?: string | null
+          status?: string
           tenant_id: string
           user_id: string
         }
@@ -2491,6 +2659,8 @@ export type Database = {
           created_at?: string
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
+          role_id?: string | null
+          status?: string
           tenant_id?: string
           user_id?: string
         }
@@ -2500,6 +2670,13 @@ export type Database = {
             columns: ["branch_id"]
             isOneToOne: false
             referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_tenants_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "roles"
             referencedColumns: ["id"]
           },
           {
@@ -2568,8 +2745,73 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      add_member_by_email: {
+        Args: { _email: string; _role_id: string; _tenant: string }
+        Returns: string
+      }
+      adjust_inventory: {
+        Args: {
+          _delta: number
+          _item: string
+          _reason: string
+          _type: Database["public"]["Enums"]["stock_movement_type"]
+        }
+        Returns: number
+      }
+      apply_bill_discount: {
+        Args: {
+          _bill_id: string
+          _reason?: string
+          _type: Database["public"]["Enums"]["discount_type"]
+          _value: number
+        }
+        Returns: number
+      }
       apply_tenant_rls: { Args: { _table: unknown }; Returns: undefined }
+      approve_member: {
+        Args: { _tenant: string; _user_id: string }
+        Returns: undefined
+      }
+      attach_bill_customer: {
+        Args: { _bill_id: string; _name: string; _phone: string }
+        Returns: string
+      }
+      cancel_invite: {
+        Args: { _email: string; _tenant: string }
+        Returns: undefined
+      }
+      claim_invites: { Args: never; Returns: undefined }
+      close_cash_session: {
+        Args: { _counted_cents: number; _session_id: string }
+        Returns: {
+          counted_cents: number
+          expected_cents: number
+          variance_cents: number
+        }[]
+      }
+      create_bill_for_order: { Args: { _order_id: string }; Returns: string }
+      create_public_reservation: {
+        Args: {
+          _name: string
+          _notes: string
+          _party: number
+          _phone: string
+          _slug: string
+          _when: string
+        }
+        Returns: string
+      }
       current_tenant_ids: { Args: never; Returns: string[] }
+      default_role_permissions: {
+        Args: { _base: Database["public"]["Enums"]["app_role"] }
+        Returns: string[]
+      }
+      fire_order: { Args: { _order_id: string }; Returns: number }
+      get_my_permissions: { Args: { _tenant: string }; Returns: string[] }
+      has_permission: {
+        Args: { _key: string; _tenant: string }
+        Returns: boolean
+      }
       has_tenant_role: {
         Args: {
           _roles: Database["public"]["Enums"]["app_role"][]
@@ -2578,6 +2820,234 @@ export type Database = {
         Returns: boolean
       }
       is_platform_admin: { Args: never; Returns: boolean }
+      list_tenant_members: {
+        Args: { _tenant: string }
+        Returns: {
+          base_role: Database["public"]["Enums"]["app_role"]
+          created_at: string
+          email: string
+          role_id: string
+          role_name: string
+          status: string
+          user_id: string
+        }[]
+      }
+      loyalty_adjust: {
+        Args: {
+          _customer_id: string
+          _points: number
+          _reference?: string
+          _type: Database["public"]["Enums"]["loyalty_txn_type"]
+        }
+        Returns: number
+      }
+      open_cash_session: {
+        Args: {
+          _branch_id: string
+          _opening_float_cents: number
+          _tenant: string
+        }
+        Returns: string
+      }
+      place_online_order: {
+        Args: {
+          _address: Json
+          _fulfillment: string
+          _items: Json
+          _name: string
+          _phone: string
+          _slug: string
+        }
+        Returns: string
+      }
+      place_qr_order: {
+        Args: { _items: Json; _token: string }
+        Returns: string
+      }
+      place_staff_order: {
+        Args: {
+          _idempotency_key: string
+          _items: Json
+          _order_type: Database["public"]["Enums"]["order_type"]
+          _table_id: string
+          _tenant: string
+        }
+        Returns: string
+      }
+      provision_tenant: {
+        Args: { _currency?: string; _name: string; _timezone?: string }
+        Returns: string
+      }
+      qr_menu: { Args: { _token: string }; Returns: Json }
+      qr_request_bill: { Args: { _token: string }; Returns: boolean }
+      receive_po: { Args: { _po_id: string }; Returns: number }
+      recompute_bill: { Args: { _bill_id: string }; Returns: undefined }
+      record_payment: {
+        Args: {
+          _amount_cents: number
+          _bill_id: string
+          _idempotency_key?: string
+          _method: Database["public"]["Enums"]["payment_method"]
+        }
+        Returns: Database["public"]["Enums"]["bill_status"]
+      }
+      redeem_points_for_bill: {
+        Args: { _bill_id: string; _idempotency_key?: string; _points: number }
+        Returns: Json
+      }
+      refund_payment: {
+        Args: { _amount_cents: number; _bill_id: string; _reason: string }
+        Returns: Database["public"]["Enums"]["bill_status"]
+      }
+      remove_member: {
+        Args: { _tenant: string; _user_id: string }
+        Returns: undefined
+      }
+      report_by_branch: {
+        Args: { _from: string; _tenant: string; _to: string }
+        Returns: {
+          branch_id: string
+          branch_name: string
+          orders: number
+          revenue_cents: number
+        }[]
+      }
+      report_customers: {
+        Args: { _from: string; _tenant: string; _to: string }
+        Returns: {
+          customer_id: string
+          name: string
+          orders: number
+          points_redeemed: number
+          spend_cents: number
+        }[]
+      }
+      report_extras: {
+        Args: { _from: string; _tenant: string; _to: string }
+        Returns: {
+          paid_orders: number
+          refunds_cents: number
+          tables_served: number
+          voids: number
+        }[]
+      }
+      report_inventory: {
+        Args: { _from: string; _tenant: string; _to: string }
+        Returns: {
+          cogs_cents: number
+          consumed: number
+          cost_cents: number
+          current_qty: number
+          item_id: string
+          name: string
+          par_level: number
+          reorder_level: number
+          reorder_qty: number
+          uom: string
+          valuation_cents: number
+          wasted: number
+        }[]
+      }
+      report_payments: {
+        Args: { _from: string; _tenant: string; _to: string }
+        Returns: {
+          amount_cents: number
+          method: string
+        }[]
+      }
+      report_sales: {
+        Args: { _from: string; _tenant: string; _to: string }
+        Returns: {
+          discount_cents: number
+          orders: number
+          revenue_cents: number
+          service_cents: number
+          tax_cents: number
+        }[]
+      }
+      report_sales_by_bill: {
+        Args: {
+          _dim: string
+          _from: string
+          _tenant: string
+          _to: string
+          _tz?: string
+        }
+        Returns: {
+          label: string
+          orders: number
+          revenue_cents: number
+        }[]
+      }
+      report_sales_by_category: {
+        Args: { _from: string; _tenant: string; _to: string }
+        Returns: {
+          label: string
+          orders: number
+          revenue_cents: number
+        }[]
+      }
+      report_staff: {
+        Args: { _from: string; _tenant: string; _to: string }
+        Returns: {
+          email: string
+          orders: number
+          revenue_cents: number
+          shift_minutes: number
+          tips_cents: number
+          user_id: string
+        }[]
+      }
+      report_top_items: {
+        Args: {
+          _from: string
+          _limit?: number
+          _offset?: number
+          _tenant: string
+          _to: string
+        }
+        Returns: {
+          description: string
+          qty: number
+          revenue_cents: number
+        }[]
+      }
+      run_dunning: {
+        Args: never
+        Returns: {
+          marked_past_due: number
+          suspended: number
+        }[]
+      }
+      seed_system_roles: { Args: { _tenant: string }; Returns: undefined }
+      set_member_role: {
+        Args: { _role_id: string; _tenant: string; _user_id: string }
+        Returns: undefined
+      }
+      storefront_menu: { Args: { _slug: string }; Returns: Json }
+      submit_feedback: {
+        Args: { _comment: string; _rating: number; _token: string }
+        Returns: boolean
+      }
+      subscribe_tenant: {
+        Args: { _interval?: string; _plan_code: string; _tenant: string }
+        Returns: string
+      }
+      tenant_has_feature: {
+        Args: { _key: string; _tenant: string }
+        Returns: boolean
+      }
+      trigger_dunning: {
+        Args: never
+        Returns: {
+          marked_past_due: number
+          suspended: number
+        }[]
+      }
+      void_order_item: {
+        Args: { _order_item_id: string; _reason: string }
+        Returns: undefined
+      }
     }
     Enums: {
       app_role:

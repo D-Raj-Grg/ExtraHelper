@@ -122,6 +122,41 @@ export async function payByCard(
   return { ok: true }
 }
 
+/** Attach (or create) a customer on the bill's order so points can be redeemed. */
+export async function attachCustomer(
+  billId: string,
+  name: string,
+  phone: string,
+): Promise<BillState> {
+  await requirePermission("payment.take")
+  if (!name.trim() && !phone.trim()) return { error: "Enter a name or phone." }
+  const supabase = await createClient()
+  const { error } = await supabase.rpc("attach_bill_customer", {
+    _bill_id: billId,
+    _name: name || null,
+    _phone: phone || null,
+  })
+  if (error) return { error: error.message }
+  revalidatePath(`/bill/${billId}`)
+  return { ok: true }
+}
+
+/** Redeem loyalty points → burn + record a 'points' payment (trusted, atomic). */
+export async function redeemPoints(billId: string, points: number): Promise<BillState> {
+  await requirePermission("payment.take")
+  if (!Number.isInteger(points) || points <= 0)
+    return { error: "Points must be a positive whole number." }
+  const supabase = await createClient()
+  const { error } = await supabase.rpc("redeem_points_for_bill", {
+    _bill_id: billId,
+    _points: points,
+    _idempotency_key: randomUUID(),
+  })
+  if (error) return { error: error.message }
+  revalidatePath(`/bill/${billId}`)
+  return { ok: true }
+}
+
 /** Record a payment (trusted SQL flips bill → partial/paid, closes order). */
 export async function takePayment(
   billId: string,

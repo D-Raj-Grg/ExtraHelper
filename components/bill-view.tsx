@@ -5,6 +5,7 @@ import Link from "next/link"
 import { applyDiscount, payByCard, refundBill, takePayment, voidLine } from "@/app/(app)/bill/actions"
 import { money } from "@/lib/format"
 import { BillSplit } from "@/components/bill-split"
+import { BillLoyalty } from "@/components/bill-loyalty"
 import { useOffline } from "@/components/offline-sync-provider"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -36,6 +37,8 @@ export function BillView({
   payments,
   paidCents,
   canDiscount = false,
+  customer = null,
+  pointsValueCents = 1,
 }: {
   currency: string
   bill: Bill
@@ -43,6 +46,8 @@ export function BillView({
   payments: Payment[]
   paidCents: number
   canDiscount?: boolean
+  customer?: { id: string; name: string | null; phone: string | null; points: number } | null
+  pointsValueCents?: number
 }) {
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
@@ -337,6 +342,13 @@ export function BillView({
               {error}
             </p>
           ) : null}
+          <BillLoyalty
+            billId={bill.id}
+            currency={currency}
+            due={due}
+            pointsValueCents={pointsValueCents}
+            customer={customer}
+          />
           <BillSplit
             billId={bill.id}
             currency={currency}
