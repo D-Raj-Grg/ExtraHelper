@@ -1,13 +1,14 @@
 "use client"
 
 import { useState, useTransition } from "react"
-import { PlusIcon } from "lucide-react"
+import { PlusIcon, CopyIcon, CheckIcon } from "lucide-react"
 import { toast } from "sonner"
 import {
   addMember,
   approveMember,
   cancelInvite,
   deleteRole,
+  generateJoinCode,
   removeMember,
   setMemberRole,
   type TeamState,
@@ -181,6 +182,85 @@ function RoleGrid({
   )
 }
 
+const DEFAULT_ROLE = "__default__"
+
+function JoinCodeCard({ roleOptions }: { roleOptions: { id: string; name: string }[] }) {
+  const [roleId, setRoleId] = useState(DEFAULT_ROLE)
+  const [code, setCode] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+  const [pending, startTransition] = useTransition()
+
+  const generate = () =>
+    startTransition(async () => {
+      setCopied(false)
+      const res = await generateJoinCode(roleId === DEFAULT_ROLE ? null : roleId)
+      if (!res) return
+      if ("error" in res) {
+        toast.error(res.error)
+        return
+      }
+      setCode(res.code)
+      toast.success("Join code generated.")
+    })
+
+  const copy = async () => {
+    if (!code) return
+    try {
+      await navigator.clipboard.writeText(code)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      toast.error("Couldn't copy to clipboard.")
+    }
+  }
+
+  return (
+    <div className="rounded-lg border p-3">
+      <h3 className="text-sm font-semibold">Join code</h3>
+      <p className="mt-0.5 text-xs text-muted-foreground">
+        Generate a code someone can enter at sign-in to request to join.
+      </p>
+      <div className="mt-3 flex flex-wrap items-end gap-2">
+        <label className="text-sm font-medium">
+          Role
+          <Select value={roleId} onValueChange={(v) => setRoleId(v ?? DEFAULT_ROLE)}>
+            <SelectTrigger className="mt-1 w-56">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={DEFAULT_ROLE}>— default (waiter) —</SelectItem>
+              {roleOptions.map((r) => (
+                <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </label>
+        <Button disabled={pending} onClick={generate}>
+          Generate code
+        </Button>
+      </div>
+
+      {code ? (
+        <div className="mt-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <code className="rounded-md border bg-muted px-3 py-2 font-mono text-lg font-semibold tracking-widest">
+              {code}
+            </code>
+            <Button type="button" variant="outline" size="sm" onClick={copy}>
+              {copied ? <CheckIcon className="size-4" /> : <CopyIcon className="size-4" />}
+              {copied ? "Copied" : "Copy"}
+            </Button>
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Share this code — the person enters it at sign-in / onboarding to request to join; you approve them in the
+            members list.
+          </p>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 function StaffTab({
   members,
   roleOptions,
@@ -237,6 +317,8 @@ function StaffTab({
           </Button>
         </div>
       ) : null}
+
+      {canEdit ? <JoinCodeCard roleOptions={roleOptions} /> : null}
 
       {members.length === 0 ? (
         <p className="text-sm text-muted-foreground">No team members yet.</p>

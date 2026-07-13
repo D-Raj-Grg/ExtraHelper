@@ -25,10 +25,18 @@ export async function GET(request: NextRequest) {
 
   if (tokenHash && type) {
     const { error } = await supabase.auth.verifyOtp({ type, token_hash: tokenHash })
-    if (!error) return NextResponse.redirect(new URL(next, url.origin))
+    if (!error) {
+      // Attach any pending email invites (Google OAuth / magic-link path — the
+      // password-login + email-OTP actions already do this).
+      await supabase.rpc("claim_invites")
+      return NextResponse.redirect(new URL(next, url.origin))
+    }
   } else if (code) {
     const { error } = await supabase.auth.exchangeCodeForSession(code)
-    if (!error) return NextResponse.redirect(new URL(next, url.origin))
+    if (!error) {
+      await supabase.rpc("claim_invites")
+      return NextResponse.redirect(new URL(next, url.origin))
+    }
   }
 
   return NextResponse.redirect(new URL("/login?error=confirm", url.origin))

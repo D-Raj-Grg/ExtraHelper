@@ -1,7 +1,8 @@
 "use client"
 
 import { useTransition } from "react"
-import { CheckIcon, ChevronsUpDownIcon, StoreIcon } from "lucide-react"
+import Link from "next/link"
+import { CheckIcon, ChevronsUpDownIcon, PlusIcon, StoreIcon } from "lucide-react"
 import { switchTenant } from "@/app/(app)/tenant-actions"
 import type { TenantMembership } from "@/lib/supabase/tenant"
 import {
@@ -9,6 +10,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar"
@@ -63,6 +65,11 @@ export function TenantSwitcher({
                 {t.tenantId === activeId ? <CheckIcon className="size-4" /> : null}
               </DropdownMenuItem>
             ))}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem render={<Link href="/onboarding?add=1" />}>
+              <PlusIcon className="size-4 text-muted-foreground" />
+              <span className="flex-1">Add restaurant</span>
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </SidebarMenuItem>

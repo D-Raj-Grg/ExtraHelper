@@ -2616,6 +2616,57 @@ export type Database = {
           },
         ]
       }
+      tenant_join_codes: {
+        Row: {
+          base_role: Database["public"]["Enums"]["app_role"]
+          code: string
+          created_at: string
+          created_by: string | null
+          expires_at: string | null
+          id: string
+          is_active: boolean
+          role_id: string | null
+          tenant_id: string
+        }
+        Insert: {
+          base_role?: Database["public"]["Enums"]["app_role"]
+          code: string
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          role_id?: string | null
+          tenant_id: string
+        }
+        Update: {
+          base_role?: Database["public"]["Enums"]["app_role"]
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          role_id?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_join_codes_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "roles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_join_codes_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tenant_settings: {
         Row: {
           block_negative_stock: boolean
@@ -2896,6 +2947,10 @@ export type Database = {
         }[]
       }
       create_bill_for_order: { Args: { _order_id: string }; Returns: string }
+      create_join_code: {
+        Args: { _role_id?: string; _tenant: string }
+        Returns: string
+      }
       create_public_reservation: {
         Args: {
           _name: string
@@ -2983,7 +3038,12 @@ export type Database = {
       }
       post_stock_count: { Args: { _count_id: string }; Returns: number }
       provision_tenant: {
-        Args: { _currency?: string; _name: string; _timezone?: string }
+        Args: {
+          _currency?: string
+          _force_new?: boolean
+          _name: string
+          _timezone?: string
+        }
         Returns: string
       }
       public_bill_quote: { Args: { _order_id: string }; Returns: Json }
@@ -3012,6 +3072,7 @@ export type Database = {
         }
         Returns: Database["public"]["Enums"]["bill_status"]
       }
+      redeem_join_code: { Args: { _code: string }; Returns: Json }
       redeem_points_for_bill: {
         Args: { _bill_id: string; _idempotency_key?: string; _points: number }
         Returns: Json

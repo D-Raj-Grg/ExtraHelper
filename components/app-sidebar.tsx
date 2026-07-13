@@ -128,12 +128,14 @@ export function AppSidebar({
     .map((g) => ({ ...g, items: g.items.filter((i) => canSee(i.title)) }))
     .filter((g) => g.items.length > 0)
   const navSecondary = data.navSecondary.filter((i) => canSee(i.title))
-  const multiTenant = (tenants?.length ?? 0) > 1
+  // Show the switcher whenever there's an active tenant — even with one
+  // restaurant it hosts the "+ Add restaurant" action.
+  const showSwitcher = (tenants?.length ?? 0) >= 1 && Boolean(activeTenantId)
   return (
     <Sidebar collapsible="offcanvas" {...props}>
       <SidebarHeader>
-        {multiTenant && activeTenantId ? (
-          <TenantSwitcher tenants={tenants!} activeId={activeTenantId} />
+        {showSwitcher ? (
+          <TenantSwitcher tenants={tenants!} activeId={activeTenantId!} />
         ) : (
           <SidebarMenu>
             <SidebarMenuItem>

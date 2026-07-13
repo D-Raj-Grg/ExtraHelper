@@ -126,3 +126,21 @@ export async function getTenantMemberships(): Promise<TenantMembership[]> {
     }
   })
 }
+
+/** Pending (invited/redeemed, not-yet-approved) memberships — awaiting owner approval. */
+export async function getPendingMemberships(): Promise<{ tenantId: string; name: string; role: string }[]> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return []
+  const { data } = await supabase
+    .from("user_tenants")
+    .select("role, tenant_id, tenants(name)")
+    .eq("user_id", user.id)
+    .eq("status", "pending")
+  return (data ?? []).map((r) => {
+    const t = Array.isArray(r.tenants) ? r.tenants[0] : r.tenants
+    return { tenantId: r.tenant_id as string, name: (t?.name as string) ?? "", role: r.role as string }
+  })
+}

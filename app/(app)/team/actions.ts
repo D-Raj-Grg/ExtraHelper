@@ -194,6 +194,27 @@ export async function removeMember(userId: string): Promise<TeamState> {
   return { ok: true }
 }
 
+export type JoinCodeState = { error: string } | { ok: true; code: string } | undefined
+
+/** Generate a shareable join code someone can enter to self-join as a pending member. */
+export async function generateJoinCode(roleId?: string | null): Promise<JoinCodeState> {
+  const tenant = await requirePermission("staff.edit")
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc("create_join_code", {
+    _tenant: tenant.tenantId,
+    _role_id: roleId || null,
+  })
+  if (error) return { error: error.message }
+  await writeAudit({
+    tenantId: tenant.tenantId,
+    action: "role_change",
+    entityType: "user_tenant",
+    metadata: { event: "join_code", role_id: roleId || null },
+  })
+  revalidatePath("/team")
+  return { ok: true, code: data as string }
+}
+
 export async function cancelInvite(email: string): Promise<TeamState> {
   const tenant = await requirePermission("staff.edit")
   const supabase = await createClient()
