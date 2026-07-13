@@ -33,7 +33,11 @@ export async function startOrder(formData: FormData): Promise<void> {
   if (error || !data) redirect("/pos")
 
   if (tableId) {
-    await supabase.from("restaurant_tables").update({ state: "occupied" }).eq("id", tableId)
+    await supabase
+      .from("restaurant_tables")
+      .update({ state: "occupied" })
+      .eq("id", tableId)
+      .eq("tenant_id", tenant.tenantId)
   }
   redirect(`/pos/${data.id}`)
 }
@@ -47,6 +51,7 @@ export async function addItem(orderId: string, itemId: string): Promise<PosState
     .from("menu_items")
     .select("name, base_price_cents, is_86")
     .eq("id", itemId)
+    .eq("tenant_id", tenant.tenantId)
     .single()
   if (itemErr || !item) return { error: "Item not found." }
   if (item.is_86) return { error: `${item.name} is 86'd (out of stock).` }
@@ -67,9 +72,13 @@ export async function addItem(orderId: string, itemId: string): Promise<PosState
 }
 
 export async function removeItem(orderId: string, orderItemId: string): Promise<PosState> {
-  await requireRole(...ORDER_ROLES)
+  const tenant = await requireRole(...ORDER_ROLES)
   const supabase = await createClient()
-  const { error } = await supabase.from("order_items").delete().eq("id", orderItemId)
+  const { error } = await supabase
+    .from("order_items")
+    .delete()
+    .eq("id", orderItemId)
+    .eq("tenant_id", tenant.tenantId)
   if (error) return { error: error.message }
   revalidatePath(`/pos/${orderId}`)
   return { ok: true }

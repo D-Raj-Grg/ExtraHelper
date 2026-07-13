@@ -54,7 +54,7 @@ export async function setTableState(
   tableId: string,
   state: TableState,
 ): Promise<TablesState> {
-  await requireRole("owner", "manager", "receptionist", "waiter", "cashier")
+  const tenant = await requireRole("owner", "manager", "receptionist", "waiter", "cashier")
   if (!TABLE_STATES.includes(state)) return { error: "Invalid state." }
 
   const supabase = await createClient()
@@ -62,18 +62,20 @@ export async function setTableState(
     .from("restaurant_tables")
     .update({ state })
     .eq("id", tableId)
+    .eq("tenant_id", tenant.tenantId)
   if (error) return { error: error.message }
   revalidatePath("/tables")
   return { ok: true }
 }
 
 export async function deleteTable(tableId: string): Promise<TablesState> {
-  await requireRole("owner", "manager")
+  const tenant = await requireRole("owner", "manager")
   const supabase = await createClient()
   const { error } = await supabase
     .from("restaurant_tables")
     .delete()
     .eq("id", tableId)
+    .eq("tenant_id", tenant.tenantId)
   if (error) return { error: error.message }
   revalidatePath("/tables")
   return { ok: true }

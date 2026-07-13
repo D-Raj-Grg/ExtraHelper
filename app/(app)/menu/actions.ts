@@ -74,21 +74,26 @@ export async function createItem(
 
 /** 86 = mark out of stock. Realtime disables it on all ordering surfaces later. */
 export async function toggleItem86(itemId: string, is86: boolean): Promise<MenuState> {
-  await requireRole("owner", "manager", "kitchen")
+  const tenant = await requireRole("owner", "manager", "kitchen")
   const supabase = await createClient()
   const { error } = await supabase
     .from("menu_items")
     .update({ is_86: is86 })
     .eq("id", itemId)
+    .eq("tenant_id", tenant.tenantId)
   if (error) return { error: error.message }
   revalidatePath("/menu")
   return { ok: true }
 }
 
 export async function deleteItem(itemId: string): Promise<MenuState> {
-  await requireRole("owner", "manager")
+  const tenant = await requireRole("owner", "manager")
   const supabase = await createClient()
-  const { error } = await supabase.from("menu_items").delete().eq("id", itemId)
+  const { error } = await supabase
+    .from("menu_items")
+    .delete()
+    .eq("id", itemId)
+    .eq("tenant_id", tenant.tenantId)
   if (error) return { error: error.message }
   revalidatePath("/menu")
   return { ok: true }

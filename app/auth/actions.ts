@@ -7,6 +7,25 @@ import { createClient } from "@/lib/supabase/server"
 
 export type AuthState = { error: string } | { confirm: string } | undefined
 
+// Basic shape check — the real gate is Supabase, but this catches typos early.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+/** Turn Supabase's terse auth errors into guidance the user can act on. */
+function friendlyAuthError(err: { code?: string; message: string }): string {
+  const code = err.code ?? ""
+  const msg = err.message.toLowerCase()
+  if (code === "email_address_invalid" || (msg.includes("email") && msg.includes("invalid"))) {
+    return "That email address was rejected. Some domains (e.g. .dev, .local, disposable addresses) aren't accepted — try another email."
+  }
+  if (code === "user_already_exists" || msg.includes("already registered")) {
+    return "An account with this email already exists. Try signing in instead."
+  }
+  if (code === "weak_password" || msg.includes("password")) {
+    return "That password was rejected. Use at least 8 characters with a mix of letters and numbers."
+  }
+  return err.message
+}
+
 /** Only allow same-origin relative redirects — blocks open-redirect via `next`. */
 function safeNext(raw: string): string {
   if (!raw.startsWith("/") || raw.startsWith("//") || raw.startsWith("/\\")) {
@@ -51,6 +70,7 @@ export async function signup(
   const restaurantName = String(formData.get("restaurantName") ?? "").trim()
 
   if (!email || !password) return { error: "Email and password are required." }
+  if (!EMAIL_RE.test(email)) return { error: "Enter a valid email address." }
   if (password.length < 8)
     return { error: "Password must be at least 8 characters." }
 
@@ -64,7 +84,7 @@ export async function signup(
       emailRedirectTo: origin ? `${origin}/auth/confirm?next=/` : undefined,
     },
   })
-  if (error) return { error: error.message }
+  if (error) return { error: friendlyAuthError(error) }
 
   // Email confirmation enabled → no session yet. Tell the user to check email
   // instead of bouncing to /login (which looks like a silent failure).

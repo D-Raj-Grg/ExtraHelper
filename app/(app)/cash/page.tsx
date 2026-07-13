@@ -16,6 +16,7 @@ export default async function CashPage() {
   const { data: open } = await supabase
     .from("cash_sessions")
     .select("id, opening_float_cents, opened_at")
+    .eq("tenant_id", tenant.tenantId)
     .eq("cashier_id", user!.id)
     .eq("status", "open")
     .order("opened_at", { ascending: false })
@@ -26,6 +27,7 @@ export default async function CashPage() {
   const { data: closed } = await supabase
     .from("cash_sessions")
     .select("id, opening_float_cents, expected_cents, counted_cents, variance_cents, opened_at, closed_at")
+    .eq("tenant_id", tenant.tenantId)
     .eq("status", "closed")
     .order("closed_at", { ascending: false })
     .limit(10)
