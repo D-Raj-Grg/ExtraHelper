@@ -48,9 +48,14 @@ export async function payForOrder(orderId: string): Promise<PayState> {
     idempotencyKey: reference,
   })
   if (result.status === "failed") return { error: "Payment failed. Please try again." }
-  // 'pending' → leave for the webhook to reconcile (public_pay_order records the
-  // completed leg; for sandbox this is 'succeeded' and settles immediately).
+  // 'pending' → persist a pending payment keyed by the gateway reference so the
+  // webhook (/api/webhooks/[gateway]) can reconcile it to completed later. For
+  // sandbox this is 'succeeded' and settles immediately below.
   if (result.status !== "succeeded") {
+    await supabase.rpc("public_record_pending", {
+      _order_id: orderId,
+      _reference: result.reference,
+    })
     return { ok: true, status: "pending", paidCents: quote.paid, totalCents: quote.total }
   }
 

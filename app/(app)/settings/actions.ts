@@ -46,13 +46,22 @@ export async function updateSettings(
       return { error: `Tax rate for "${r.name}" must be between 0 and 100.` }
   }
 
+  const blockNegativeStock = formData.get("blockNegativeStock") === "on"
+
+  const supabaseEarly = await createClient()
+  // Preserve any keys we don't edit here (e.g. logo_url set by uploadTenantLogo)
+  // instead of clobbering the whole receipt_template JSON.
+  const { data: existing } = await supabaseEarly
+    .from("tenant_settings")
+    .select("receipt_template")
+    .eq("tenant_id", tenant.tenantId)
+    .maybeSingle()
   const receiptTemplate = {
+    ...((existing?.receipt_template as Record<string, unknown>) ?? {}),
     header: String(formData.get("receiptHeader") ?? "").trim(),
     footer: String(formData.get("receiptFooter") ?? "").trim(),
     terms: String(formData.get("receiptTerms") ?? "").trim(),
   }
-
-  const blockNegativeStock = formData.get("blockNegativeStock") === "on"
 
   // Pluggable payment gateway (rule #6). Only registered keys are accepted.
   const GATEWAYS = ["sandbox", "manual"]

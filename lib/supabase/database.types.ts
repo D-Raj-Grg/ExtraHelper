@@ -2964,6 +2964,10 @@ export type Database = {
         Args: { _order_id: string; _reference: string }
         Returns: Json
       }
+      public_record_pending: {
+        Args: { _order_id: string; _reference: string }
+        Returns: Json
+      }
       qr_menu: { Args: { _token: string }; Returns: Json }
       qr_request_bill: { Args: { _token: string }; Returns: boolean }
       receive_po: { Args: { _po_id: string }; Returns: number }
