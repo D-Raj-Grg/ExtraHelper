@@ -1,12 +1,52 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
+import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { requireRole } from "@/lib/supabase/guards"
 
 export type InvState = { error: string } | { ok: true } | undefined
 
 const INV_ROLES = ["owner", "manager", "inventory"] as const
+
+/** Open a new stock count (snapshots on-hand as theoretical) and go edit it. */
+export async function startCount(): Promise<void> {
+  const tenant = await requireRole(...INV_ROLES)
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc("start_stock_count", { _tenant: tenant.tenantId })
+  if (error || !data) redirect("/inventory")
+  redirect(`/inventory/count/${data}`)
+}
+
+/** Record the counted (actual) quantity for a line. */
+export async function setCountActual(
+  countItemId: string,
+  countId: string,
+  actual: number,
+): Promise<InvState> {
+  const tenant = await requireRole(...INV_ROLES)
+  if (!Number.isFinite(actual) || actual < 0) return { error: "Enter a valid quantity." }
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from("stock_count_items")
+    .update({ actual_qty: actual })
+    .eq("id", countItemId)
+    .eq("tenant_id", tenant.tenantId)
+  if (error) return { error: error.message }
+  revalidatePath(`/inventory/count/${countId}`)
+  return { ok: true }
+}
+
+/** Post the count — reconcile on-hand to actual + log 'count' movements. */
+export async function postCount(countId: string): Promise<InvState> {
+  await requireRole(...INV_ROLES)
+  const supabase = await createClient()
+  const { error } = await supabase.rpc("post_stock_count", { _count_id: countId })
+  if (error) return { error: error.message }
+  revalidatePath(`/inventory/count/${countId}`)
+  revalidatePath("/inventory")
+  return { ok: true }
+}
 
 export async function createInventoryItem(
   _prev: InvState,

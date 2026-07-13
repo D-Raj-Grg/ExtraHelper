@@ -2329,6 +2329,7 @@ export type Database = {
           counted_by: string | null
           created_at: string
           id: string
+          posted_at: string | null
           tenant_id: string
         }
         Insert: {
@@ -2336,6 +2337,7 @@ export type Database = {
           counted_by?: string | null
           created_at?: string
           id?: string
+          posted_at?: string | null
           tenant_id: string
         }
         Update: {
@@ -2343,6 +2345,7 @@ export type Database = {
           counted_by?: string | null
           created_at?: string
           id?: string
+          posted_at?: string | null
           tenant_id?: string
         }
         Relationships: [
@@ -2891,6 +2894,7 @@ export type Database = {
         }
         Returns: string
       }
+      post_stock_count: { Args: { _count_id: string }; Returns: number }
       provision_tenant: {
         Args: { _currency?: string; _name: string; _timezone?: string }
         Returns: string
@@ -3041,6 +3045,7 @@ export type Database = {
         Args: { _role_id: string; _tenant: string; _user_id: string }
         Returns: undefined
       }
+      start_stock_count: { Args: { _tenant: string }; Returns: string }
       storefront_menu: { Args: { _slug: string }; Returns: Json }
       submit_feedback: {
         Args: { _comment: string; _rating: number; _token: string }
