@@ -12,6 +12,7 @@ import { createClient } from "@/lib/supabase/server"
 import { getActiveTenant, getTenantMemberships } from "@/lib/supabase/tenant"
 import { getUserPreferences } from "@/lib/supabase/preferences"
 import { getMyPermissions } from "@/lib/supabase/permissions"
+import { getProfile } from "@/lib/supabase/profile"
 import { PermissionProvider } from "@/components/permission-provider"
 
 /**
@@ -34,20 +35,21 @@ export default async function AppLayout({
   const tenant = await getActiveTenant()
   if (!tenant) redirect("/onboarding")
 
-  const [prefs, memberships, permissions] = await Promise.all([
+  const [prefs, memberships, permissions, profile] = await Promise.all([
     getUserPreferences(),
     getTenantMemberships(),
     getMyPermissions(tenant.tenantId),
+    getProfile(),
   ])
 
   const sidebarUser = {
     name:
-      tenant.name ??
+      profile?.fullName ??
       (user.user_metadata?.restaurant_name as string) ??
       user.email?.split("@")[0] ??
       "User",
     email: user.email ?? "",
-    avatar: "",
+    avatar: profile?.avatarUrl ?? "",
   }
 
   return (

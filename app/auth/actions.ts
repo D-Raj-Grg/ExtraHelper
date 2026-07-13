@@ -72,6 +72,7 @@ export async function signup(
   const email = String(formData.get("email") ?? "").trim()
   const password = String(formData.get("password") ?? "")
   const restaurantName = String(formData.get("restaurantName") ?? "").trim()
+  const fullName = String(formData.get("fullName") ?? "").trim()
 
   if (!email || !password) return { error: "Email and password are required." }
   if (!EMAIL_RE.test(email)) return { error: "Enter a valid email address." }
@@ -84,7 +85,8 @@ export async function signup(
     email,
     password,
     options: {
-      data: { restaurant_name: restaurantName },
+      // full_name feeds the profiles row via the handle_new_user trigger.
+      data: { restaurant_name: restaurantName, full_name: fullName },
       emailRedirectTo: origin ? `${origin}/auth/confirm?next=/` : undefined,
     },
   })

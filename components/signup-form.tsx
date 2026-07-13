@@ -41,6 +41,16 @@ export function SignupForm({
             </FieldDescription>
           </div>
           <Field>
+            <FieldLabel htmlFor="fullName">Your name</FieldLabel>
+            <Input
+              id="fullName"
+              name="fullName"
+              type="text"
+              placeholder="Jane Doe"
+              autoComplete="name"
+            />
+          </Field>
+          <Field>
             <FieldLabel htmlFor="restaurantName">Restaurant name</FieldLabel>
             <Input
               id="restaurantName"
