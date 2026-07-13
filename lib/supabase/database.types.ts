@@ -2767,6 +2767,19 @@ export type Database = {
         }
         Returns: number
       }
+      apply_coupon: {
+        Args: { _bill_id: string; _code: string }
+        Returns: number
+      }
+      apply_item_discount: {
+        Args: {
+          _order_item_id: string
+          _reason?: string
+          _type: Database["public"]["Enums"]["discount_type"]
+          _value: number
+        }
+        Returns: undefined
+      }
       apply_tenant_rls: { Args: { _table: unknown }; Returns: undefined }
       approve_member: {
         Args: { _tenant: string; _user_id: string }
@@ -2775,6 +2788,10 @@ export type Database = {
       attach_bill_customer: {
         Args: { _bill_id: string; _name: string; _phone: string }
         Returns: string
+      }
+      bill_discount_total: {
+        Args: { _bill_id: string; _subtotal: number }
+        Returns: number
       }
       cancel_invite: {
         Args: { _email: string; _tenant: string }

@@ -44,6 +44,40 @@ export async function applyDiscount(
   return { ok: true }
 }
 
+/** Apply an item-level discount (owner/manager; trusted recompute + audit). */
+export async function applyItemDiscount(
+  orderItemId: string,
+  billId: string,
+  type: "percent" | "flat",
+  value: number,
+  reason: string,
+): Promise<BillState> {
+  await requirePermission("order.discount")
+  if (!Number.isFinite(value) || value <= 0)
+    return { error: "Discount must be a positive number." }
+  const supabase = await createClient()
+  const { error } = await supabase.rpc("apply_item_discount", {
+    _order_item_id: orderItemId,
+    _type: type,
+    _value: value,
+    _reason: reason || null,
+  })
+  if (error) return { error: error.message }
+  revalidatePath(`/bill/${billId}`)
+  return { ok: true }
+}
+
+/** Apply a coupon code to the bill (cashier-usable; validated server-side). */
+export async function applyCoupon(billId: string, code: string): Promise<BillState> {
+  await requirePermission("payment.take")
+  if (!code.trim()) return { error: "Enter a coupon code." }
+  const supabase = await createClient()
+  const { error } = await supabase.rpc("apply_coupon", { _bill_id: billId, _code: code })
+  if (error) return { error: error.message }
+  revalidatePath(`/bill/${billId}`)
+  return { ok: true }
+}
+
 /** Void a bill line (owner/manager; trusted recompute + audit). */
 export async function voidLine(
   orderItemId: string,

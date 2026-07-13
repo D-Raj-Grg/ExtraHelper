@@ -2,7 +2,15 @@
 
 import { useRef, useState, useTransition } from "react"
 import Link from "next/link"
-import { applyDiscount, payByCard, refundBill, takePayment, voidLine } from "@/app/(app)/bill/actions"
+import {
+  applyCoupon,
+  applyDiscount,
+  applyItemDiscount,
+  payByCard,
+  refundBill,
+  takePayment,
+  voidLine,
+} from "@/app/(app)/bill/actions"
 import { money } from "@/lib/format"
 import { BillSplit } from "@/components/bill-split"
 import { BillLoyalty } from "@/components/bill-loyalty"
@@ -80,6 +88,10 @@ export function BillView({
   const [discReason, setDiscReason] = useState<string>("")
   const [voidingId, setVoidingId] = useState<string | null>(null)
   const [voidReason, setVoidReason] = useState<string>("")
+  const [discItemId, setDiscItemId] = useState<string | null>(null)
+  const [itemDiscType, setItemDiscType] = useState<"percent" | "flat">("percent")
+  const [itemDiscValue, setItemDiscValue] = useState<string>("")
+  const [couponCode, setCouponCode] = useState<string>("")
   const [refundAmount, setRefundAmount] = useState<string>("")
   const [refundReason, setRefundReason] = useState<string>("")
   const settled = bill.status === "paid"
@@ -125,6 +137,36 @@ export function BillView({
       const res = await applyDiscount(bill.id, discType, v, discReason)
       if (res && "error" in res) setError(res.error)
       else setDiscValue("")
+    })
+  }
+
+  function doItemDiscount(orderItemId: string) {
+    const v = Number(itemDiscValue)
+    if (!Number.isFinite(v) || v <= 0) {
+      setError("Enter a valid discount.")
+      return
+    }
+    setError(null)
+    startTransition(async () => {
+      const res = await applyItemDiscount(orderItemId, bill.id, itemDiscType, v, "")
+      if (res && "error" in res) setError(res.error)
+      else {
+        setDiscItemId(null)
+        setItemDiscValue("")
+      }
+    })
+  }
+
+  function coupon() {
+    if (!couponCode.trim()) {
+      setError("Enter a coupon code.")
+      return
+    }
+    setError(null)
+    startTransition(async () => {
+      const res = await applyCoupon(bill.id, couponCode)
+      if (res && "error" in res) setError(res.error)
+      else setCouponCode("")
     })
   }
 
@@ -220,16 +262,55 @@ export function BillView({
                 </span>
                 <span className="text-muted-foreground">{money(it.total_cents, currency)}</span>
                 {canDiscount && !settled && it.order_item_id ? (
-                  <button
-                    type="button"
-                    disabled={pending}
-                    onClick={() => setVoidingId(voidingId === it.id ? null : it.id)}
-                    className="text-xs text-destructive hover:underline"
-                  >
-                    void
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={() => setDiscItemId(discItemId === it.id ? null : it.id)}
+                      className="text-xs text-blue-600 hover:underline dark:text-blue-400"
+                    >
+                      disc
+                    </button>
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={() => setVoidingId(voidingId === it.id ? null : it.id)}
+                      className="text-xs text-destructive hover:underline"
+                    >
+                      void
+                    </button>
+                  </>
                 ) : null}
               </div>
+              {discItemId === it.id && it.order_item_id ? (
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+                  <select
+                    value={itemDiscType}
+                    onChange={(e) => setItemDiscType(e.target.value as "percent" | "flat")}
+                    className="border-input dark:bg-input/30 h-8 rounded-md border bg-transparent px-2 text-xs"
+                  >
+                    <option value="percent">%</option>
+                    <option value="flat">Flat</option>
+                  </select>
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={itemDiscValue}
+                    onChange={(e) => setItemDiscValue(e.target.value)}
+                    placeholder={itemDiscType === "percent" ? "10" : "2.00"}
+                    className="h-8 max-w-20 text-xs"
+                  />
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={pending}
+                    onClick={() => doItemDiscount(it.order_item_id as string)}
+                  >
+                    Apply
+                  </Button>
+                </div>
+              ) : null}
               {voidingId === it.id && it.order_item_id ? (
                 <div className="mt-1 flex items-center gap-2">
                   <Input
@@ -276,6 +357,23 @@ export function BillView({
               <span>{money(p.amount_cents, currency)}</span>
             </div>
           ))}
+        </div>
+      ) : null}
+
+      {!settled ? (
+        <div className="mt-6 rounded-lg border border-dashed p-3">
+          <p className="mb-2 text-sm font-medium">Coupon</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              value={couponCode}
+              onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+              placeholder="CODE"
+              className="max-w-40 uppercase"
+            />
+            <Button size="sm" variant="secondary" disabled={pending} onClick={coupon}>
+              Apply coupon
+            </Button>
+          </div>
         </div>
       ) : null}
 
