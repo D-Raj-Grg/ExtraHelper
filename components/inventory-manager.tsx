@@ -10,6 +10,7 @@ import {
 import { money } from "@/lib/format"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table"
 
 type Item = {
@@ -90,15 +91,16 @@ function InventoryRow({ item, currency }: { item: Item; currency: string }) {
       <TableCell className="px-3 py-2 text-muted-foreground">{money(item.cost_cents, currency)}</TableCell>
       <TableCell className="px-3 py-2">
         <div className="flex items-center gap-1">
-          <select
-            value={type}
-            onChange={(e) => setType(e.target.value as typeof type)}
-            className={inputClass}
-          >
-            <option value="purchase">+ in</option>
-            <option value="wastage">- waste</option>
-            <option value="adjustment">± adj</option>
-          </select>
+          <Select value={type} onValueChange={(v) => setType(v as typeof type)}>
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="purchase">+ in</SelectItem>
+              <SelectItem value="wastage">- waste</SelectItem>
+              <SelectItem value="adjustment">± adj</SelectItem>
+            </SelectContent>
+          </Select>
           <Input
             type="number"
             step="0.001"
@@ -202,23 +204,33 @@ export function InventoryManager({
       <section>
         <h2 className="mb-2 text-lg font-semibold">Recipes (BOM)</h2>
         <form action={recipeAction} className="mb-3 flex flex-wrap items-center gap-2">
-          <select name="menuItemId" defaultValue="" className={inputClass} required>
-            <option value="">— dish —</option>
-            {menu.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-              </option>
-            ))}
-          </select>
+          <Select name="menuItemId" defaultValue="" required>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="— dish —" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">— dish —</SelectItem>
+              {menu.map((m) => (
+                <SelectItem key={m.id} value={m.id}>
+                  {m.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <span className="text-xs text-muted-foreground">uses</span>
-          <select name="inventoryItemId" defaultValue="" className={inputClass} required>
-            <option value="">— ingredient —</option>
-            {items.map((i) => (
-              <option key={i.id} value={i.id}>
-                {i.name}
-              </option>
-            ))}
-          </select>
+          <Select name="inventoryItemId" defaultValue="" required>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="— ingredient —" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">— ingredient —</SelectItem>
+              {items.map((i) => (
+                <SelectItem key={i.id} value={i.id}>
+                  {i.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Input name="qty" type="number" step="0.001" placeholder="qty" className="h-8 w-20 text-xs" required />
           <Button type="submit" size="sm" variant="secondary" disabled={recipePending}>
             {recipePending ? "…" : "Map"}

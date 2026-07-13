@@ -11,6 +11,7 @@ import {
   FieldLabel,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { UtensilsCrossedIcon } from "lucide-react"
 
 const CURRENCIES = ["USD", "EUR", "GBP", "INR", "NPR", "AED", "SGD", "AUD", "CAD", "JPY"]
@@ -69,24 +70,34 @@ export function OnboardingForm({
           </Field>
           <Field>
             <FieldLabel htmlFor="currency">Currency</FieldLabel>
-            <select id="currency" name="currency" defaultValue="USD" className={selectClass}>
-              {CURRENCIES.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
+            <Select name="currency" defaultValue="USD">
+              <SelectTrigger id="currency" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CURRENCIES.map((c) => (
+                  <SelectItem key={c} value={c}>
+                    {c}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <FieldDescription>Used for all pricing and receipts.</FieldDescription>
           </Field>
           <Field>
             <FieldLabel htmlFor="timezone">Timezone</FieldLabel>
-            <select id="timezone" name="timezone" defaultValue="UTC" className={selectClass}>
-              {TIMEZONES.map((tz) => (
-                <option key={tz} value={tz}>
-                  {tz}
-                </option>
-              ))}
-            </select>
+            <Select name="timezone" defaultValue="UTC">
+              <SelectTrigger id="timezone" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {TIMEZONES.map((tz) => (
+                  <SelectItem key={tz} value={tz}>
+                    {tz}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </Field>
           {state?.error ? (
             <p className="text-sm text-destructive" role="alert">

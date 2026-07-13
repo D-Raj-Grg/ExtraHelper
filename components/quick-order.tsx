@@ -13,6 +13,7 @@ import {
 } from "@/lib/offline/menu-cache"
 import { money } from "@/lib/format"
 import { Button } from "@/components/ui/button"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 /**
  * Order composer that works online AND offline. Menu + tables are cached to
@@ -129,18 +130,19 @@ export function QuickOrder({
       {/* Menu */}
       <div>
         <div className="mb-2 flex items-center gap-2">
-          <select
-            value={tableId}
-            onChange={(e) => setTableId(e.target.value)}
-            className="border-input dark:bg-input/30 h-9 rounded-md border bg-transparent px-3 text-sm"
-          >
-            <option value="">Takeaway / pickup</option>
-            {tableOpts.map((t) => (
-              <option key={t.id} value={t.id}>
-                Table {t.label} ({t.state})
-              </option>
-            ))}
-          </select>
+          <Select value={tableId} onValueChange={(v) => setTableId(v ?? "")}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Takeaway / pickup" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">Takeaway / pickup</SelectItem>
+              {tableOpts.map((t) => (
+                <SelectItem key={t.id} value={t.id}>
+                  Table {t.label} ({t.state})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           {!online ? (
             <span className="rounded-full border border-amber-500/40 px-2 py-0.5 text-xs text-amber-600 dark:text-amber-400">
               Offline — will queue

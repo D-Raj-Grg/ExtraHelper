@@ -15,6 +15,7 @@ import { TABLE_STATES, type TableState } from "@/lib/table-constants"
 import { TableQr } from "@/components/table-qr"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 type Floor = { id: string; name: string }
 type Table = {
@@ -134,14 +135,19 @@ export function TablesManager({
               className="w-20"
               required
             />
-            <select name="floorId" className={inputClass} defaultValue="">
-              <option value="">— floor —</option>
-              {floors.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.name}
-                </option>
-              ))}
-            </select>
+            <Select name="floorId" defaultValue="">
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="— floor —" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">— floor —</SelectItem>
+                {floors.map((f) => (
+                  <SelectItem key={f.id} value={f.id}>
+                    {f.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Button type="submit" size="sm" disabled={tablePending}>
               {tablePending ? "…" : "Add"}
             </Button>
@@ -181,12 +187,11 @@ export function TablesManager({
                         Seats {t.capacity}
                       </p>
                       <div className="mt-3 flex flex-wrap items-center gap-2">
-                        <select
-                          className={inputClass}
+                        <Select
                           value={t.state}
                           disabled={pending}
-                          onChange={(e) => {
-                            const next = e.target.value as TableState
+                          onValueChange={(v) => {
+                            const next = v as TableState
                             startTransition(async () => {
                               setOptTable({ id: t.id, state: next })
                               const res = await setTableState(t.id, next)
@@ -194,12 +199,17 @@ export function TablesManager({
                             })
                           }}
                         >
-                          {TABLE_STATES.map((s) => (
-                            <option key={s} value={s}>
-                              {s.replace("_", " ")}
-                            </option>
-                          ))}
-                        </select>
+                          <SelectTrigger className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {TABLE_STATES.map((s) => (
+                              <SelectItem key={s} value={s}>
+                                {s.replace("_", " ")}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                         <Button
                           size="sm"
                           variant={qrOpenId === t.id ? "default" : "outline"}

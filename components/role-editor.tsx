@@ -7,6 +7,7 @@ import { createRole, updateRole } from "@/app/(app)/team/actions"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 export type Permission = { key: string; grp: string; label: string; sort: number }
 export type EditableRole = {
@@ -115,16 +116,16 @@ export function RoleEditor({
           </label>
           <div className="text-sm font-medium">
             Base role (DB access floor)
-            <select
-              value={baseRole}
-              onChange={(e) => setBaseRole(e.target.value)}
-              disabled={readOnly}
-              className="border-input dark:bg-input/30 mt-1 h-9 w-full rounded-md border bg-transparent px-2 text-sm capitalize"
-            >
-              {BASE_ROLES.map((b) => (
-                <option key={b} value={b}>{b}</option>
-              ))}
-            </select>
+            <Select value={baseRole} onValueChange={(v) => v && setBaseRole(v)} disabled={readOnly}>
+              <SelectTrigger className="mt-1 w-full capitalize">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {BASE_ROLES.map((b) => (
+                  <SelectItem key={b} value={b} className="capitalize">{b}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="text-sm font-medium">
             Color

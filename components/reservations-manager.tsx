@@ -10,6 +10,7 @@ import { type ResvStatus } from "@/lib/reservation-constants"
 import { formatDateTime } from "@/lib/format"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table"
 
 type Table = { id: string; label: string; capacity: number }
@@ -74,14 +75,19 @@ export function ReservationsManager({
           <Input name="phone" placeholder="Phone" className="w-32" />
           <Input name="party" type="number" min={1} defaultValue={2} className="w-20" required />
           <input name="when" type="datetime-local" className={inputClass} required />
-          <select name="tableId" defaultValue="" className={inputClass}>
-            <option value="">— table —</option>
-            {tables.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.label} ({t.capacity})
-              </option>
-            ))}
-          </select>
+          <Select name="tableId" defaultValue="">
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="— table —" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">— table —</SelectItem>
+              {tables.map((t) => (
+                <SelectItem key={t.id} value={t.id}>
+                  {t.label} ({t.capacity})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Button type="submit" size="sm" disabled={pending}>
             {pending ? "…" : "Book"}
           </Button>

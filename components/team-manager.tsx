@@ -16,6 +16,7 @@ import { RoleEditor, type EditableRole, type Permission } from "@/components/rol
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 type Role = EditableRole & { userCount: number }
 type Member = {
@@ -210,15 +211,16 @@ function StaffTab({
           </label>
           <label className="text-sm font-medium">
             Role
-            <select
-              value={roleId}
-              onChange={(e) => setRoleId(e.target.value)}
-              className="border-input dark:bg-input/30 mt-1 h-9 rounded-md border bg-transparent px-2 text-sm"
-            >
-              {roleOptions.map((r) => (
-                <option key={r.id} value={r.id}>{r.name}</option>
-              ))}
-            </select>
+            <Select value={roleId} onValueChange={(v) => setRoleId(v ?? "")}>
+              <SelectTrigger className="mt-1 w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {roleOptions.map((r) => (
+                  <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
           <Button
             disabled={pending || !email.trim() || !roleId}
@@ -251,16 +253,20 @@ function StaffTab({
                   <TableCell className="px-3 py-2">{m.email}</TableCell>
                   <TableCell className="px-3 py-2">
                     {canEdit && m.user_id ? (
-                      <select
+                      <Select
                         value={m.role_id ?? ""}
                         disabled={pending}
-                        onChange={(e) => onSetRole(m.user_id as string, e.target.value)}
-                        className="border-input dark:bg-input/30 h-8 rounded-md border bg-transparent px-2 text-xs"
+                        onValueChange={(v) => v && onSetRole(m.user_id as string, v)}
                       >
-                        {roleOptions.map((r) => (
-                          <option key={r.id} value={r.id}>{r.name}</option>
-                        ))}
-                      </select>
+                        <SelectTrigger className="h-8 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {roleOptions.map((r) => (
+                            <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     ) : (
                       <span className="capitalize">{m.role_name ?? m.base_role}</span>
                     )}

@@ -17,6 +17,7 @@ import { BillLoyalty } from "@/components/bill-loyalty"
 import { useOffline } from "@/components/offline-sync-provider"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 type Bill = {
   id: string
@@ -284,14 +285,18 @@ export function BillView({
               </div>
               {discItemId === it.id && it.order_item_id ? (
                 <div className="mt-1 flex flex-wrap items-center gap-2">
-                  <select
+                  <Select
                     value={itemDiscType}
-                    onChange={(e) => setItemDiscType(e.target.value as "percent" | "flat")}
-                    className="border-input dark:bg-input/30 h-8 rounded-md border bg-transparent px-2 text-xs"
+                    onValueChange={(v) => setItemDiscType(v as "percent" | "flat")}
                   >
-                    <option value="percent">%</option>
-                    <option value="flat">Flat</option>
-                  </select>
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="percent">%</SelectItem>
+                      <SelectItem value="flat">Flat</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <Input
                     type="number"
                     min={0}
@@ -381,14 +386,18 @@ export function BillView({
         <div className="mt-6 rounded-lg border border-dashed p-3">
           <p className="mb-2 text-sm font-medium">Discount (manager)</p>
           <div className="flex flex-wrap items-center gap-2">
-            <select
+            <Select
               value={discType}
-              onChange={(e) => setDiscType(e.target.value as "percent" | "flat")}
-              className="border-input dark:bg-input/30 h-9 rounded-md border bg-transparent px-2 text-sm"
+              onValueChange={(v) => setDiscType(v as "percent" | "flat")}
             >
-              <option value="percent">%</option>
-              <option value="flat">Flat</option>
-            </select>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="percent">%</SelectItem>
+                <SelectItem value="flat">Flat</SelectItem>
+              </SelectContent>
+            </Select>
             <Input
               type="number"
               min={0}

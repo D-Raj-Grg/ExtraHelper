@@ -11,6 +11,7 @@ import {
 import { money } from "@/lib/format"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table"
 
 type Supplier = { id: string; name: string; phone: string | null }
@@ -107,14 +108,19 @@ export function PurchasingManager({
       <section>
         <h2 className="mb-2 text-lg font-semibold">New purchase order</h2>
         <form action={poAction} className="flex flex-wrap items-center gap-2">
-          <select name="supplierId" defaultValue="" className={inputClass}>
-            <option value="">— supplier —</option>
-            {suppliers.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
+          <Select name="supplierId" defaultValue="">
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="— supplier —" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">— supplier —</SelectItem>
+              {suppliers.map((s) => (
+                <SelectItem key={s.id} value={s.id}>
+                  {s.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Button type="submit" size="sm" disabled={poPending}>
             {poPending ? "…" : "Create PO"}
           </Button>
@@ -166,14 +172,19 @@ export function PurchasingManager({
                   <div className="flex flex-col gap-2">
                     <form action={lineAction} className="flex flex-wrap items-center gap-2">
                       <input type="hidden" name="poId" value={po.id} />
-                      <select name="inventoryItemId" defaultValue="" className={inputClass} required>
-                        <option value="">— item —</option>
-                        {items.map((i) => (
-                          <option key={i.id} value={i.id}>
-                            {i.name}
-                          </option>
-                        ))}
-                      </select>
+                      <Select name="inventoryItemId" defaultValue="" required>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="— item —" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">— item —</SelectItem>
+                          {items.map((i) => (
+                            <SelectItem key={i.id} value={i.id}>
+                              {i.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       <Input name="qty" type="number" step="0.001" placeholder="qty" className="h-8 w-20 text-xs" required />
                       <Input name="cost" type="number" step="0.01" placeholder="unit cost" className="h-8 w-24 text-xs" />
                       <Button type="submit" size="sm" variant="secondary" disabled={linePending}>

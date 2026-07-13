@@ -12,6 +12,7 @@ import {
 import { money } from "@/lib/format"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table"
 
 type Category = { id: string; name: string }
@@ -121,25 +122,35 @@ export function MenuManager({
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-xs text-muted-foreground">Category</label>
-            <select name="categoryId" className={inputClass} defaultValue="">
-              <option value="">— none —</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+            <Select name="categoryId" defaultValue="">
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="— none —" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">— none —</SelectItem>
+                {categories.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-xs text-muted-foreground">Station</label>
-            <select name="stationId" className={inputClass} defaultValue="">
-              <option value="">— none —</option>
-              {stations.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
+            <Select name="stationId" defaultValue="">
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="— none —" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">— none —</SelectItem>
+                {stations.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <Button type="submit" size="sm" disabled={itemPending}>
             {itemPending ? "Adding…" : "Add item"}
