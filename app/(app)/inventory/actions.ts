@@ -55,12 +55,16 @@ export async function createInventoryItem(
   const tenant = await requireRole(...INV_ROLES)
   const name = String(formData.get("name") ?? "").trim()
   const uom = String(formData.get("uom") ?? "unit").trim() || "unit"
+  const category = String(formData.get("category") ?? "").trim() || null
   const reorder = Number(formData.get("reorder") ?? 0)
+  const parRaw = String(formData.get("par") ?? "").trim()
+  const par = parRaw === "" ? null : Number(parRaw)
   const cost = Math.round(Number(formData.get("cost") ?? 0) * 100)
   const qty = Number(formData.get("qty") ?? 0)
 
   if (!name) return { error: "Item name is required." }
   if (Number.isNaN(reorder) || reorder < 0) return { error: "Invalid reorder level." }
+  if (par !== null && (Number.isNaN(par) || par < 0)) return { error: "Invalid par level." }
   if (Number.isNaN(qty) || qty < 0) return { error: "Invalid quantity." }
 
   const supabase = await createClient()
@@ -68,7 +72,9 @@ export async function createInventoryItem(
     tenant_id: tenant.tenantId,
     name,
     uom,
+    category,
     reorder_level: reorder,
+    par_level: par,
     current_qty: qty,
     cost_cents: Number.isNaN(cost) ? 0 : cost,
   })
@@ -78,11 +84,48 @@ export async function createInventoryItem(
   return { ok: true }
 }
 
+/** Edit an inventory item's fields (category / par / reorder / uom / cost). */
+export async function updateInventoryItem(
+  itemId: string,
+  fields: { name?: string; category?: string | null; uom?: string; reorder?: number; par?: number | null; cost?: number },
+): Promise<InvState> {
+  const tenant = await requireRole(...INV_ROLES)
+  const patch: Record<string, unknown> = {}
+  if (fields.name !== undefined) {
+    const n = fields.name.trim()
+    if (!n) return { error: "Item name is required." }
+    patch.name = n
+  }
+  if (fields.category !== undefined) patch.category = fields.category?.trim() || null
+  if (fields.uom !== undefined) patch.uom = fields.uom.trim() || "unit"
+  if (fields.reorder !== undefined) {
+    if (!Number.isFinite(fields.reorder) || fields.reorder < 0) return { error: "Invalid reorder level." }
+    patch.reorder_level = fields.reorder
+  }
+  if (fields.par !== undefined) {
+    if (fields.par !== null && (!Number.isFinite(fields.par) || fields.par < 0))
+      return { error: "Invalid par level." }
+    patch.par_level = fields.par
+  }
+  if (fields.cost !== undefined) patch.cost_cents = Math.max(0, Math.round(fields.cost))
+  if (Object.keys(patch).length === 0) return { ok: true }
+
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from("inventory_items")
+    .update(patch)
+    .eq("id", itemId)
+    .eq("tenant_id", tenant.tenantId)
+  if (error) return { error: error.message }
+  revalidatePath("/inventory")
+  return { ok: true }
+}
+
 /** Manual stock movement (purchase-in, wastage, adjustment) + qty update. */
 export async function adjustStock(
   itemId: string,
   deltaQty: number,
-  type: "purchase" | "wastage" | "adjustment",
+  type: "purchase" | "wastage" | "adjustment" | "staff_meal" | "transfer",
   reason: string,
 ): Promise<InvState> {
   await requireRole(...INV_ROLES)
