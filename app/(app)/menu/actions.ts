@@ -83,6 +83,8 @@ export async function toggleItem86(itemId: string, is86: boolean): Promise<MenuS
     .eq("tenant_id", tenant.tenantId)
   if (error) return { error: error.message }
   revalidatePath("/menu")
+  revalidatePath("/pos")
+  revalidatePath("/kds")
   return { ok: true }
 }
 

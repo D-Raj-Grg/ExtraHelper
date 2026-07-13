@@ -2,6 +2,7 @@ import { notFound } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { requirePermission } from "@/lib/supabase/guards"
 import { PosBuilder } from "@/components/pos-builder"
+import { MenuRealtimeRefresh } from "@/components/menu-realtime-refresh"
 import { PageShell } from "@/components/page-header"
 
 export const dynamic = "force-dynamic"
@@ -47,6 +48,7 @@ export default async function OrderBuilderPage({
 
   return (
     <PageShell>
+      <MenuRealtimeRefresh tenantId={tenant.tenantId} />
       <PosBuilder
         currency={tenant.currency}
         order={order as never}
