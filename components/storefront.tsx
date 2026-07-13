@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react"
 import { placeOnlineOrder, type StoreState } from "@/app/s/actions"
+import { payForOrder, type PayState } from "@/app/pay/actions"
 import { money } from "@/lib/format"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -27,6 +28,7 @@ export function Storefront({
   const [address, setAddress] = useState("")
   const [pending, startTransition] = useTransition()
   const [state, setState] = useState<StoreState>(undefined)
+  const [pay, setPay] = useState<PayState | null>(null)
 
   const items = categories.flatMap((c) => c.items)
   const subtotal = Object.entries(cart).reduce((s, [id, q]) => {
@@ -46,11 +48,33 @@ export function Storefront({
 
   if (state && "ok" in state) {
     return (
-      <div className="rounded-lg border border-green-500/30 bg-green-500/5 p-6 text-center">
-        <p className="text-lg font-semibold text-green-600 dark:text-green-400">Order received!</p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          We&apos;ll start preparing your {fulfillment} order.
-        </p>
+      <div className="space-y-4">
+        <div className="rounded-lg border border-green-500/30 bg-green-500/5 p-6 text-center">
+          <p className="text-lg font-semibold text-green-600 dark:text-green-400">Order received!</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            We&apos;ll start preparing your {fulfillment} order.
+          </p>
+        </div>
+        {pay && "ok" in pay && pay.status === "paid" ? (
+          <p className="text-center text-sm font-medium text-green-600 dark:text-green-400">
+            Paid ✓ — thanks!
+          </p>
+        ) : pay && "ok" in pay ? (
+          <p className="text-center text-sm text-muted-foreground">Payment processing…</p>
+        ) : (
+          <div className="space-y-2">
+            {pay && "error" in pay ? (
+              <p className="text-sm text-destructive" role="alert">{pay.error}</p>
+            ) : null}
+            <Button
+              className="w-full"
+              disabled={pending}
+              onClick={() => startTransition(async () => setPay(await payForOrder(state.orderId)))}
+            >
+              {pending ? "Processing…" : `Pay now (prepay) · ${money(total, currency)}`}
+            </Button>
+          </div>
+        )}
       </div>
     )
   }

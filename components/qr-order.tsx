@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react"
 import { placeQrOrder, requestBill, submitFeedback, type QrState } from "@/app/t/actions"
+import { payForOrder, type PayState } from "@/app/pay/actions"
 import { money } from "@/lib/format"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -25,6 +26,7 @@ export function QrOrder({
   const [rating, setRating] = useState(0)
   const [comment, setComment] = useState("")
   const [thanked, setThanked] = useState(false)
+  const [pay, setPay] = useState<PayState | null>(null)
 
   const items = categories.flatMap((c) => c.items)
   const total = Object.entries(cart).reduce((sum, [id, qty]) => {
@@ -62,6 +64,29 @@ export function QrOrder({
             Your order is with the kitchen. A server will confirm shortly.
           </p>
         </div>
+        <div className="space-y-2">
+          {pay && "ok" in pay && pay.status === "paid" ? (
+            <p className="text-center text-sm font-medium text-green-600 dark:text-green-400">
+              Paid ✓ — thanks!
+            </p>
+          ) : pay && "ok" in pay ? (
+            <p className="text-center text-sm text-muted-foreground">Payment processing…</p>
+          ) : (
+            <>
+              {pay && "error" in pay ? (
+                <p className="text-sm text-destructive" role="alert">{pay.error}</p>
+              ) : null}
+              <Button
+                className="w-full"
+                disabled={pending}
+                onClick={() => startTransition(async () => setPay(await payForOrder(state.orderId)))}
+              >
+                {pending ? "Processing…" : `Pay now${" · " + money(total, currency)}`}
+              </Button>
+            </>
+          )}
+        </div>
+
         <Button
           className="w-full"
           variant="secondary"
