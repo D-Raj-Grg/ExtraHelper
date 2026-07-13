@@ -146,8 +146,8 @@ export async function payByCard(
     return { error: "Amount must be a positive number." }
 
   const idempotencyKey = randomUUID()
-  // Per-tenant gateway selection is a future setting; sandbox for now.
-  const gateway = getGateway("sandbox")
+  // Per-tenant gateway selection (rule #6) — configured in settings.
+  const gateway = getGateway(tenant.paymentGateway)
   const result = await gateway.createPayment({
     tenantId: tenant.tenantId,
     amountCents,

@@ -1,8 +1,15 @@
 "use client"
 
-import { useActionState, useState } from "react"
+import { useActionState, useState, useTransition } from "react"
 import { PlusIcon, Trash2Icon } from "lucide-react"
-import { updateSettings, type SettingsState } from "@/app/(app)/settings/actions"
+import {
+  updateSettings,
+  uploadTenantLogo,
+  createBranch,
+  updateBranch,
+  deleteBranch,
+  type SettingsState,
+} from "@/app/(app)/settings/actions"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field"
@@ -32,6 +39,7 @@ const textareaClass =
   "border-input dark:bg-input/30 min-h-16 w-full rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
 
 type TaxRule = { name: string; rate: number; inclusive: boolean }
+type Branch = { id: string; name: string; address: string | null; is_default: boolean }
 
 export function SettingsForm({
   currency,
@@ -41,6 +49,10 @@ export function SettingsForm({
   taxRules,
   receipt,
   blockNegativeStock,
+  paymentGateway,
+  logoUrl,
+  branches,
+  canManageBranches,
 }: {
   currency: string
   timezone: string
@@ -49,6 +61,10 @@ export function SettingsForm({
   taxRules: TaxRule[]
   receipt: { header: string; footer: string; terms: string }
   blockNegativeStock: boolean
+  paymentGateway: string
+  logoUrl: string | null
+  branches: Branch[]
+  canManageBranches: boolean
 }) {
   const [state, formAction, pending] = useActionState<SettingsState, FormData>(
     updateSettings,
@@ -61,7 +77,13 @@ export function SettingsForm({
   const addRule = () => setRules((rs) => [...rs, { name: "", rate: 0, inclusive: false }])
   const removeRule = (i: number) => setRules((rs) => rs.filter((_, idx) => idx !== i))
 
+  const [logoState, logoAction, logoPending] = useActionState<SettingsState, FormData>(
+    uploadTenantLogo,
+    undefined,
+  )
+
   return (
+    <div className="flex flex-col gap-8">
     <form action={formAction}>
       {/* Serialize the tax rules for the server action. */}
       <input type="hidden" name="taxRules" value={JSON.stringify(rules)} />
@@ -120,6 +142,23 @@ export function SettingsForm({
             step="0.01"
             defaultValue={packagingFee}
           />
+        </Field>
+
+        {/* Payment gateway (rule #6) ------------------------------------- */}
+        <Field>
+          <FieldLabel htmlFor="paymentGateway">Payment gateway</FieldLabel>
+          <Select name="paymentGateway" defaultValue={paymentGateway}>
+            <SelectTrigger id="paymentGateway" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="sandbox">Sandbox (test)</SelectItem>
+              <SelectItem value="manual">Manual / cash-terminal</SelectItem>
+            </SelectContent>
+          </Select>
+          <FieldDescription>
+            Real gateways (Stripe / eSewa / Khalti) register under their own key later.
+          </FieldDescription>
         </Field>
 
         {/* Tax rules ------------------------------------------------------- */}
@@ -241,5 +280,141 @@ export function SettingsForm({
         </Field>
       </FieldGroup>
     </form>
+
+    {/* Branding / logo (separate multipart form) ----------------------- */}
+    <form action={logoAction}>
+      <FieldGroup>
+        <Field>
+          <FieldLabel htmlFor="logo">Branding / logo</FieldLabel>
+          <FieldDescription>Shown on receipts and storefront.</FieldDescription>
+          {logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={logoUrl}
+              alt="Current logo"
+              className="h-16 w-16 rounded-md border object-contain"
+            />
+          ) : (
+            <p className="text-sm text-muted-foreground">No logo uploaded yet.</p>
+          )}
+          <Input id="logo" name="logo" type="file" accept="image/*" />
+          {logoState && "error" in logoState ? (
+            <p className="text-sm text-destructive" role="alert">
+              {logoState.error}
+            </p>
+          ) : null}
+          {logoState && "ok" in logoState ? (
+            <p className="text-sm text-green-600 dark:text-green-400" role="status">
+              Logo updated.
+            </p>
+          ) : null}
+        </Field>
+        <Field>
+          <Button type="submit" variant="outline" disabled={logoPending}>
+            {logoPending ? "Uploading…" : "Upload logo"}
+          </Button>
+        </Field>
+      </FieldGroup>
+    </form>
+
+    {/* Branches (multi-branch) ---------------------------------------- */}
+    {canManageBranches ? <BranchesSection branches={branches} /> : null}
+    </div>
+  )
+}
+
+function BranchesSection({ branches }: { branches: Branch[] }) {
+  const [pending, startTransition] = useTransition()
+  const [error, setError] = useState<string | null>(null)
+  const [createState, createAction, creating] = useActionState<SettingsState, FormData>(
+    createBranch,
+    undefined,
+  )
+
+  const runUpdate = (id: string, fields: { name?: string; address?: string | null }) =>
+    startTransition(async () => {
+      const res = await updateBranch(id, fields)
+      setError(res && "error" in res ? res.error : null)
+    })
+  const runDelete = (id: string) =>
+    startTransition(async () => {
+      const res = await deleteBranch(id)
+      setError(res && "error" in res ? res.error : null)
+    })
+
+  return (
+    <div>
+      <FieldGroup>
+        <Field>
+          <FieldLabel>Branches</FieldLabel>
+          <FieldDescription>Manage locations for this tenant.</FieldDescription>
+          <div className="flex flex-col gap-2">
+            {branches.map((b) => (
+              <div key={b.id} className="flex flex-wrap items-center gap-2">
+                <Input
+                  aria-label="Branch name"
+                  defaultValue={b.name}
+                  disabled={b.is_default || pending}
+                  onBlur={(e) =>
+                    !b.is_default && e.target.value !== b.name
+                      ? runUpdate(b.id, { name: e.target.value })
+                      : undefined
+                  }
+                  className="min-w-32 flex-1"
+                />
+                <Input
+                  aria-label="Branch address"
+                  placeholder="Address"
+                  defaultValue={b.address ?? ""}
+                  disabled={b.is_default || pending}
+                  onBlur={(e) =>
+                    !b.is_default && e.target.value !== (b.address ?? "")
+                      ? runUpdate(b.id, { address: e.target.value })
+                      : undefined
+                  }
+                  className="min-w-32 flex-1"
+                />
+                {b.is_default ? (
+                  <span className="rounded-md border px-2 py-1 text-xs text-muted-foreground">
+                    Default
+                  </span>
+                ) : (
+                  <Button
+                    type="button"
+                    size="icon-sm"
+                    variant="ghost"
+                    disabled={pending}
+                    onClick={() => runDelete(b.id)}
+                    aria-label="Delete branch"
+                  >
+                    <Trash2Icon className="size-4" />
+                  </Button>
+                )}
+              </div>
+            ))}
+          </div>
+          {error ? (
+            <p className="text-sm text-destructive" role="alert">
+              {error}
+            </p>
+          ) : null}
+        </Field>
+      </FieldGroup>
+
+      <form action={createAction} className="mt-2">
+        <div className="flex flex-wrap items-end gap-2">
+          <Input name="name" placeholder="New branch name" className="min-w-32 flex-1" required />
+          <Input name="address" placeholder="Address (optional)" className="min-w-32 flex-1" />
+          <Button type="submit" size="sm" variant="outline" disabled={creating}>
+            <PlusIcon className="size-4" /> {creating ? "Adding…" : "Add branch"}
+          </Button>
+        </div>
+        {createState && "error" in createState ? (
+          <p className="mt-1 text-sm text-destructive" role="alert">
+            {createState.error}
+          </p>
+        ) : null}
+      </form>
+    </div>
   )
 }

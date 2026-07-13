@@ -11,6 +11,7 @@ export type ActiveTenant = {
   slug: string
   currency: string
   timezone: string
+  paymentGateway: string
   impersonating?: boolean
 }
 
@@ -39,7 +40,7 @@ async function fetchMemberships(): Promise<Row[]> {
 
   const { data } = await supabase
     .from("user_tenants")
-    .select("role, tenant_id, tenants(name, slug, tenant_settings(currency, timezone))")
+    .select("role, tenant_id, tenants(name, slug, tenant_settings(currency, timezone, payment_gateway))")
     .eq("user_id", user.id)
     .eq("status", "active") // pending (unapproved) memberships don't grant access
     .order("tenant_id", { ascending: true }) // stable ordering for "first"
@@ -68,12 +69,12 @@ export async function getActiveTenant(): Promise<ActiveTenant | null> {
     if (isAdmin) {
       const { data: t } = await supabase
         .from("tenants")
-        .select("name, slug, tenant_settings(currency, timezone)")
+        .select("name, slug, tenant_settings(currency, timezone, payment_gateway)")
         .eq("id", imp)
         .maybeSingle()
       if (t) {
         const s = (Array.isArray(t.tenant_settings) ? t.tenant_settings[0] : t.tenant_settings) as
-          | { currency?: string; timezone?: string }
+          | { currency?: string; timezone?: string; payment_gateway?: string }
           | undefined
         return {
           tenantId: imp,
@@ -82,6 +83,7 @@ export async function getActiveTenant(): Promise<ActiveTenant | null> {
           slug: (t.slug as string) ?? "",
           currency: s?.currency ?? "USD",
           timezone: s?.timezone ?? "UTC",
+          paymentGateway: s?.payment_gateway ?? "sandbox",
           impersonating: true,
         }
       }
@@ -97,7 +99,7 @@ export async function getActiveTenant(): Promise<ActiveTenant | null> {
   const tenant = tenantOf(row)
   const settingsRaw = (tenant as { tenant_settings?: unknown })?.tenant_settings
   const settings = (Array.isArray(settingsRaw) ? settingsRaw[0] : settingsRaw) as
-    | { currency?: string; timezone?: string }
+    | { currency?: string; timezone?: string; payment_gateway?: string }
     | undefined
 
   return {
@@ -107,6 +109,7 @@ export async function getActiveTenant(): Promise<ActiveTenant | null> {
     slug: tenant?.slug ?? "",
     currency: settings?.currency ?? "USD",
     timezone: settings?.timezone ?? "UTC",
+    paymentGateway: settings?.payment_gateway ?? "sandbox",
   }
 }
 

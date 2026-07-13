@@ -54,6 +54,11 @@ export async function updateSettings(
 
   const blockNegativeStock = formData.get("blockNegativeStock") === "on"
 
+  // Pluggable payment gateway (rule #6). Only registered keys are accepted.
+  const GATEWAYS = ["sandbox", "manual"]
+  const paymentGateway = String(formData.get("paymentGateway") ?? "sandbox").trim()
+  if (!GATEWAYS.includes(paymentGateway)) return { error: "Unknown payment gateway." }
+
   const supabase = await createClient()
   const { error } = await supabase
     .from("tenant_settings")
@@ -65,10 +70,111 @@ export async function updateSettings(
       tax_rules: taxRules,
       receipt_template: receiptTemplate,
       block_negative_stock: blockNegativeStock,
+      payment_gateway: paymentGateway,
     })
     .eq("tenant_id", tenant.tenantId)
   if (error) return { error: error.message }
 
+  revalidatePath("/settings")
+  return { ok: true }
+}
+
+/** Upload a tenant logo/brand image → receipt_template.logo_url (Storage). */
+export async function uploadTenantLogo(
+  _prev: SettingsState,
+  formData: FormData,
+): Promise<SettingsState> {
+  const tenant = await requireRole("owner", "manager")
+  const file = formData.get("logo")
+  if (!(file instanceof File) || file.size === 0) return { error: "Choose an image file." }
+  if (file.size > 3 * 1024 * 1024) return { error: "Logo must be under 3 MB." }
+
+  const ext = (file.name.split(".").pop() || "png").toLowerCase().replace(/[^a-z0-9]/g, "")
+  const path = `${tenant.tenantId}/logo.${ext}`
+  const supabase = await createClient()
+  const { error: upErr } = await supabase.storage
+    .from("menu-images")
+    .upload(path, file, { upsert: true, contentType: file.type || undefined })
+  if (upErr) return { error: upErr.message }
+  const { data: pub } = supabase.storage.from("menu-images").getPublicUrl(path)
+  const url = `${pub.publicUrl}?v=${Date.now()}`
+
+  // Merge into the existing receipt_template JSON without clobbering other keys.
+  const { data: current } = await supabase
+    .from("tenant_settings")
+    .select("receipt_template")
+    .eq("tenant_id", tenant.tenantId)
+    .maybeSingle()
+  const tmpl = { ...((current?.receipt_template as Record<string, unknown>) ?? {}), logo_url: url }
+  const { error } = await supabase
+    .from("tenant_settings")
+    .update({ receipt_template: tmpl })
+    .eq("tenant_id", tenant.tenantId)
+  if (error) return { error: error.message }
+  revalidatePath("/settings")
+  return { ok: true }
+}
+
+// --- Branch management (multi-branch) --------------------------------------
+
+export async function createBranch(
+  _prev: SettingsState,
+  formData: FormData,
+): Promise<SettingsState> {
+  const tenant = await requireRole("owner", "manager")
+  const name = String(formData.get("name") ?? "").trim()
+  const address = String(formData.get("address") ?? "").trim() || null
+  if (!name) return { error: "Branch name is required." }
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from("branches")
+    .insert({ tenant_id: tenant.tenantId, name, address })
+  if (error) return { error: error.message }
+  revalidatePath("/settings")
+  return { ok: true }
+}
+
+export async function updateBranch(
+  branchId: string,
+  fields: { name?: string; address?: string | null },
+): Promise<SettingsState> {
+  const tenant = await requireRole("owner", "manager")
+  const patch: Record<string, unknown> = {}
+  if (fields.name !== undefined) {
+    const n = fields.name.trim()
+    if (!n) return { error: "Branch name is required." }
+    patch.name = n
+  }
+  if (fields.address !== undefined) patch.address = fields.address?.trim() || null
+  if (Object.keys(patch).length === 0) return { ok: true }
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from("branches")
+    .update(patch)
+    .eq("id", branchId)
+    .eq("tenant_id", tenant.tenantId)
+  if (error) return { error: error.message }
+  revalidatePath("/settings")
+  return { ok: true }
+}
+
+export async function deleteBranch(branchId: string): Promise<SettingsState> {
+  const tenant = await requireRole("owner", "manager")
+  const supabase = await createClient()
+  // Never delete the default branch (it anchors existing data).
+  const { data: b } = await supabase
+    .from("branches")
+    .select("is_default")
+    .eq("id", branchId)
+    .eq("tenant_id", tenant.tenantId)
+    .maybeSingle()
+  if (b?.is_default) return { error: "Can't delete the default branch." }
+  const { error } = await supabase
+    .from("branches")
+    .delete()
+    .eq("id", branchId)
+    .eq("tenant_id", tenant.tenantId)
+  if (error) return { error: error.message }
   revalidatePath("/settings")
   return { ok: true }
 }

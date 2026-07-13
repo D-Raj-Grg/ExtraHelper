@@ -7,11 +7,21 @@ export default async function SettingsPage() {
   const tenant = await requirePermission("settings.view")
 
   const supabase = await createClient()
-  const { data: settings } = await supabase
-    .from("tenant_settings")
-    .select("currency, timezone, service_charge, packaging_fee, tax_rules, receipt_template, block_negative_stock")
-    .eq("tenant_id", tenant.tenantId)
-    .maybeSingle()
+  const [{ data: settings }, { data: branches }] = await Promise.all([
+    supabase
+      .from("tenant_settings")
+      .select(
+        "currency, timezone, service_charge, packaging_fee, tax_rules, receipt_template, block_negative_stock, payment_gateway",
+      )
+      .eq("tenant_id", tenant.tenantId)
+      .maybeSingle(),
+    supabase
+      .from("branches")
+      .select("id, name, address, is_default")
+      .eq("tenant_id", tenant.tenantId)
+      .order("is_default", { ascending: false })
+      .order("name"),
+  ])
 
   const taxRules = Array.isArray(settings?.tax_rules)
     ? (settings.tax_rules as { name?: string; rate?: number; inclusive?: boolean }[]).map((r) => ({
@@ -24,6 +34,7 @@ export default async function SettingsPage() {
     header?: string
     footer?: string
     terms?: string
+    logo_url?: string
   }
 
   return (
@@ -44,6 +55,10 @@ export default async function SettingsPage() {
           terms: receipt.terms ?? "",
         }}
         blockNegativeStock={Boolean(settings?.block_negative_stock)}
+        paymentGateway={settings?.payment_gateway ?? "sandbox"}
+        logoUrl={receipt.logo_url ?? null}
+        branches={branches ?? []}
+        canManageBranches={tenant.role === "owner" || tenant.role === "manager"}
       />
     </PageShell>
   )

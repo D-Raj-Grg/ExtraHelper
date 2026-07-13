@@ -1,9 +1,10 @@
 "use client"
 
-import { useActionState } from "react"
+import { useActionState, useState } from "react"
 import { cn } from "@/lib/utils"
 import { provisionTenant, type OnboardingState } from "@/app/onboarding/actions"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Field,
   FieldDescription,
@@ -12,7 +13,9 @@ import {
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { UtensilsCrossedIcon } from "lucide-react"
+import { PlusIcon, Trash2Icon, UtensilsCrossedIcon } from "lucide-react"
+
+type TaxRule = { name: string; rate: number; inclusive: boolean }
 
 const CURRENCIES = ["USD", "EUR", "GBP", "INR", "NPR", "AED", "SGD", "AUD", "CAD", "JPY"]
 
@@ -42,6 +45,11 @@ export function OnboardingForm({
     provisionTenant,
     undefined,
   )
+  const [rules, setRules] = useState<TaxRule[]>([])
+  const setRule = (i: number, patch: Partial<TaxRule>) =>
+    setRules((rs) => rs.map((r, idx) => (idx === i ? { ...r, ...patch } : r)))
+  const addRule = () => setRules((rs) => [...rs, { name: "", rate: 0, inclusive: false }])
+  const removeRule = (i: number) => setRules((rs) => rs.filter((_, idx) => idx !== i))
 
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
@@ -98,6 +106,72 @@ export function OnboardingForm({
                 ))}
               </SelectContent>
             </Select>
+          </Field>
+          {/* Optional — Tax & charges (region-configurable, rule #2) ----- */}
+          <input type="hidden" name="taxRules" value={JSON.stringify(rules)} />
+          <Field>
+            <FieldLabel htmlFor="serviceCharge">Service charge (%)</FieldLabel>
+            <Input
+              id="serviceCharge"
+              name="serviceCharge"
+              type="number"
+              min={0}
+              max={100}
+              step="0.01"
+              defaultValue={0}
+            />
+            <FieldDescription>Optional — added to dine-in bills. Leave 0 if unused.</FieldDescription>
+          </Field>
+          <Field>
+            <FieldLabel>Tax rules</FieldLabel>
+            <FieldDescription>Optional — add your region&apos;s taxes now or later in settings.</FieldDescription>
+            <div className="flex flex-col gap-2">
+              {rules.map((r, i) => (
+                <div key={i} className="flex flex-wrap items-center gap-2">
+                  <Input
+                    aria-label="Tax name"
+                    placeholder="e.g. VAT / GST"
+                    value={r.name}
+                    onChange={(e) => setRule(i, { name: e.target.value })}
+                    className="min-w-32 flex-1"
+                  />
+                  <div className="flex items-center gap-1">
+                    <Input
+                      aria-label="Rate percent"
+                      type="number"
+                      min={0}
+                      max={100}
+                      step="0.01"
+                      value={r.rate}
+                      onChange={(e) => setRule(i, { rate: Number(e.target.value) })}
+                      className="w-24"
+                    />
+                    <span className="text-sm text-muted-foreground">%</span>
+                  </div>
+                  <label className="flex items-center gap-1.5 text-sm">
+                    <Checkbox
+                      checked={r.inclusive}
+                      onCheckedChange={(v) => setRule(i, { inclusive: v === true })}
+                    />
+                    Inclusive
+                  </label>
+                  <Button
+                    type="button"
+                    size="icon-sm"
+                    variant="ghost"
+                    onClick={() => removeRule(i)}
+                    aria-label="Remove tax rule"
+                  >
+                    <Trash2Icon className="size-4" />
+                  </Button>
+                </div>
+              ))}
+              <div>
+                <Button type="button" size="sm" variant="outline" onClick={addRule}>
+                  <PlusIcon className="size-4" /> Add tax rule
+                </Button>
+              </div>
+            </div>
           </Field>
           {state?.error ? (
             <p className="text-sm text-destructive" role="alert">
