@@ -25,7 +25,27 @@ export async function bumpKot(kotId: string, status: KotStatus): Promise<KdsStat
     .eq("kot_id", kotId)
     .eq("tenant_id", tenant.tenantId)
 
+  // Propagate ticket progress up to the parent order status.
+  const { data: kot } = await supabase
+    .from("kots")
+    .select("order_id")
+    .eq("id", kotId)
+    .eq("tenant_id", tenant.tenantId)
+    .maybeSingle()
+  if (kot?.order_id) await supabase.rpc("sync_order_status_from_kots", { _order_id: kot.order_id })
+
   revalidatePath("/kds")
+  return { ok: true }
+}
+
+/** Waiter marks an order delivered — advances order + tickets to served. */
+export async function markServed(orderId: string): Promise<KdsState> {
+  await requireRole("owner", "manager", "kitchen", "waiter", "cashier")
+  const supabase = await createClient()
+  const { error } = await supabase.rpc("mark_order_served", { _order_id: orderId })
+  if (error) return { error: error.message }
+  revalidatePath("/kds")
+  revalidatePath("/pos")
   return { ok: true }
 }
 
@@ -58,6 +78,14 @@ export async function recallKot(kotId: string): Promise<KdsState> {
     .update({ status: "preparing" })
     .eq("kot_id", kotId)
     .eq("tenant_id", tenant.tenantId)
+
+  const { data: kot } = await supabase
+    .from("kots")
+    .select("order_id")
+    .eq("id", kotId)
+    .eq("tenant_id", tenant.tenantId)
+    .maybeSingle()
+  if (kot?.order_id) await supabase.rpc("sync_order_status_from_kots", { _order_id: kot.order_id })
 
   revalidatePath("/kds")
   return { ok: true }

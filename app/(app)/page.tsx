@@ -15,6 +15,7 @@ import { DashboardRevenueChart } from "@/components/dashboard-revenue-chart"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { PageShell } from "@/components/page-header"
 
 export const dynamic = "force-dynamic"
 
@@ -116,7 +117,8 @@ export default async function DashboardPage({
   }[]
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
+    <PageShell>
+      <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">{tenant.name}</h1>
         <p className="mt-1 text-sm text-muted-foreground">Today at a glance · {tenant.timezone}</p>
@@ -262,7 +264,8 @@ export default async function DashboardPage({
           )}
         </CardContent>
       </Card>
-    </div>
+      </div>
+    </PageShell>
   )
 }
 

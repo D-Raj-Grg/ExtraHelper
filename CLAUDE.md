@@ -52,6 +52,7 @@ See PRD §4 for the full table list. Core groups: tenancy/subscription · users/
 ## Open questions (unresolved — confirm with owner before the relevant phase)
 Payment gateway to launch with · printing approach (local agent vs cloud) · subscription tiers + feature-gating map · delivery model (own drivers vs 3rd-party) · future country tax compliance (Nepal IRD / India GST). See PRD §9.
 
+- Use the shadcn component as possible to make project consistant.
 - Always read the PLANNING.md at the start of every new conversation 
 - Check TASKS.md before starting your work
 - Mark completed tasks immediately

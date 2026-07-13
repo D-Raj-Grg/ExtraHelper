@@ -24,13 +24,20 @@ export default async function OrderBuilderPage({
       .maybeSingle(),
     supabase
       .from("order_items")
-      .select("id, name_snapshot, qty, unit_price_cents, status, is_void")
+      .select(
+        "id, name_snapshot, qty, unit_price_cents, status, is_void, is_held, notes, course, seat, " +
+          "order_item_modifiers(modifier_id, name_snapshot, price_cents)",
+      )
       .eq("order_id", orderId)
       .eq("tenant_id", tenant.tenantId)
       .order("created_at"),
     supabase
       .from("menu_items")
-      .select("id, name, base_price_cents, is_86")
+      .select(
+        "id, name, base_price_cents, is_86, " +
+          "item_variants(id, name, price_delta_cents), " +
+          "item_modifiers(modifier_id, modifiers(id, name, price_cents))",
+      )
       .eq("tenant_id", tenant.tenantId)
       .eq("is_active", true)
       .order("name"),

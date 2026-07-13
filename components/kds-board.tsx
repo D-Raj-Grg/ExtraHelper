@@ -9,7 +9,7 @@ import { KOT_FLOW, type KotStatus } from "@/lib/kds-constants"
 import { Button } from "@/components/ui/button"
 
 const KDS_SELECT =
-  "id, status, created_at, station_id, kitchen_stations(name), orders(table_id, restaurant_tables!orders_table_id_fkey(label)), kot_items(id, qty, status, order_items(name_snapshot))"
+  "id, status, created_at, station_id, kitchen_stations(name), orders(table_id, restaurant_tables!orders_table_id_fkey(label)), kot_items(id, qty, status, order_items(name_snapshot, is_void, void_reason))"
 const ACTIVE = ["new", "preparing", "ready"]
 // Bumped tickets stay recallable for a short window.
 const RECALL_WINDOW_MS = 20 * 60 * 1000
@@ -23,7 +23,12 @@ type Kot = {
   station_id: string | null
   kitchen_stations: { name: string } | null
   orders: { restaurant_tables: { label: string } | null } | null
-  kot_items: { id: string; qty: number; status: string; order_items: { name_snapshot: string } | null }[]
+  kot_items: {
+    id: string
+    qty: number
+    status: string
+    order_items: { name_snapshot: string; is_void: boolean; void_reason: string | null } | null
+  }[]
 }
 
 /** Next status in the bump flow, or null if terminal. */
@@ -135,6 +140,7 @@ export function KdsBoard({
       .on("postgres_changes", { event: "*", schema: "public", table: "kots", filter }, ping)
       .on("postgres_changes", { event: "*", schema: "public", table: "kot_items", filter }, ping)
       .on("postgres_changes", { event: "*", schema: "public", table: "orders", filter }, ping)
+      .on("postgres_changes", { event: "*", schema: "public", table: "order_items", filter }, ping)
       .subscribe()
     return () => {
       if (timer) clearTimeout(timer)
@@ -147,6 +153,7 @@ export function KdsBoard({
     const counts = new Map<string, number>()
     for (const k of optKots)
       for (const ki of k.kot_items) {
+        if (ki.order_items?.is_void) continue
         const name = ki.order_items?.name_snapshot ?? "item"
         counts.set(name, (counts.get(name) ?? 0) + ki.qty)
       }
@@ -231,12 +238,25 @@ export function KdsBoard({
                   </span>
                 </div>
                 <ul className="mb-3 flex-1 space-y-1 text-sm">
-                  {kot.kot_items.map((ki) => (
-                    <li key={ki.id} className="flex justify-between">
-                      <span>{ki.order_items?.name_snapshot ?? "item"}</span>
-                      <span className="text-muted-foreground">×{ki.qty}</span>
-                    </li>
-                  ))}
+                  {kot.kot_items.map((ki) => {
+                    const voided = ki.order_items?.is_void
+                    return (
+                      <li
+                        key={ki.id}
+                        className={`flex justify-between ${voided ? "text-muted-foreground line-through decoration-red-500" : ""}`}
+                      >
+                        <span>
+                          {ki.order_items?.name_snapshot ?? "item"}
+                          {voided ? (
+                            <span className="ml-1 rounded bg-red-500/10 px-1 py-0.5 text-[10px] font-semibold text-red-600 no-underline dark:text-red-400">
+                              VOID{ki.order_items?.void_reason ? ` · ${ki.order_items.void_reason}` : ""}
+                            </span>
+                          ) : null}
+                        </span>
+                        <span className="text-muted-foreground">×{ki.qty}</span>
+                      </li>
+                    )
+                  })}
                 </ul>
                 <div className="flex items-center justify-between gap-2">
                   <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium capitalize">

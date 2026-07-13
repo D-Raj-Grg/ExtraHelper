@@ -42,8 +42,25 @@ export async function startOrder(formData: FormData): Promise<void> {
   redirect(`/pos/${data.id}`)
 }
 
-/** Add a menu item to a draft order (snapshots name + price). */
-export async function addItem(orderId: string, itemId: string): Promise<PosState> {
+export type AddItemOpts = {
+  variantId?: string | null
+  modifierIds?: string[]
+  notes?: string | null
+  course?: number | null
+  seat?: number | null
+  qty?: number
+}
+
+/**
+ * Add a menu item to a draft order. Snapshots name + price at add time,
+ * folding in the chosen variant delta and modifier prices. Modifiers are
+ * recorded on `order_item_modifiers` for the kitchen ticket + receipt.
+ */
+export async function addItem(
+  orderId: string,
+  itemId: string,
+  opts: AddItemOpts = {},
+): Promise<PosState> {
   const tenant = await requireRole(...ORDER_ROLES)
   const supabase = await createClient()
 
@@ -56,17 +73,150 @@ export async function addItem(orderId: string, itemId: string): Promise<PosState
   if (itemErr || !item) return { error: "Item not found." }
   if (item.is_86) return { error: `${item.name} is 86'd (out of stock).` }
 
-  const { error } = await supabase.from("order_items").insert({
-    tenant_id: tenant.tenantId,
-    order_id: orderId,
-    item_id: itemId,
-    name_snapshot: item.name,
-    qty: 1,
-    unit_price_cents: item.base_price_cents,
-    status: "draft",
+  const qty = Math.max(1, Math.floor(opts.qty ?? 1))
+  let unitPrice = item.base_price_cents
+  let nameSnapshot = item.name
+
+  // Variant: fold price delta + append name (validated to belong to this item).
+  if (opts.variantId) {
+    const { data: variant } = await supabase
+      .from("item_variants")
+      .select("name, price_delta_cents")
+      .eq("id", opts.variantId)
+      .eq("item_id", itemId)
+      .eq("tenant_id", tenant.tenantId)
+      .maybeSingle()
+    if (!variant) return { error: "Variant not found." }
+    unitPrice += variant.price_delta_cents
+    nameSnapshot = `${item.name} (${variant.name})`
+  }
+
+  // Modifiers: fetch trusted prices, fold into unit price.
+  const modifierIds = [...new Set(opts.modifierIds ?? [])]
+  let mods: { id: string; name: string; price_cents: number }[] = []
+  if (modifierIds.length) {
+    const { data: rows } = await supabase
+      .from("modifiers")
+      .select("id, name, price_cents")
+      .eq("tenant_id", tenant.tenantId)
+      .in("id", modifierIds)
+    mods = rows ?? []
+    unitPrice += mods.reduce((s, m) => s + m.price_cents, 0)
+  }
+
+  const { data: line, error } = await supabase
+    .from("order_items")
+    .insert({
+      tenant_id: tenant.tenantId,
+      order_id: orderId,
+      item_id: itemId,
+      variant_id: opts.variantId ?? null,
+      name_snapshot: nameSnapshot,
+      qty,
+      unit_price_cents: unitPrice,
+      notes: opts.notes?.trim() || null,
+      course: opts.course ?? null,
+      seat: opts.seat ?? null,
+      status: "draft",
+    })
+    .select("id")
+    .single()
+  if (error || !line) return { error: error?.message ?? "Could not add item." }
+
+  if (mods.length) {
+    const { error: modErr } = await supabase.from("order_item_modifiers").insert(
+      mods.map((m) => ({
+        tenant_id: tenant.tenantId,
+        order_item_id: line.id,
+        modifier_id: m.id,
+        name_snapshot: m.name,
+        qty: 1,
+        price_cents: m.price_cents,
+      })),
+    )
+    if (modErr) return { error: modErr.message }
+  }
+
+  revalidatePath(`/pos/${orderId}`)
+  return { ok: true }
+}
+
+/** Change a line's quantity (min 1). Editable states only. */
+export async function setLineQty(
+  orderId: string,
+  orderItemId: string,
+  qty: number,
+): Promise<PosState> {
+  const tenant = await requireRole(...ORDER_ROLES)
+  const next = Math.max(1, Math.floor(qty))
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from("order_items")
+    .update({ qty: next })
+    .eq("id", orderItemId)
+    .eq("tenant_id", tenant.tenantId)
+    .in("status", ["draft", "placed"])
+  if (error) return { error: error.message }
+  revalidatePath(`/pos/${orderId}`)
+  return { ok: true }
+}
+
+/** Edit a line's notes / course / seat. */
+export async function updateLine(
+  orderId: string,
+  orderItemId: string,
+  fields: { notes?: string | null; course?: number | null; seat?: number | null },
+): Promise<PosState> {
+  const tenant = await requireRole(...ORDER_ROLES)
+  const patch: Record<string, unknown> = {}
+  if (fields.notes !== undefined) patch.notes = fields.notes?.trim() || null
+  if (fields.course !== undefined) patch.course = fields.course
+  if (fields.seat !== undefined) patch.seat = fields.seat
+  if (Object.keys(patch).length === 0) return { ok: true }
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from("order_items")
+    .update(patch)
+    .eq("id", orderItemId)
+    .eq("tenant_id", tenant.tenantId)
+  if (error) return { error: error.message }
+  revalidatePath(`/pos/${orderId}`)
+  return { ok: true }
+}
+
+/** Stage/unstage a line — held lines are not fired to the kitchen. */
+export async function setLineHold(
+  orderId: string,
+  orderItemId: string,
+  hold: boolean,
+): Promise<PosState> {
+  const tenant = await requireRole(...ORDER_ROLES)
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from("order_items")
+    .update({ is_held: hold })
+    .eq("id", orderItemId)
+    .eq("tenant_id", tenant.tenantId)
+    .in("status", ["draft", "placed"])
+  if (error) return { error: error.message }
+  revalidatePath(`/pos/${orderId}`)
+  return { ok: true }
+}
+
+/** Void a line (manager approval + reason + audit + stock restore) via RPC. */
+export async function voidLine(
+  orderId: string,
+  orderItemId: string,
+  reason: string,
+): Promise<PosState> {
+  await requireRole(...ORDER_ROLES)
+  if (!reason.trim()) return { error: "Void reason is required." }
+  const supabase = await createClient()
+  const { error } = await supabase.rpc("void_order_item", {
+    _order_item_id: orderItemId,
+    _reason: reason.trim(),
   })
   if (error) return { error: error.message }
-
   revalidatePath(`/pos/${orderId}`)
   return { ok: true }
 }

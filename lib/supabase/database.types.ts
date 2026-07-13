@@ -664,6 +664,51 @@ export type Database = {
           },
         ]
       }
+      item_availability: {
+        Row: {
+          created_at: string
+          day_of_week: number | null
+          end_time: string
+          id: string
+          item_id: string
+          start_time: string
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          day_of_week?: number | null
+          end_time: string
+          id?: string
+          item_id: string
+          start_time: string
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          day_of_week?: number | null
+          end_time?: string
+          id?: string
+          item_id?: string
+          start_time?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "item_availability_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "menu_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "item_availability_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       item_modifiers: {
         Row: {
           id: string
@@ -1409,6 +1454,7 @@ export type Database = {
           course: number | null
           created_at: string
           id: string
+          is_held: boolean
           is_void: boolean
           item_id: string | null
           name_snapshot: string
@@ -1426,6 +1472,7 @@ export type Database = {
           course?: number | null
           created_at?: string
           id?: string
+          is_held?: boolean
           is_void?: boolean
           item_id?: string | null
           name_snapshot: string
@@ -1443,6 +1490,7 @@ export type Database = {
           course?: number | null
           created_at?: string
           id?: string
+          is_held?: boolean
           is_void?: boolean
           item_id?: string | null
           name_snapshot?: string
@@ -2861,6 +2909,7 @@ export type Database = {
         }
         Returns: number
       }
+      mark_order_served: { Args: { _order_id: string }; Returns: undefined }
       open_cash_session: {
         Args: {
           _branch_id: string
@@ -3054,6 +3103,10 @@ export type Database = {
       subscribe_tenant: {
         Args: { _interval?: string; _plan_code: string; _tenant: string }
         Returns: string
+      }
+      sync_order_status_from_kots: {
+        Args: { _order_id: string }
+        Returns: undefined
       }
       tenant_has_feature: {
         Args: { _key: string; _tenant: string }
