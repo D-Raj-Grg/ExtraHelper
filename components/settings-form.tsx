@@ -4,6 +4,7 @@ import { useActionState, useState } from "react"
 import { PlusIcon, Trash2Icon } from "lucide-react"
 import { updateSettings, type SettingsState } from "@/app/(app)/settings/actions"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 
@@ -140,10 +141,9 @@ export function SettingsForm({
                     <span className="text-sm text-muted-foreground">%</span>
                   </div>
                   <label className="flex items-center gap-1.5 text-sm">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={r.inclusive}
-                      onChange={(e) => setRule(i, { inclusive: e.target.checked })}
+                      onCheckedChange={(v) => setRule(i, { inclusive: v === true })}
                     />
                     Inclusive
                   </label>
@@ -200,7 +200,7 @@ export function SettingsForm({
 
         <Field>
           <label className="flex items-center gap-2 text-sm font-medium">
-            <input type="checkbox" name="blockNegativeStock" defaultChecked={blockNegativeStock} />
+            <Checkbox name="blockNegativeStock" value="on" defaultChecked={blockNegativeStock} />
             Block sales below zero stock
           </label>
           <FieldDescription>

@@ -4,6 +4,7 @@ import { useRef, useState, useTransition } from "react"
 import { takePayment } from "@/app/(app)/bill/actions"
 import { money } from "@/lib/format"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 
 type SplitItem = { id: string; description: string; qty: number; total_cents: number }
@@ -206,12 +207,11 @@ export function BillSplit({
         <div className="space-y-1.5">
           {items.map((it) => (
             <label key={it.id} className="flex cursor-pointer items-center gap-2 text-sm">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={selected.has(it.id)}
-                onChange={(e) => {
+                onCheckedChange={(v) => {
                   const next = new Set(selected)
-                  if (e.target.checked) next.add(it.id)
+                  if (v === true) next.add(it.id)
                   else next.delete(it.id)
                   setSelected(next)
                 }}

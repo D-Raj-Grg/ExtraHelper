@@ -5,6 +5,7 @@ import { XIcon } from "lucide-react"
 import { toast } from "sonner"
 import { createRole, updateRole } from "@/app/(app)/team/actions"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 
 export type Permission = { key: string; grp: string; label: string; sort: number }
@@ -166,11 +167,10 @@ export function RoleEditor({
                     {g.items.map((p) => (
                       <li key={p.key} className="flex items-center justify-between px-3 py-1.5 text-sm">
                         <span>{p.label}</span>
-                        <input
-                          type="checkbox"
+                        <Checkbox
                           checked={selected.has(p.key)}
                           disabled={readOnly}
-                          onChange={() => toggle(p.key)}
+                          onCheckedChange={() => toggle(p.key)}
                           className="size-4"
                         />
                       </li>
