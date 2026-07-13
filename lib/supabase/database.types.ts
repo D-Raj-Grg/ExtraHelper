@@ -2423,6 +2423,7 @@ export type Database = {
           reference: string | null
           tenant_id: string
           type: Database["public"]["Enums"]["stock_movement_type"]
+          unit_cost_cents: number | null
         }
         Insert: {
           branch_id?: string | null
@@ -2433,6 +2434,7 @@ export type Database = {
           reference?: string | null
           tenant_id: string
           type: Database["public"]["Enums"]["stock_movement_type"]
+          unit_cost_cents?: number | null
         }
         Update: {
           branch_id?: string | null
@@ -2443,6 +2445,7 @@ export type Database = {
           reference?: string | null
           tenant_id?: string
           type?: Database["public"]["Enums"]["stock_movement_type"]
+          unit_cost_cents?: number | null
         }
         Relationships: [
           {
@@ -2592,6 +2595,7 @@ export type Database = {
           currency: string
           order_type_fees: Json
           packaging_fee: number
+          payment_gateway: string
           points_value_cents: number
           receipt_template: Json
           service_charge: number
@@ -2605,6 +2609,7 @@ export type Database = {
           currency?: string
           order_type_fees?: Json
           packaging_fee?: number
+          payment_gateway?: string
           points_value_cents?: number
           receipt_template?: Json
           service_charge?: number
@@ -2618,6 +2623,7 @@ export type Database = {
           currency?: string
           order_type_fees?: Json
           packaging_fee?: number
+          payment_gateway?: string
           points_value_cents?: number
           receipt_template?: Json
           service_charge?: number
@@ -2796,8 +2802,13 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      _build_bill_for_order: { Args: { _order_id: string }; Returns: string }
       add_member_by_email: {
         Args: { _email: string; _role_id: string; _tenant: string }
+        Returns: string
+      }
+      add_order_to_bill: {
+        Args: { _bill_id: string; _order_id: string }
         Returns: string
       }
       adjust_inventory: {
@@ -2948,9 +2959,18 @@ export type Database = {
         Args: { _currency?: string; _name: string; _timezone?: string }
         Returns: string
       }
+      public_bill_quote: { Args: { _order_id: string }; Returns: Json }
+      public_pay_order: {
+        Args: { _order_id: string; _reference: string }
+        Returns: Json
+      }
       qr_menu: { Args: { _token: string }; Returns: Json }
       qr_request_bill: { Args: { _token: string }; Returns: boolean }
       receive_po: { Args: { _po_id: string }; Returns: number }
+      receive_po_partial: {
+        Args: { _lines: Json; _po_id: string }
+        Returns: number
+      }
       recompute_bill: { Args: { _bill_id: string }; Returns: undefined }
       record_payment: {
         Args: {
@@ -2964,6 +2984,10 @@ export type Database = {
       redeem_points_for_bill: {
         Args: { _bill_id: string; _idempotency_key?: string; _points: number }
         Returns: Json
+      }
+      refresh_table_state: {
+        Args: { _table: string; _tenant: string }
+        Returns: undefined
       }
       refund_payment: {
         Args: { _amount_cents: number; _bill_id: string; _reason: string }
@@ -3094,6 +3118,10 @@ export type Database = {
         Args: { _role_id: string; _tenant: string; _user_id: string }
         Returns: undefined
       }
+      split_order_items: {
+        Args: { _item_ids: string[]; _order_id: string; _to_table: string }
+        Returns: string
+      }
       start_stock_count: { Args: { _tenant: string }; Returns: string }
       storefront_menu: { Args: { _slug: string }; Returns: Json }
       submit_feedback: {
@@ -3111,6 +3139,10 @@ export type Database = {
       tenant_has_feature: {
         Args: { _key: string; _tenant: string }
         Returns: boolean
+      }
+      transfer_order: {
+        Args: { _order_id: string; _to_table: string }
+        Returns: undefined
       }
       trigger_dunning: {
         Args: never
