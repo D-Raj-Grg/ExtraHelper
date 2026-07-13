@@ -20,6 +20,19 @@ export async function generateBill(orderId: string): Promise<void> {
   redirect(`/bill/${data}`)
 }
 
+/** Merge another (fired) order onto this bill — combined/multi-order tab. */
+export async function addOrderToBill(billId: string, orderId: string): Promise<BillState> {
+  await requirePermission("checkout.view")
+  const supabase = await createClient()
+  const { error } = await supabase.rpc("add_order_to_bill", {
+    _bill_id: billId,
+    _order_id: orderId,
+  })
+  if (error) return { error: error.message }
+  revalidatePath(`/bill/${billId}`)
+  return { ok: true }
+}
+
 /** Apply a bill-level discount (owner/manager only; trusted recompute + audit). */
 export async function applyDiscount(
   billId: string,

@@ -3,6 +3,7 @@
 import { useRef, useState, useTransition } from "react"
 import Link from "next/link"
 import {
+  addOrderToBill,
   applyCoupon,
   applyDiscount,
   applyItemDiscount,
@@ -38,6 +39,12 @@ type Item = {
   total_cents: number
 }
 type Payment = { id: string; method: string; amount_cents: number }
+type MergeableOrder = {
+  id: string
+  order_type: string
+  status: string
+  restaurant_tables: { label: string } | null
+}
 
 export function BillView({
   currency,
@@ -48,6 +55,7 @@ export function BillView({
   canDiscount = false,
   customer = null,
   pointsValueCents = 1,
+  mergeableOrders = [],
 }: {
   currency: string
   bill: Bill
@@ -57,6 +65,7 @@ export function BillView({
   canDiscount?: boolean
   customer?: { id: string; name: string | null; phone: string | null; points: number } | null
   pointsValueCents?: number
+  mergeableOrders?: MergeableOrder[]
 }) {
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
@@ -155,6 +164,14 @@ export function BillView({
         setDiscItemId(null)
         setItemDiscValue("")
       }
+    })
+  }
+
+  function mergeOrder(orderId: string) {
+    setError(null)
+    startTransition(async () => {
+      const res = await addOrderToBill(bill.id, orderId)
+      if (res && "error" in res) setError(res.error)
     })
   }
 
@@ -382,6 +399,27 @@ export function BillView({
             <Button size="sm" variant="secondary" disabled={pending} onClick={coupon}>
               Apply coupon
             </Button>
+          </div>
+        </div>
+      ) : null}
+
+      {!settled && mergeableOrders.length > 0 ? (
+        <div className="mt-6 rounded-lg border border-dashed p-3">
+          <p className="mb-2 text-sm font-medium">Merge another order onto this bill</p>
+          <div className="flex flex-col gap-1.5">
+            {mergeableOrders.map((o) => (
+              <div key={o.id} className="flex items-center justify-between gap-2 text-sm">
+                <span>
+                  {o.restaurant_tables?.label ? `Table ${o.restaurant_tables.label}` : o.order_type}
+                  <span className="ml-2 text-xs capitalize text-muted-foreground">
+                    {o.status.replace("_", " ")}
+                  </span>
+                </span>
+                <Button size="sm" variant="secondary" disabled={pending} onClick={() => mergeOrder(o.id)}>
+                  Add to bill
+                </Button>
+              </div>
+            ))}
           </div>
         </div>
       ) : null}

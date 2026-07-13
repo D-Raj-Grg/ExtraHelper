@@ -42,6 +42,8 @@ export default async function BillPage({
         .select("customer_id, customers(id, name, phone, loyalty_accounts(points_balance))")
         .eq("bill_id", billId)
         .eq("tenant_id", tenant.tenantId)
+        .not("customer_id", "is", null)
+        .limit(1)
         .maybeSingle(),
       supabase
         .from("tenant_settings")
@@ -51,6 +53,18 @@ export default async function BillPage({
     ])
 
   if (!bill) notFound()
+
+  // Orders that could be merged onto this open bill (fired, not yet billed).
+  const { data: mergeable } =
+    bill.status === "open" || bill.status === "partial"
+      ? await supabase
+          .from("orders")
+          .select("id, order_type, status, restaurant_tables!orders_table_id_fkey(label)")
+          .eq("tenant_id", tenant.tenantId)
+          .is("bill_id", null)
+          .in("status", ["in_kitchen", "preparing", "ready", "served"])
+          .order("created_at", { ascending: false })
+      : { data: [] }
 
   const paid = (payments ?? []).reduce((s, p) => s + p.amount_cents, 0)
 
@@ -79,6 +93,7 @@ export default async function BillPage({
         canDiscount={tenant.role === "owner" || tenant.role === "manager"}
         customer={customer}
         pointsValueCents={settings?.points_value_cents ?? 1}
+        mergeableOrders={(mergeable ?? []) as never}
       />
     </PageShell>
   )
