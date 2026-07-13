@@ -23,10 +23,11 @@ export async function updateProfile(
   if (username && !USERNAME_RE.test(username))
     return { error: "Handle must be 3–30 chars: lowercase letters, numbers, underscores." }
 
+  // Upsert (not update) so a user whose profile row is somehow missing still
+  // gets one instead of a silent 0-row no-op reported as success.
   const { error } = await supabase
     .from("profiles")
-    .update({ full_name: fullName || null, username: username || null })
-    .eq("id", user.id)
+    .upsert({ id: user.id, full_name: fullName || null, username: username || null }, { onConflict: "id" })
   if (error) {
     if (error.code === "23505") return { error: "That handle is already taken." }
     return { error: error.message }
@@ -60,7 +61,9 @@ export async function uploadAvatar(
   const { data: pub } = supabase.storage.from("avatars").getPublicUrl(path)
   const url = `${pub.publicUrl}?v=${Date.now()}`
 
-  const { error } = await supabase.from("profiles").update({ avatar_url: url }).eq("id", user.id)
+  const { error } = await supabase
+    .from("profiles")
+    .upsert({ id: user.id, avatar_url: url }, { onConflict: "id" })
   if (error) return { error: error.message }
   revalidatePath("/profile")
   revalidatePath("/", "layout")
