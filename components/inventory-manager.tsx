@@ -10,6 +10,7 @@ import {
 import { money } from "@/lib/format"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table"
 
 type Item = {
   id: string
@@ -60,8 +61,8 @@ function InventoryRow({ item, currency }: { item: Item; currency: string }) {
   }
 
   return (
-    <tr className="border-t">
-      <td className="px-3 py-2 font-medium">
+    <TableRow className="border-t">
+      <TableCell className="px-3 py-2 font-medium">
         {item.name}
         {oversold ? (
           <span className="ml-2 rounded bg-red-600/15 px-1.5 py-0.5 text-xs font-medium text-red-700 dark:text-red-400">
@@ -72,9 +73,9 @@ function InventoryRow({ item, currency }: { item: Item; currency: string }) {
             low stock
           </span>
         ) : null}
-      </td>
-      <td className="px-3 py-2 text-muted-foreground">{item.uom}</td>
-      <td
+      </TableCell>
+      <TableCell className="px-3 py-2 text-muted-foreground">{item.uom}</TableCell>
+      <TableCell
         className={`px-3 py-2 font-medium ${
           oversold
             ? "text-red-700 dark:text-red-400"
@@ -84,10 +85,10 @@ function InventoryRow({ item, currency }: { item: Item; currency: string }) {
         }`}
       >
         {Number(item.current_qty)}
-      </td>
-      <td className="px-3 py-2 text-muted-foreground">{Number(item.reorder_level)}</td>
-      <td className="px-3 py-2 text-muted-foreground">{money(item.cost_cents, currency)}</td>
-      <td className="px-3 py-2">
+      </TableCell>
+      <TableCell className="px-3 py-2 text-muted-foreground">{Number(item.reorder_level)}</TableCell>
+      <TableCell className="px-3 py-2 text-muted-foreground">{money(item.cost_cents, currency)}</TableCell>
+      <TableCell className="px-3 py-2">
         <div className="flex items-center gap-1">
           <select
             value={type}
@@ -110,8 +111,8 @@ function InventoryRow({ item, currency }: { item: Item; currency: string }) {
             Apply
           </Button>
         </div>
-      </td>
-    </tr>
+      </TableCell>
+    </TableRow>
   )
 }
 
@@ -176,23 +177,23 @@ export function InventoryManager({
           <p className="text-sm text-muted-foreground">No inventory items yet.</p>
         ) : (
           <div className="overflow-x-auto rounded-lg border">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50 text-left">
-                <tr>
-                  <th className="px-3 py-2 font-medium">Item</th>
-                  <th className="px-3 py-2 font-medium">UoM</th>
-                  <th className="px-3 py-2 font-medium">On hand</th>
-                  <th className="px-3 py-2 font-medium">Reorder</th>
-                  <th className="px-3 py-2 font-medium">Cost</th>
-                  <th className="px-3 py-2 font-medium">Adjust</th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table className="w-full text-sm">
+              <TableHeader className="bg-muted/50 text-left">
+                <TableRow>
+                  <TableHead className="px-3 py-2 font-medium">Item</TableHead>
+                  <TableHead className="px-3 py-2 font-medium">UoM</TableHead>
+                  <TableHead className="px-3 py-2 font-medium">On hand</TableHead>
+                  <TableHead className="px-3 py-2 font-medium">Reorder</TableHead>
+                  <TableHead className="px-3 py-2 font-medium">Cost</TableHead>
+                  <TableHead className="px-3 py-2 font-medium">Adjust</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {items.map((it) => (
                   <InventoryRow key={it.id} item={it} currency={currency} />
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         )}
       </section>

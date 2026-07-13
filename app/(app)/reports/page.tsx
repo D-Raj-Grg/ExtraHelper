@@ -4,6 +4,7 @@ import { requirePermission } from "@/lib/supabase/guards"
 import { money } from "@/lib/format"
 import { PageShell, PageHeader } from "@/components/page-header"
 import { ExportButtons } from "@/components/export-buttons"
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table"
 
 export const dynamic = "force-dynamic"
 
@@ -148,15 +149,15 @@ function BreakdownTable({ title, rows, cur, file }: { title: string; rows: Break
         <ExportButtons rows={disp} columns={[{ key: "label", label: title }, { key: "orders", label: "Orders" }, { key: "revenue", label: "Revenue" }]} filename={file} />
       </div>
       {rows.length === 0 ? <p className="text-sm text-muted-foreground">No data.</p> : (
-        <div className="overflow-x-auto rounded-lg border"><table className="w-full text-sm"><tbody>
+        <div className="overflow-x-auto rounded-lg border"><Table className="w-full text-sm"><TableBody>
           {rows.map((r) => (
-            <tr key={r.label} className="border-b last:border-0">
-              <td className="px-3 py-2">{r.label}</td>
-              <td className="px-3 py-2 text-muted-foreground">{r.orders} orders</td>
-              <td className="px-3 py-2 text-right">{money(r.revenue_cents, cur)}</td>
-            </tr>
+            <TableRow key={r.label} className="border-b last:border-0">
+              <TableCell className="px-3 py-2">{r.label}</TableCell>
+              <TableCell className="px-3 py-2 text-muted-foreground">{r.orders} orders</TableCell>
+              <TableCell className="px-3 py-2 text-right">{money(r.revenue_cents, cur)}</TableCell>
+            </TableRow>
           ))}
-        </tbody></table></div>
+        </TableBody></Table></div>
       )}
     </section>
   )
@@ -213,14 +214,14 @@ async function SalesTab({ supabase, tenantId, F, T, PF, PT, tz, cur }: Ctx & { P
               columns={[{ key: "method", label: "Method" }, { key: "amount", label: "Amount" }]} filename="sales-by-payment" />
           </div>
           {payments.length === 0 ? <p className="text-sm text-muted-foreground">No payments.</p> : (
-            <div className="overflow-x-auto rounded-lg border"><table className="w-full text-sm"><tbody>
+            <div className="overflow-x-auto rounded-lg border"><Table className="w-full text-sm"><TableBody>
               {payments.map((p) => (
-                <tr key={p.method} className="border-b last:border-0">
-                  <td className="px-3 py-2 capitalize">{p.method}</td>
-                  <td className="px-3 py-2 text-right">{money(p.amount_cents, cur)}</td>
-                </tr>
+                <TableRow key={p.method} className="border-b last:border-0">
+                  <TableCell className="px-3 py-2 capitalize">{p.method}</TableCell>
+                  <TableCell className="px-3 py-2 text-right">{money(p.amount_cents, cur)}</TableCell>
+                </TableRow>
               ))}
-            </tbody></table></div>
+            </TableBody></Table></div>
           )}
         </section>
       </div>
@@ -232,15 +233,15 @@ async function SalesTab({ supabase, tenantId, F, T, PF, PT, tz, cur }: Ctx & { P
             columns={[{ key: "item", label: "Item" }, { key: "qty", label: "Qty" }, { key: "revenue", label: "Revenue" }]} filename="top-items" />
         </div>
         {topItems.length === 0 ? <p className="text-sm text-muted-foreground">No sales in this period.</p> : (
-          <div className="overflow-x-auto rounded-lg border"><table className="w-full text-sm"><tbody>
+          <div className="overflow-x-auto rounded-lg border"><Table className="w-full text-sm"><TableBody>
             {topItems.map((t) => (
-              <tr key={t.description} className="border-b last:border-0">
-                <td className="px-3 py-2">{t.description}</td>
-                <td className="px-3 py-2 text-muted-foreground">×{Number(t.qty)}</td>
-                <td className="px-3 py-2 text-right">{money(t.revenue_cents, cur)}</td>
-              </tr>
+              <TableRow key={t.description} className="border-b last:border-0">
+                <TableCell className="px-3 py-2">{t.description}</TableCell>
+                <TableCell className="px-3 py-2 text-muted-foreground">×{Number(t.qty)}</TableCell>
+                <TableCell className="px-3 py-2 text-right">{money(t.revenue_cents, cur)}</TableCell>
+              </TableRow>
             ))}
-          </tbody></table></div>
+          </TableBody></Table></div>
         )}
       </section>
     </div>
@@ -273,25 +274,25 @@ async function InventoryTab({ supabase, tenantId, F, T, cur }: Ctx) {
         ]} filename="inventory-report" />
       </div>
       {rows.length === 0 ? <p className="text-sm text-muted-foreground">No inventory.</p> : (
-        <div className="overflow-x-auto rounded-lg border"><table className="w-full text-sm">
-          <thead className="bg-muted/50 text-left"><tr>
-            <th className="px-3 py-2 font-medium">Item</th><th className="px-3 py-2 font-medium">On hand</th>
-            <th className="px-3 py-2 font-medium">Consumed</th><th className="px-3 py-2 font-medium">Wasted</th>
-            <th className="px-3 py-2 font-medium text-right">COGS</th><th className="px-3 py-2 font-medium text-right">Valuation</th>
-            <th className="px-3 py-2 font-medium text-right">Reorder</th>
-          </tr></thead>
-          <tbody>{rows.map((r) => (
-            <tr key={r.name} className="border-t">
-              <td className="px-3 py-2 font-medium">{r.name}</td>
-              <td className="px-3 py-2 text-muted-foreground">{Number(r.current_qty)} {r.uom}</td>
-              <td className="px-3 py-2 text-muted-foreground">{Number(r.consumed)}</td>
-              <td className="px-3 py-2 text-muted-foreground">{Number(r.wasted)}</td>
-              <td className="px-3 py-2 text-right">{money(r.cogs_cents, cur)}</td>
-              <td className="px-3 py-2 text-right">{money(r.valuation_cents, cur)}</td>
-              <td className={`px-3 py-2 text-right ${Number(r.reorder_qty) > 0 ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`}>{Number(r.reorder_qty)}</td>
-            </tr>
-          ))}</tbody>
-        </table></div>
+        <div className="overflow-x-auto rounded-lg border"><Table className="w-full text-sm">
+          <TableHeader className="bg-muted/50 text-left"><TableRow>
+            <TableHead className="px-3 py-2 font-medium">Item</TableHead><TableHead className="px-3 py-2 font-medium">On hand</TableHead>
+            <TableHead className="px-3 py-2 font-medium">Consumed</TableHead><TableHead className="px-3 py-2 font-medium">Wasted</TableHead>
+            <TableHead className="px-3 py-2 font-medium text-right">COGS</TableHead><TableHead className="px-3 py-2 font-medium text-right">Valuation</TableHead>
+            <TableHead className="px-3 py-2 font-medium text-right">Reorder</TableHead>
+          </TableRow></TableHeader>
+          <TableBody>{rows.map((r) => (
+            <TableRow key={r.name} className="border-t">
+              <TableCell className="px-3 py-2 font-medium">{r.name}</TableCell>
+              <TableCell className="px-3 py-2 text-muted-foreground">{Number(r.current_qty)} {r.uom}</TableCell>
+              <TableCell className="px-3 py-2 text-muted-foreground">{Number(r.consumed)}</TableCell>
+              <TableCell className="px-3 py-2 text-muted-foreground">{Number(r.wasted)}</TableCell>
+              <TableCell className="px-3 py-2 text-right">{money(r.cogs_cents, cur)}</TableCell>
+              <TableCell className="px-3 py-2 text-right">{money(r.valuation_cents, cur)}</TableCell>
+              <TableCell className={`px-3 py-2 text-right ${Number(r.reorder_qty) > 0 ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`}>{Number(r.reorder_qty)}</TableCell>
+            </TableRow>
+          ))}</TableBody>
+        </Table></div>
       )}
     </div>
   )
@@ -314,22 +315,22 @@ async function StaffTab({ supabase, tenantId, F, T, cur }: Ctx) {
         ]} filename="staff-report" />
       </div>
       {rows.length === 0 ? <p className="text-sm text-muted-foreground">No staff activity in this period. (Waiter is recorded on new orders.)</p> : (
-        <div className="overflow-x-auto rounded-lg border"><table className="w-full text-sm">
-          <thead className="bg-muted/50 text-left"><tr>
-            <th className="px-3 py-2 font-medium">Staff</th><th className="px-3 py-2 font-medium">Orders</th>
-            <th className="px-3 py-2 font-medium text-right">Revenue</th><th className="px-3 py-2 font-medium text-right">Tips</th>
-            <th className="px-3 py-2 font-medium text-right">Shift hrs</th>
-          </tr></thead>
-          <tbody>{rows.map((r) => (
-            <tr key={r.email} className="border-t">
-              <td className="px-3 py-2 font-medium">{r.email}</td>
-              <td className="px-3 py-2 text-muted-foreground">{Number(r.orders)}</td>
-              <td className="px-3 py-2 text-right">{money(r.revenue_cents, cur)}</td>
-              <td className="px-3 py-2 text-right">{money(r.tips_cents, cur)}</td>
-              <td className="px-3 py-2 text-right text-muted-foreground">{(Number(r.shift_minutes) / 60).toFixed(1)}h</td>
-            </tr>
-          ))}</tbody>
-        </table></div>
+        <div className="overflow-x-auto rounded-lg border"><Table className="w-full text-sm">
+          <TableHeader className="bg-muted/50 text-left"><TableRow>
+            <TableHead className="px-3 py-2 font-medium">Staff</TableHead><TableHead className="px-3 py-2 font-medium">Orders</TableHead>
+            <TableHead className="px-3 py-2 font-medium text-right">Revenue</TableHead><TableHead className="px-3 py-2 font-medium text-right">Tips</TableHead>
+            <TableHead className="px-3 py-2 font-medium text-right">Shift hrs</TableHead>
+          </TableRow></TableHeader>
+          <TableBody>{rows.map((r) => (
+            <TableRow key={r.email} className="border-t">
+              <TableCell className="px-3 py-2 font-medium">{r.email}</TableCell>
+              <TableCell className="px-3 py-2 text-muted-foreground">{Number(r.orders)}</TableCell>
+              <TableCell className="px-3 py-2 text-right">{money(r.revenue_cents, cur)}</TableCell>
+              <TableCell className="px-3 py-2 text-right">{money(r.tips_cents, cur)}</TableCell>
+              <TableCell className="px-3 py-2 text-right text-muted-foreground">{(Number(r.shift_minutes) / 60).toFixed(1)}h</TableCell>
+            </TableRow>
+          ))}</TableBody>
+        </Table></div>
       )}
     </div>
   )
@@ -357,20 +358,20 @@ async function CustomersTab({ supabase, tenantId, F, T, cur }: Ctx) {
         ]} filename="customer-report" />
       </div>
       {rows.length === 0 ? <p className="text-sm text-muted-foreground">No customer activity.</p> : (
-        <div className="overflow-x-auto rounded-lg border"><table className="w-full text-sm">
-          <thead className="bg-muted/50 text-left"><tr>
-            <th className="px-3 py-2 font-medium">Customer</th><th className="px-3 py-2 font-medium">Orders</th>
-            <th className="px-3 py-2 font-medium text-right">Spend</th><th className="px-3 py-2 font-medium text-right">Redeemed</th>
-          </tr></thead>
-          <tbody>{rows.map((r, i) => (
-            <tr key={i} className="border-t">
-              <td className="px-3 py-2 font-medium">{r.name ?? "Guest"}</td>
-              <td className="px-3 py-2 text-muted-foreground">{Number(r.orders)}</td>
-              <td className="px-3 py-2 text-right">{money(r.spend_cents, cur)}</td>
-              <td className="px-3 py-2 text-right text-muted-foreground">{Number(r.points_redeemed)}</td>
-            </tr>
-          ))}</tbody>
-        </table></div>
+        <div className="overflow-x-auto rounded-lg border"><Table className="w-full text-sm">
+          <TableHeader className="bg-muted/50 text-left"><TableRow>
+            <TableHead className="px-3 py-2 font-medium">Customer</TableHead><TableHead className="px-3 py-2 font-medium">Orders</TableHead>
+            <TableHead className="px-3 py-2 font-medium text-right">Spend</TableHead><TableHead className="px-3 py-2 font-medium text-right">Redeemed</TableHead>
+          </TableRow></TableHeader>
+          <TableBody>{rows.map((r, i) => (
+            <TableRow key={i} className="border-t">
+              <TableCell className="px-3 py-2 font-medium">{r.name ?? "Guest"}</TableCell>
+              <TableCell className="px-3 py-2 text-muted-foreground">{Number(r.orders)}</TableCell>
+              <TableCell className="px-3 py-2 text-right">{money(r.spend_cents, cur)}</TableCell>
+              <TableCell className="px-3 py-2 text-right text-muted-foreground">{Number(r.points_redeemed)}</TableCell>
+            </TableRow>
+          ))}</TableBody>
+        </Table></div>
       )}
     </div>
   )

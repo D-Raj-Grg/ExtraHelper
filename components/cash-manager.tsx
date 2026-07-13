@@ -6,6 +6,7 @@ import { formatDateTime, money } from "@/lib/format"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Field, FieldLabel } from "@/components/ui/field"
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table"
 
 type OpenSession = { id: string; opening_float_cents: number; opened_at: string }
 type ClosedSession = {
@@ -96,26 +97,26 @@ export function CashManager({
           <p className="text-sm text-muted-foreground">No closed sessions yet.</p>
         ) : (
           <div className="overflow-x-auto rounded-lg border">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50 text-left">
-                <tr>
-                  <th className="px-3 py-2 font-medium">Closed</th>
-                  <th className="px-3 py-2 font-medium">Float</th>
-                  <th className="px-3 py-2 font-medium">Expected</th>
-                  <th className="px-3 py-2 font-medium">Counted</th>
-                  <th className="px-3 py-2 font-medium">Variance</th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table className="w-full text-sm">
+              <TableHeader className="bg-muted/50 text-left">
+                <TableRow>
+                  <TableHead className="px-3 py-2 font-medium">Closed</TableHead>
+                  <TableHead className="px-3 py-2 font-medium">Float</TableHead>
+                  <TableHead className="px-3 py-2 font-medium">Expected</TableHead>
+                  <TableHead className="px-3 py-2 font-medium">Counted</TableHead>
+                  <TableHead className="px-3 py-2 font-medium">Variance</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {closedSessions.map((s) => (
-                  <tr key={s.id} className="border-t">
-                    <td className="px-3 py-2 text-muted-foreground">
+                  <TableRow key={s.id} className="border-t">
+                    <TableCell className="px-3 py-2 text-muted-foreground">
                       {s.closed_at ? formatDateTime(s.closed_at, timezone) : "—"}
-                    </td>
-                    <td className="px-3 py-2">{money(s.opening_float_cents, currency)}</td>
-                    <td className="px-3 py-2">{money(s.expected_cents ?? 0, currency)}</td>
-                    <td className="px-3 py-2">{money(s.counted_cents ?? 0, currency)}</td>
-                    <td
+                    </TableCell>
+                    <TableCell className="px-3 py-2">{money(s.opening_float_cents, currency)}</TableCell>
+                    <TableCell className="px-3 py-2">{money(s.expected_cents ?? 0, currency)}</TableCell>
+                    <TableCell className="px-3 py-2">{money(s.counted_cents ?? 0, currency)}</TableCell>
+                    <TableCell
                       className={`px-3 py-2 font-medium ${
                         (s.variance_cents ?? 0) === 0
                           ? "text-green-600 dark:text-green-400"
@@ -123,11 +124,11 @@ export function CashManager({
                       }`}
                     >
                       {money(s.variance_cents ?? 0, currency)}
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         )}
       </section>

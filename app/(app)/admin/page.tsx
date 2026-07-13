@@ -5,6 +5,7 @@ import { TenantStatusButton } from "@/components/admin-tenant-actions"
 import { AdminPlanSelect } from "@/components/admin-plan-select"
 import { runDunning, startImpersonation } from "@/app/(app)/admin/actions"
 import { PageShell, PageHeader } from "@/components/page-header"
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table"
 
 export const dynamic = "force-dynamic"
 
@@ -77,46 +78,46 @@ export default async function AdminPage() {
       </div>
 
       <div className="overflow-x-auto rounded-lg border">
-        <table className="w-full text-sm">
-          <thead className="bg-muted/50 text-left">
-            <tr>
-              <th className="px-4 py-3 font-medium">Restaurant</th>
-              <th className="px-4 py-3 font-medium">Status</th>
-              <th className="px-4 py-3 font-medium">Plan</th>
-              <th className="px-4 py-3 font-medium text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
+        <Table className="w-full text-sm">
+          <TableHeader className="bg-muted/50 text-left">
+            <TableRow>
+              <TableHead className="px-4 py-3 font-medium">Restaurant</TableHead>
+              <TableHead className="px-4 py-3 font-medium">Status</TableHead>
+              <TableHead className="px-4 py-3 font-medium">Plan</TableHead>
+              <TableHead className="px-4 py-3 font-medium text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {rows.length === 0 ? (
-              <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-muted-foreground">
+              <TableRow>
+                <TableCell colSpan={4} className="px-4 py-8 text-center text-muted-foreground">
                   No tenants yet.
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ) : (
               rows.map((t) => {
                 const plan = t.subscriptions?.[0]?.plans ?? null
                 const subStatus = t.subscriptions?.[0]?.status ?? null
                 return (
-                  <tr key={t.id} className="border-t">
-                    <td className="px-4 py-3">
+                  <TableRow key={t.id} className="border-t">
+                    <TableCell className="px-4 py-3">
                       <span className="font-medium">{t.name}</span>
                       <span className="block text-xs text-muted-foreground">{t.slug}</span>
-                    </td>
-                    <td className="px-4 py-3">
+                    </TableCell>
+                    <TableCell className="px-4 py-3">
                       <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[t.status] ?? STATUS_STYLES.cancelled}`}>
                         {t.status}
                       </span>
-                    </td>
-                    <td className="px-4 py-3">
+                    </TableCell>
+                    <TableCell className="px-4 py-3">
                       <AdminPlanSelect tenantId={t.id} currentCode={plan?.code ?? null} plans={planOpts} />
                       {subStatus === "past_due" ? (
                         <span className="mt-1 inline-flex rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-400">
                           past due
                         </span>
                       ) : null}
-                    </td>
-                    <td className="px-4 py-3">
+                    </TableCell>
+                    <TableCell className="px-4 py-3">
                       <div className="flex items-center justify-end gap-2">
                         <form action={startImpersonation.bind(null, t.id)}>
                           <button type="submit" className="rounded-md border px-2 py-1 text-xs hover:bg-accent">
@@ -125,13 +126,13 @@ export default async function AdminPage() {
                         </form>
                         <TenantStatusButton tenantId={t.id} status={t.status} />
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 )
               })
             )}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
     </PageShell>
   )

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table"
 
 type Row = { id: string; status: string; restaurant_tables: { label: string } | null }
 
@@ -51,25 +52,25 @@ export function PosActiveOrders({ initial, tenantId }: { initial: Row[]; tenantI
 
   return (
     <div className="overflow-x-auto rounded-lg border">
-      <table className="w-full text-sm">
-        <tbody>
+      <Table className="w-full text-sm">
+        <TableBody>
           {rows.map((o) => (
-            <tr key={o.id} className="border-b last:border-0">
-              <td className="px-4 py-2 font-medium">
+            <TableRow key={o.id} className="border-b last:border-0">
+              <TableCell className="px-4 py-2 font-medium">
                 {o.restaurant_tables?.label ? `Table ${o.restaurant_tables.label}` : "Takeaway"}
-              </td>
-              <td className="px-4 py-2 capitalize text-muted-foreground">
+              </TableCell>
+              <TableCell className="px-4 py-2 capitalize text-muted-foreground">
                 {o.status.replace("_", " ")}
-              </td>
-              <td className="px-4 py-2 text-right">
+              </TableCell>
+              <TableCell className="px-4 py-2 text-right">
                 <Button size="sm" variant="outline" nativeButton={false} render={<Link href={`/pos/${o.id}`} />}>
                   Open
                 </Button>
-              </td>
-            </tr>
+              </TableCell>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
     </div>
   )
 }

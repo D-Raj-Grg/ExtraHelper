@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils"
 type Width = "standard" | "narrow" | "full"
 
 const WIDTH: Record<Width, string> = {
-  standard: "max-w-5xl",
+  standard: "max-w-7xl",
   narrow: "max-w-lg",
   full: "max-w-none",
 }

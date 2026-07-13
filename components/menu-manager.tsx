@@ -12,6 +12,7 @@ import {
 import { money } from "@/lib/format"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table"
 
 type Category = { id: string; name: string }
 type Station = { id: string; name: string }
@@ -164,28 +165,28 @@ export function MenuManager({
               <div key={cat.id}>
                 <h3 className="mb-2 font-medium">{cat.name}</h3>
                 <div className="overflow-x-auto rounded-lg border">
-                  <table className="w-full text-sm">
-                    <tbody>
+                  <Table className="w-full text-sm">
+                    <TableBody>
                       {list.map((item) => (
-                        <tr key={item.id} className="border-b last:border-0">
-                          <td className="px-4 py-2 font-medium">
+                        <TableRow key={item.id} className="border-b last:border-0">
+                          <TableCell className="px-4 py-2 font-medium">
                             {item.name}
                             {item.is_86 ? (
                               <span className="ml-2 rounded bg-red-500/10 px-1.5 py-0.5 text-xs text-red-600 dark:text-red-400">
                                 86
                               </span>
                             ) : null}
-                          </td>
-                          <td className="px-4 py-2 text-muted-foreground">
+                          </TableCell>
+                          <TableCell className="px-4 py-2 text-muted-foreground">
                             {money(item.base_price_cents, currency)}
-                          </td>
-                          <td className="px-4 py-2 text-muted-foreground">
+                          </TableCell>
+                          <TableCell className="px-4 py-2 text-muted-foreground">
                             {item.item_station_routes
                               .map((r) => r.kitchen_stations?.name)
                               .filter(Boolean)
                               .join(", ") || "—"}
-                          </td>
-                          <td className="px-4 py-2 text-right">
+                          </TableCell>
+                          <TableCell className="px-4 py-2 text-right">
                             <div className="flex justify-end gap-2">
                               <Button
                                 size="sm"
@@ -212,11 +213,11 @@ export function MenuManager({
                                 Delete
                               </Button>
                             </div>
-                          </td>
-                        </tr>
+                          </TableCell>
+                        </TableRow>
                       ))}
-                    </tbody>
-                  </table>
+                    </TableBody>
+                  </Table>
                 </div>
               </div>
             )

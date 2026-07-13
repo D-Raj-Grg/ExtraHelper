@@ -6,6 +6,7 @@ import { toast } from "sonner"
 import { postCount, setCountActual } from "@/app/(app)/inventory/actions"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table"
 
 type Row = {
   id: string
@@ -61,26 +62,26 @@ export function StockCountSheet({
   return (
     <div className="flex flex-col gap-4">
       <div className="overflow-x-auto rounded-lg border">
-        <table className="w-full text-sm">
-          <thead className="bg-muted/50 text-left">
-            <tr>
-              <th className="px-3 py-2 font-medium">Item</th>
-              <th className="px-3 py-2 text-right font-medium">Theoretical</th>
-              <th className="px-3 py-2 text-right font-medium">Counted</th>
-              <th className="px-3 py-2 text-right font-medium">Variance</th>
-            </tr>
-          </thead>
-          <tbody>
+        <Table className="w-full text-sm">
+          <TableHeader className="bg-muted/50 text-left">
+            <TableRow>
+              <TableHead className="px-3 py-2 font-medium">Item</TableHead>
+              <TableHead className="px-3 py-2 text-right font-medium">Theoretical</TableHead>
+              <TableHead className="px-3 py-2 text-right font-medium">Counted</TableHead>
+              <TableHead className="px-3 py-2 text-right font-medium">Variance</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {rows.map((r) => {
               const live = Number(actuals[r.id])
               const variance = Number.isFinite(live) ? live - r.theoretical : r.variance
               return (
-                <tr key={r.id} className="border-t">
-                  <td className="px-3 py-2">
+                <TableRow key={r.id} className="border-t">
+                  <TableCell className="px-3 py-2">
                     {r.name} <span className="text-xs text-muted-foreground">{r.uom}</span>
-                  </td>
-                  <td className="px-3 py-2 text-right text-muted-foreground">{fmt(r.theoretical)}</td>
-                  <td className="px-3 py-2 text-right">
+                  </TableCell>
+                  <TableCell className="px-3 py-2 text-right text-muted-foreground">{fmt(r.theoretical)}</TableCell>
+                  <TableCell className="px-3 py-2 text-right">
                     {posted ? (
                       fmt(r.actual)
                     ) : (
@@ -94,8 +95,8 @@ export function StockCountSheet({
                         className="ml-auto h-8 max-w-24 text-right text-sm"
                       />
                     )}
-                  </td>
-                  <td
+                  </TableCell>
+                  <TableCell
                     className={`px-3 py-2 text-right font-medium ${
                       variance === 0
                         ? "text-muted-foreground"
@@ -106,19 +107,19 @@ export function StockCountSheet({
                   >
                     {variance > 0 ? "+" : ""}
                     {fmt(variance)}
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               )
             })}
             {rows.length === 0 ? (
-              <tr>
-                <td colSpan={4} className="px-3 py-6 text-center text-muted-foreground">
+              <TableRow>
+                <TableCell colSpan={4} className="px-3 py-6 text-center text-muted-foreground">
                   No inventory items to count.
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ) : null}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
 
       {posted ? (

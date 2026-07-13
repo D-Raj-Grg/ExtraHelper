@@ -4,6 +4,7 @@ import { useState, useTransition } from "react"
 import { subscribe, type BillingState } from "@/app/(app)/billing/actions"
 import { money, formatDateTime } from "@/lib/format"
 import { Button } from "@/components/ui/button"
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table"
 
 type Sub = {
   status: string
@@ -127,21 +128,21 @@ export function BillingManager({
           <p className="text-sm text-muted-foreground">No invoices yet.</p>
         ) : (
           <div className="overflow-x-auto rounded-lg border">
-            <table className="w-full text-sm">
-              <tbody>
+            <Table className="w-full text-sm">
+              <TableBody>
                 {invoices.map((inv) => (
-                  <tr key={inv.id} className="border-b last:border-0">
-                    <td className="px-3 py-2 text-muted-foreground">{formatDateTime(inv.issued_at, timezone)}</td>
-                    <td className="px-3 py-2">{money(inv.amount_cents, currency)}</td>
-                    <td className="px-3 py-2 text-right">
+                  <TableRow key={inv.id} className="border-b last:border-0">
+                    <TableCell className="px-3 py-2 text-muted-foreground">{formatDateTime(inv.issued_at, timezone)}</TableCell>
+                    <TableCell className="px-3 py-2">{money(inv.amount_cents, currency)}</TableCell>
+                    <TableCell className="px-3 py-2 text-right">
                       <span className="rounded-full bg-green-500/10 px-2 py-0.5 text-xs capitalize text-green-600 dark:text-green-400">
                         {inv.status}
                       </span>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         )}
       </section>

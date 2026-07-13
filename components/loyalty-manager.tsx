@@ -5,6 +5,7 @@ import { adjustPoints } from "@/app/(app)/loyalty/actions"
 import { formatDateTime } from "@/lib/format"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table"
 
 type Customer = {
   id: string
@@ -43,18 +44,18 @@ function CustomerRow({ c }: { c: Customer }) {
   }
 
   return (
-    <tr className="border-t">
-      <td className="px-3 py-2">
+    <TableRow className="border-t">
+      <TableCell className="px-3 py-2">
         {c.name ?? "Guest"}
         {c.phone ? <span className="block text-xs text-muted-foreground">{c.phone}</span> : null}
-      </td>
-      <td className="px-3 py-2 font-medium">{balance} pts</td>
-      <td className="px-3 py-2">
+      </TableCell>
+      <TableCell className="px-3 py-2 font-medium">{balance} pts</TableCell>
+      <TableCell className="px-3 py-2">
         <span className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${TIER_STYLES[tier] ?? ""}`}>
           {tier}
         </span>
-      </td>
-      <td className="px-3 py-2">
+      </TableCell>
+      <TableCell className="px-3 py-2">
         <div className="flex items-center justify-end gap-1">
           <Input
             type="number"
@@ -71,8 +72,8 @@ function CustomerRow({ c }: { c: Customer }) {
             Redeem
           </Button>
         </div>
-      </td>
-    </tr>
+      </TableCell>
+    </TableRow>
   )
 }
 
@@ -93,21 +94,21 @@ export function LoyaltyManager({
           <p className="text-sm text-muted-foreground">No customers yet.</p>
         ) : (
           <div className="overflow-x-auto rounded-lg border">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50 text-left">
-                <tr>
-                  <th className="px-3 py-2 font-medium">Customer</th>
-                  <th className="px-3 py-2 font-medium">Balance</th>
-                  <th className="px-3 py-2 font-medium">Tier</th>
-                  <th className="px-3 py-2 font-medium text-right">Points</th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table className="w-full text-sm">
+              <TableHeader className="bg-muted/50 text-left">
+                <TableRow>
+                  <TableHead className="px-3 py-2 font-medium">Customer</TableHead>
+                  <TableHead className="px-3 py-2 font-medium">Balance</TableHead>
+                  <TableHead className="px-3 py-2 font-medium">Tier</TableHead>
+                  <TableHead className="px-3 py-2 font-medium text-right">Points</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {customers.map((c) => (
                   <CustomerRow key={c.id} c={c} />
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         )}
       </section>

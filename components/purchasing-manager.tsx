@@ -11,6 +11,7 @@ import {
 import { money } from "@/lib/format"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table"
 
 type Supplier = { id: string; name: string; phone: string | null }
 type ItemOpt = { id: string; name: string; uom: string }
@@ -142,21 +143,21 @@ export function PurchasingManager({
                   </span>
                 </div>
                 {po.po_items.length > 0 ? (
-                  <table className="mb-2 w-full text-sm">
-                    <tbody>
+                  <Table className="mb-2 w-full text-sm">
+                    <TableBody>
                       {po.po_items.map((l) => (
-                        <tr key={l.id} className="border-t">
-                          <td className="py-1">{l.inventory_items?.name}</td>
-                          <td className="py-1 text-muted-foreground">
+                        <TableRow key={l.id} className="border-t">
+                          <TableCell className="py-1">{l.inventory_items?.name}</TableCell>
+                          <TableCell className="py-1 text-muted-foreground">
                             {Number(l.qty_received)}/{Number(l.qty_ordered)} {l.inventory_items?.uom}
-                          </td>
-                          <td className="py-1 text-right text-muted-foreground">
+                          </TableCell>
+                          <TableCell className="py-1 text-right text-muted-foreground">
                             {money(l.unit_cost_cents, currency)}/{l.inventory_items?.uom}
-                          </td>
-                        </tr>
+                          </TableCell>
+                        </TableRow>
                       ))}
-                    </tbody>
-                  </table>
+                    </TableBody>
+                  </Table>
                 ) : (
                   <p className="mb-2 text-xs text-muted-foreground">No lines yet.</p>
                 )}

@@ -15,6 +15,7 @@ import {
 import { RoleEditor, type EditableRole, type Permission } from "@/components/role-editor"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table"
 
 type Role = EditableRole & { userCount: number }
 type Member = {
@@ -235,20 +236,20 @@ function StaffTab({
         <p className="text-sm text-muted-foreground">No team members yet.</p>
       ) : (
         <div className="overflow-x-auto rounded-lg border">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/50 text-left">
-              <tr>
-                <th className="px-3 py-2 font-medium">Email</th>
-                <th className="px-3 py-2 font-medium">Role</th>
-                <th className="px-3 py-2 font-medium">Status</th>
-                {canEdit ? <th className="px-3 py-2 text-right font-medium">Actions</th> : null}
-              </tr>
-            </thead>
-            <tbody>
+          <Table className="w-full text-sm">
+            <TableHeader className="bg-muted/50 text-left">
+              <TableRow>
+                <TableHead className="px-3 py-2 font-medium">Email</TableHead>
+                <TableHead className="px-3 py-2 font-medium">Role</TableHead>
+                <TableHead className="px-3 py-2 font-medium">Status</TableHead>
+                {canEdit ? <TableHead className="px-3 py-2 text-right font-medium">Actions</TableHead> : null}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {members.map((m) => (
-                <tr key={m.user_id ?? m.email} className="border-t">
-                  <td className="px-3 py-2">{m.email}</td>
-                  <td className="px-3 py-2">
+                <TableRow key={m.user_id ?? m.email} className="border-t">
+                  <TableCell className="px-3 py-2">{m.email}</TableCell>
+                  <TableCell className="px-3 py-2">
                     {canEdit && m.user_id ? (
                       <select
                         value={m.role_id ?? ""}
@@ -263,14 +264,14 @@ function StaffTab({
                     ) : (
                       <span className="capitalize">{m.role_name ?? m.base_role}</span>
                     )}
-                  </td>
-                  <td className="px-3 py-2">
+                  </TableCell>
+                  <TableCell className="px-3 py-2">
                     <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[m.status] ?? "bg-muted"}`}>
                       {m.status}
                     </span>
-                  </td>
+                  </TableCell>
                   {canEdit ? (
-                    <td className="px-3 py-2">
+                    <TableCell className="px-3 py-2">
                       <div className="flex justify-end gap-2">
                         {m.status === "pending" && m.user_id ? (
                           <button type="button" disabled={pending} onClick={() => onApprove(m.user_id as string)} className="text-xs text-green-600 hover:underline dark:text-green-400">
@@ -287,12 +288,12 @@ function StaffTab({
                           </button>
                         )}
                       </div>
-                    </td>
+                    </TableCell>
                   ) : null}
-                </tr>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       )}
     </div>

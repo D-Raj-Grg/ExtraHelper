@@ -10,6 +10,7 @@ import { type ResvStatus } from "@/lib/reservation-constants"
 import { formatDateTime } from "@/lib/format"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table"
 
 type Table = { id: string; label: string; capacity: number }
 type Reservation = {
@@ -98,36 +99,36 @@ export function ReservationsManager({
           <p className="text-sm text-muted-foreground">No reservations.</p>
         ) : (
           <div className="overflow-x-auto rounded-lg border">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50 text-left">
-                <tr>
-                  <th className="px-3 py-2 font-medium">When</th>
-                  <th className="px-3 py-2 font-medium">Guest</th>
-                  <th className="px-3 py-2 font-medium">Party</th>
-                  <th className="px-3 py-2 font-medium">Table</th>
-                  <th className="px-3 py-2 font-medium">Status</th>
-                  <th className="px-3 py-2 font-medium text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table className="w-full text-sm">
+              <TableHeader className="bg-muted/50 text-left">
+                <TableRow>
+                  <TableHead className="px-3 py-2 font-medium">When</TableHead>
+                  <TableHead className="px-3 py-2 font-medium">Guest</TableHead>
+                  <TableHead className="px-3 py-2 font-medium">Party</TableHead>
+                  <TableHead className="px-3 py-2 font-medium">Table</TableHead>
+                  <TableHead className="px-3 py-2 font-medium">Status</TableHead>
+                  <TableHead className="px-3 py-2 font-medium text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {reservations.map((r) => (
-                  <tr key={r.id} className="border-t">
-                    <td className="px-3 py-2 text-muted-foreground">
+                  <TableRow key={r.id} className="border-t">
+                    <TableCell className="px-3 py-2 text-muted-foreground">
                       {formatDateTime(r.reserved_at, timezone)}
-                    </td>
-                    <td className="px-3 py-2">
+                    </TableCell>
+                    <TableCell className="px-3 py-2">
                       {r.customers?.name ?? "Guest"}
                       {r.customers?.phone ? (
                         <span className="block text-xs text-muted-foreground">
                           {r.customers.phone}
                         </span>
                       ) : null}
-                    </td>
-                    <td className="px-3 py-2 text-muted-foreground">{r.party_size}</td>
-                    <td className="px-3 py-2 text-muted-foreground">
+                    </TableCell>
+                    <TableCell className="px-3 py-2 text-muted-foreground">{r.party_size}</TableCell>
+                    <TableCell className="px-3 py-2 text-muted-foreground">
                       {r.restaurant_tables?.label ?? "—"}
-                    </td>
-                    <td className="px-3 py-2">
+                    </TableCell>
+                    <TableCell className="px-3 py-2">
                       <span
                         className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                           STATUS_STYLES[r.status] ?? STATUS_STYLES.cancelled
@@ -135,8 +136,8 @@ export function ReservationsManager({
                       >
                         {r.status.replace("_", " ")}
                       </span>
-                    </td>
-                    <td className="px-3 py-2">
+                    </TableCell>
+                    <TableCell className="px-3 py-2">
                       <div className="flex justify-end gap-1">
                         {(NEXT[r.status] ?? []).map((a) => (
                           <Button
@@ -154,11 +155,11 @@ export function ReservationsManager({
                           </Button>
                         ))}
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         )}
       </section>
