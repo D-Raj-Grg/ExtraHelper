@@ -5,6 +5,7 @@ import { TenantStatusButton } from "@/components/admin-tenant-actions"
 import { AdminPlanSelect } from "@/components/admin-plan-select"
 import { runDunning, startImpersonation } from "@/app/(app)/admin/actions"
 import { PageShell, PageHeader } from "@/components/page-header"
+import { Button } from "@/components/ui/button"
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table"
 
 export const dynamic = "force-dynamic"
@@ -61,9 +62,9 @@ export default async function AdminPage() {
         description="Platform tenants, plans, and usage."
         actions={
           <form action={runDunning}>
-            <button type="submit" className="rounded-md border px-3 py-1.5 text-sm hover:bg-accent">
+            <Button type="submit" variant="outline" size="sm">
               Run dunning now
-            </button>
+            </Button>
           </form>
         }
       />
@@ -120,9 +121,9 @@ export default async function AdminPage() {
                     <TableCell className="px-4 py-3">
                       <div className="flex items-center justify-end gap-2">
                         <form action={startImpersonation.bind(null, t.id)}>
-                          <button type="submit" className="rounded-md border px-2 py-1 text-xs hover:bg-accent">
+                          <Button type="submit" variant="outline" size="sm">
                             View as
-                          </button>
+                          </Button>
                         </form>
                         <TenantStatusButton tenantId={t.id} status={t.status} />
                       </div>

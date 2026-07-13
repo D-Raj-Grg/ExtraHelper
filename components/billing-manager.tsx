@@ -71,13 +71,14 @@ export function BillingManager({
           <h2 className="text-lg font-semibold">Plans</h2>
           <div className="flex gap-1 text-sm">
             {(["month", "year"] as const).map((i) => (
-              <button
+              <Button
                 key={i}
+                size="sm"
+                variant={interval === i ? "default" : "ghost"}
                 onClick={() => setInterval(i)}
-                className={`rounded-md px-2 py-1 ${interval === i ? "bg-primary text-primary-foreground" : "bg-muted"}`}
               >
                 {i === "month" ? "Monthly" : "Yearly"}
-              </button>
+              </Button>
             ))}
           </div>
         </div>

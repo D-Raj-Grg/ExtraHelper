@@ -90,17 +90,17 @@ export function Storefront({
         <div className="fixed inset-x-0 bottom-0 mx-auto max-w-md space-y-2 border-t bg-background p-4">
           <div className="flex gap-2">
             {(["pickup", "delivery"] as const).map((f) => (
-              <button
+              <Button
                 key={f}
                 type="button"
+                variant={fulfillment === f ? "secondary" : "ghost"}
+                size="sm"
                 onClick={() => setFulfillment(f)}
-                className={`flex-1 rounded-md border px-2 py-1 text-sm capitalize ${
-                  fulfillment === f ? "border-primary bg-primary/10 font-medium" : ""
-                }`}
+                className="flex-1 capitalize"
               >
                 {f}
                 {fees[f] ? ` +${money(Math.round(Number(fees[f]) * 100), currency)}` : ""}
-              </button>
+              </Button>
             ))}
           </div>
           <Input placeholder="Your name" value={name} onChange={(e) => setName(e.target.value)} />

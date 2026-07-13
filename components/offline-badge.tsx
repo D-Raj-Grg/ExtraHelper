@@ -2,6 +2,7 @@
 
 import { CloudOffIcon, RefreshCwIcon } from "lucide-react"
 import { useOffline } from "@/components/offline-sync-provider"
+import { Button } from "@/components/ui/button"
 
 /** Header pill: shows offline state + queued-write count; click to sync now. */
 export function OfflineBadge() {
@@ -9,11 +10,13 @@ export function OfflineBadge() {
   if (online && pending === 0) return null
 
   return (
-    <button
+    <Button
       type="button"
+      variant="outline"
+      size="sm"
       onClick={() => void syncNow()}
       title={online ? "Sync queued changes now" : "You're offline — changes are queued"}
-      className={`flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium ${
+      className={`gap-1.5 rounded-full text-xs ${
         online
           ? "border-amber-500/40 text-amber-600 dark:text-amber-400"
           : "border-red-500/40 text-red-600 dark:text-red-400"
@@ -22,6 +25,6 @@ export function OfflineBadge() {
       {online ? <RefreshCwIcon className="size-3" /> : <CloudOffIcon className="size-3" />}
       {online ? "Sync" : "Offline"}
       {pending > 0 ? ` · ${pending}` : ""}
-    </button>
+    </Button>
   )
 }

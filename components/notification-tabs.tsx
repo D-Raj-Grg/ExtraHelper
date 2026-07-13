@@ -134,25 +134,23 @@ export function NotificationTabs({
     <div>
       {/* Tabs */}
       <div className="mb-4 inline-flex rounded-lg bg-muted p-1 text-sm">
-        <button
+        <Button
           type="button"
+          variant={tab === "order" ? "secondary" : "ghost"}
+          size="sm"
           onClick={() => setTab("order")}
-          className={`rounded-md px-4 py-1.5 font-medium ${
-            tab === "order" ? "bg-background shadow-sm" : "text-muted-foreground"
-          }`}
         >
           Order
-        </button>
+        </Button>
         {canSeeActivity ? (
-          <button
+          <Button
             type="button"
+            variant={tab === "activity" ? "secondary" : "ghost"}
+            size="sm"
             onClick={() => setTab("activity")}
-            className={`rounded-md px-4 py-1.5 font-medium ${
-              tab === "activity" ? "bg-background shadow-sm" : "text-muted-foreground"
-            }`}
           >
             Activity
-          </button>
+          </Button>
         ) : null}
       </div>
 

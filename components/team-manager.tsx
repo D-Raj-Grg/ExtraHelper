@@ -64,21 +64,23 @@ export function TeamManager({
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
-        <div className="inline-flex rounded-lg bg-muted p-1 text-sm">
-          <button
+        <div className="inline-flex gap-1 rounded-lg bg-muted p-1 text-sm">
+          <Button
             type="button"
+            size="sm"
+            variant={tab === "roles" ? "secondary" : "ghost"}
             onClick={() => setTab("roles")}
-            className={`rounded-md px-4 py-1.5 font-medium ${tab === "roles" ? "bg-background shadow-sm" : "text-muted-foreground"}`}
           >
             Roles
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            size="sm"
+            variant={tab === "staff" ? "secondary" : "ghost"}
             onClick={() => setTab("staff")}
-            className={`rounded-md px-4 py-1.5 font-medium ${tab === "staff" ? "bg-background shadow-sm" : "text-muted-foreground"}`}
           >
             Staff
-          </button>
+          </Button>
         </div>
         {tab === "roles" && canEdit ? (
           <Button size="sm" onClick={() => setEditor({ role: null })}>
@@ -161,13 +163,15 @@ function RoleGrid({
                 <p className="mt-2 text-sm text-muted-foreground">Total users: {r.userCount}</p>
               </button>
               {onDelete ? (
-                <button
+                <Button
                   type="button"
+                  variant="link"
+                  size="sm"
                   onClick={() => onDelete(r)}
-                  className="mt-2 text-xs text-destructive hover:underline"
+                  className="mt-2 h-auto p-0 text-xs text-destructive"
                 >
                   Delete
-                </button>
+                </Button>
               ) : null}
             </div>
           ))}
@@ -280,18 +284,18 @@ function StaffTab({
                     <TableCell className="px-3 py-2">
                       <div className="flex justify-end gap-2">
                         {m.status === "pending" && m.user_id ? (
-                          <button type="button" disabled={pending} onClick={() => onApprove(m.user_id as string)} className="text-xs text-green-600 hover:underline dark:text-green-400">
+                          <Button type="button" variant="link" size="sm" disabled={pending} onClick={() => onApprove(m.user_id as string)} className="h-auto p-0 text-xs text-green-600 dark:text-green-400">
                             Approve
-                          </button>
+                          </Button>
                         ) : null}
                         {m.user_id ? (
-                          <button type="button" disabled={pending} onClick={() => onRemove(m.user_id as string)} className="text-xs text-destructive hover:underline">
+                          <Button type="button" variant="link" size="sm" disabled={pending} onClick={() => onRemove(m.user_id as string)} className="h-auto p-0 text-xs text-destructive">
                             Remove
-                          </button>
+                          </Button>
                         ) : (
-                          <button type="button" disabled={pending} onClick={() => onCancel(m.email)} className="text-xs text-destructive hover:underline">
+                          <Button type="button" variant="link" size="sm" disabled={pending} onClick={() => onCancel(m.email)} className="h-auto p-0 text-xs text-destructive">
                             Cancel
-                          </button>
+                          </Button>
                         )}
                       </div>
                     </TableCell>

@@ -182,18 +182,16 @@ export function KdsBoard({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap gap-1">
           {filters.map((f) => (
-            <button
+            <Button
               key={f.key}
               type="button"
+              size="sm"
+              variant={station === f.key ? "default" : "ghost"}
               onClick={() => selectStation(f.key)}
-              className={`rounded-full px-3 py-1 text-sm font-medium transition-colors ${
-                station === f.key
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted text-muted-foreground hover:bg-muted/70"
-              }`}
+              className="rounded-full"
             >
               {f.label}
-            </button>
+            </Button>
           ))}
         </div>
         <Button size="sm" variant="outline" onClick={toggleFullscreen}>
@@ -245,14 +243,15 @@ export function KdsBoard({
                     {kot.status}
                   </span>
                   <div className="flex items-center gap-1">
-                    <button
+                    <Button
                       type="button"
+                      variant="outline"
+                      size="sm"
                       title="Print ticket"
                       onClick={() => window.open(`/kot/${kot.id}`, "_blank", "noopener")}
-                      className="rounded border px-2 py-1 text-xs hover:bg-muted"
                     >
                       Print
-                    </button>
+                    </Button>
                   {next ? (
                     <Button
                       size="sm"
@@ -283,9 +282,11 @@ export function KdsBoard({
           </p>
           <div className="flex flex-wrap gap-1.5">
             {served.map((k) => (
-              <button
+              <Button
                 key={k.id}
                 type="button"
+                variant="outline"
+                size="sm"
                 disabled={pending}
                 onClick={() =>
                   startTransition(async () => {
@@ -294,11 +295,10 @@ export function KdsBoard({
                     else void refetch()
                   })
                 }
-                className="rounded border bg-card px-2 py-1 text-xs hover:bg-muted disabled:opacity-50"
               >
                 ↩ {k.kitchen_stations?.name ?? "Expo"} ·{" "}
                 {k.orders?.restaurant_tables?.label ?? "—"}
-              </button>
+              </Button>
             ))}
           </div>
         </div>

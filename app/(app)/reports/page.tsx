@@ -4,6 +4,7 @@ import { requirePermission } from "@/lib/supabase/guards"
 import { money } from "@/lib/format"
 import { PageShell, PageHeader } from "@/components/page-header"
 import { ExportButtons } from "@/components/export-buttons"
+import { Button } from "@/components/ui/button"
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table"
 
 export const dynamic = "force-dynamic"
@@ -111,7 +112,7 @@ export default async function ReportsPage({
           <input type="date" name="from" defaultValue={custom ? sp.from : ""} className="mt-0.5 h-9 rounded-md border bg-transparent px-2 text-sm" /></label>
         <label className="flex flex-col text-xs text-muted-foreground">To
           <input type="date" name="to" defaultValue={custom ? sp.to : ""} className="mt-0.5 h-9 rounded-md border bg-transparent px-2 text-sm" /></label>
-        <button type="submit" className="h-9 rounded-md bg-primary px-3 text-sm text-primary-foreground">Apply range</button>
+        <Button type="submit">Apply range</Button>
         {custom ? <Link href={`/reports?tab=${tab}&window=today`} className="h-9 rounded-md border px-3 text-sm leading-9">Clear</Link> : null}
       </form>
 

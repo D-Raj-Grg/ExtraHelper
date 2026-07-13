@@ -102,21 +102,21 @@ export function BillSplit({
         <p className="text-sm font-medium">Split bill</p>
         <div className="flex gap-1">
           {(["equal", "item"] as const).map((m) => (
-            <button
+            <Button
               key={m}
               type="button"
+              size="sm"
+              variant={mode === m ? "default" : "ghost"}
               onClick={() => {
                 setMode(mode === m ? "none" : m)
                 setShares(null)
                 setPaid(0)
                 setError(null)
               }}
-              className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                mode === m ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
-              }`}
+              className="rounded-full"
             >
               {m === "equal" ? "Equally" : "By item"}
-            </button>
+            </Button>
           ))}
         </div>
       </div>
@@ -189,16 +189,18 @@ export function BillSplit({
                 </div>
               )
             })}
-            <button
+            <Button
               type="button"
+              variant="link"
+              size="sm"
               onClick={() => {
                 setShares(null)
                 setPaid(0)
               }}
-              className="text-xs text-muted-foreground hover:underline"
+              className="h-auto p-0 text-xs text-muted-foreground"
             >
               reset split
-            </button>
+            </Button>
           </div>
         )
       ) : null}

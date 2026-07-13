@@ -90,19 +90,20 @@ export function PosBuilder({
           <h2 className="mb-2 text-sm font-semibold text-muted-foreground">Add items</h2>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {menu.map((m) => (
-              <button
+              <Button
                 key={m.id}
                 type="button"
+                variant="outline"
                 disabled={!editable || m.is_86 || pending}
                 onClick={() => run({ type: "add", item: m }, () => addItem(order.id, m.id))}
-                className="flex flex-col items-start rounded-lg border p-3 text-left transition hover:bg-accent disabled:opacity-40"
+                className="flex h-auto flex-col items-start p-3 text-left"
               >
                 <span className="text-sm font-medium">{m.name}</span>
                 <span className="text-xs text-muted-foreground">
                   {money(m.base_price_cents, currency)}
                   {m.is_86 ? " · 86" : ""}
                 </span>
-              </button>
+              </Button>
             ))}
           </div>
         </section>
@@ -123,14 +124,17 @@ export function PosBuilder({
                     {money(l.unit_price_cents * l.qty, currency)}
                   </span>
                   {editable ? (
-                    <button
+                    <Button
                       type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label="Remove item"
                       disabled={pending}
                       onClick={() => run({ type: "remove", id: l.id }, () => removeItem(order.id, l.id))}
-                      className="text-xs text-destructive hover:underline"
+                      className="text-destructive"
                     >
                       ✕
-                    </button>
+                    </Button>
                   ) : null}
                 </li>
               ))}

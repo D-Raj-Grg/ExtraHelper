@@ -1,4 +1,5 @@
 import { stopImpersonation } from "@/app/(app)/admin/actions"
+import { Button } from "@/components/ui/button"
 
 /** Persistent warning bar shown while a platform admin is impersonating a tenant. */
 export function ImpersonationBanner({ name }: { name: string }) {
@@ -8,9 +9,9 @@ export function ImpersonationBanner({ name }: { name: string }) {
         Viewing as <span className="font-semibold">{name}</span> — impersonation mode.
       </span>
       <form action={stopImpersonation}>
-        <button type="submit" className="rounded-md border border-amber-500/50 px-2 py-0.5 text-xs font-medium hover:bg-amber-500/20">
+        <Button type="submit" variant="outline" size="sm">
           Exit
-        </button>
+        </Button>
       </form>
     </div>
   )

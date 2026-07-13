@@ -156,19 +156,19 @@ export function QuickOrder({
         ) : (
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {items.map((m) => (
-              <button
+              <Button
                 key={m.id}
-                type="button"
+                variant="outline"
                 disabled={m.is_86}
                 onClick={() => add(m.id)}
-                className="flex flex-col items-start rounded-lg border p-3 text-left transition hover:bg-accent disabled:opacity-40"
+                className="flex h-auto flex-col items-start p-3 text-left"
               >
                 <span className="text-sm font-medium">{m.name}</span>
                 <span className="text-xs text-muted-foreground">
                   {money(m.base_price_cents, currency)}
                   {m.is_86 ? " · 86" : ""}
                 </span>
-              </button>
+              </Button>
             ))}
           </div>
         )}
@@ -185,13 +185,13 @@ export function QuickOrder({
               <li key={l.id} className="flex items-center justify-between gap-2 text-sm">
                 <span className="flex-1">{l.name}</span>
                 <div className="flex items-center gap-1">
-                  <button type="button" onClick={() => dec(l.id)} className="rounded border px-1.5 leading-none">
+                  <Button variant="outline" size="icon-sm" className="leading-none" onClick={() => dec(l.id)}>
                     −
-                  </button>
+                  </Button>
                   <span className="w-5 text-center">{l.qty}</span>
-                  <button type="button" onClick={() => add(l.id)} className="rounded border px-1.5 leading-none">
+                  <Button variant="outline" size="icon-sm" className="leading-none" onClick={() => add(l.id)}>
                     +
-                  </button>
+                  </Button>
                 </div>
               </li>
             ))}

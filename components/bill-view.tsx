@@ -264,22 +264,26 @@ export function BillView({
                 <span className="text-muted-foreground">{money(it.total_cents, currency)}</span>
                 {canDiscount && !settled && it.order_item_id ? (
                   <>
-                    <button
+                    <Button
                       type="button"
+                      variant="link"
+                      size="sm"
                       disabled={pending}
                       onClick={() => setDiscItemId(discItemId === it.id ? null : it.id)}
-                      className="text-xs text-blue-600 hover:underline dark:text-blue-400"
+                      className="h-auto p-0 text-xs text-blue-600 dark:text-blue-400"
                     >
                       disc
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       type="button"
+                      variant="link"
+                      size="sm"
                       disabled={pending}
                       onClick={() => setVoidingId(voidingId === it.id ? null : it.id)}
-                      className="text-xs text-destructive hover:underline"
+                      className="h-auto p-0 text-xs text-destructive"
                     >
                       void
-                    </button>
+                    </Button>
                   </>
                 ) : null}
               </div>

@@ -155,13 +155,14 @@ export function RoleEditor({
                   <div className="flex items-center justify-between border-b bg-muted/40 px-3 py-1.5">
                     <span className="text-xs font-semibold uppercase text-muted-foreground">{g.grp}</span>
                     {!readOnly ? (
-                      <button
-                        type="button"
+                      <Button
+                        variant="link"
+                        size="sm"
+                        className="h-auto p-0 text-xs"
                         onClick={() => toggleGroup(g.items, !allOn)}
-                        className="text-xs text-primary hover:underline"
                       >
                         {allOn ? "Clear" : "All"}
-                      </button>
+                      </Button>
                     ) : null}
                   </div>
                   <ul>

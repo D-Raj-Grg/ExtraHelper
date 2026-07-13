@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react"
 import { markKotPrinted } from "@/app/(app)/kds/actions"
+import { Button } from "@/components/ui/button"
 
 /** Fires the browser print dialog once on mount and stamps printed_at. */
 export function PrintOnLoad({ kotId }: { kotId: string }) {
@@ -16,12 +17,13 @@ export function PrintOnLoad({ kotId }: { kotId: string }) {
   }, [kotId])
 
   return (
-    <button
+    <Button
       type="button"
+      variant="outline"
       onClick={() => window.print()}
-      className="no-print mt-4 w-full rounded-md border py-2 text-sm font-medium hover:bg-muted"
+      className="no-print mt-4 w-full"
     >
       Print again
-    </button>
+    </Button>
   )
 }
