@@ -8,6 +8,7 @@ import type { TenantMembership } from "@/lib/supabase/tenant"
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -46,25 +47,27 @@ export function TenantSwitcher({
             <ChevronsUpDownIcon className="ml-auto size-4" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="min-w-56" sideOffset={4}>
-            <DropdownMenuLabel className="text-xs text-muted-foreground">
-              Restaurants
-            </DropdownMenuLabel>
-            {tenants.map((t) => (
-              <DropdownMenuItem
-                key={t.tenantId}
-                disabled={pending}
-                onClick={() => {
-                  if (t.tenantId !== activeId)
-                    startTransition(() => {
-                      void switchTenant(t.tenantId)
-                    })
-                }}
-              >
-                <StoreIcon className="size-4 text-muted-foreground" />
-                <span className="flex-1 truncate">{t.name}</span>
-                {t.tenantId === activeId ? <CheckIcon className="size-4" /> : null}
-              </DropdownMenuItem>
-            ))}
+            <DropdownMenuGroup>
+              <DropdownMenuLabel className="text-xs text-muted-foreground">
+                Restaurants
+              </DropdownMenuLabel>
+              {tenants.map((t) => (
+                <DropdownMenuItem
+                  key={t.tenantId}
+                  disabled={pending}
+                  onClick={() => {
+                    if (t.tenantId !== activeId)
+                      startTransition(() => {
+                        void switchTenant(t.tenantId)
+                      })
+                  }}
+                >
+                  <StoreIcon className="size-4 text-muted-foreground" />
+                  <span className="flex-1 truncate">{t.name}</span>
+                  {t.tenantId === activeId ? <CheckIcon className="size-4" /> : null}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem render={<Link href="/onboarding?add=1" />}>
               <PlusIcon className="size-4 text-muted-foreground" />
