@@ -12,7 +12,7 @@ import {
   clampScale,
 } from "@/lib/preferences-constants";
 
-const figtree = Figtree({ subsets: ["latin"], variable: "--font-sans" });
+const figtree = Figtree({subsets:['latin'],variable:'--font-sans'});
 
 export const metadata: Metadata = {
   title: "ExtraHelper",
