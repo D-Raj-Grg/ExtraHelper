@@ -80,10 +80,10 @@ export function StockCountSheet({
                   <TableCell className="px-3 py-2">
                     {r.name} <span className="text-xs text-muted-foreground">{r.uom}</span>
                   </TableCell>
-                  <TableCell className="px-3 py-2 text-right text-muted-foreground">{fmt(r.theoretical)}</TableCell>
+                  <TableCell className="px-3 py-2 text-right text-muted-foreground tabular-nums">{fmt(r.theoretical)}</TableCell>
                   <TableCell className="px-3 py-2 text-right">
                     {posted ? (
-                      fmt(r.actual)
+                      <span className="tabular-nums">{fmt(r.actual)}</span>
                     ) : (
                       <Input
                         type="number"
@@ -92,16 +92,17 @@ export function StockCountSheet({
                         value={actuals[r.id]}
                         onChange={(e) => setActuals((s) => ({ ...s, [r.id]: e.target.value }))}
                         onBlur={() => save(r)}
-                        className="ml-auto h-8 max-w-24 text-right text-sm"
+                        aria-label={`Counted quantity for ${r.name}`}
+                        className="ml-auto h-8 max-w-24 text-right text-sm tabular-nums"
                       />
                     )}
                   </TableCell>
                   <TableCell
-                    className={`px-3 py-2 text-right font-medium ${
+                    className={`px-3 py-2 text-right font-medium tabular-nums ${
                       variance === 0
                         ? "text-muted-foreground"
                         : variance < 0
-                          ? "text-red-600 dark:text-red-400"
+                          ? "text-destructive"
                           : "text-green-600 dark:text-green-400"
                     }`}
                   >
@@ -129,7 +130,7 @@ export function StockCountSheet({
       ) : (
         <div className="flex items-center justify-between">
           <span className="text-sm text-muted-foreground">
-            {changed} item(s) with variance
+            {changed} item{changed === 1 ? "" : "s"} with variance
           </span>
           <Button disabled={pending || rows.length === 0} onClick={post}>
             {pending ? "Posting…" : "Post count & reconcile"}

@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 import { requirePermission } from "@/lib/supabase/guards"
-import { MenuManager } from "@/components/menu-manager"
+import { MenuManager } from "@/components/menu/menu-manager"
 import { PageShell, PageHeader } from "@/components/page-header"
 
 export default async function MenuPage() {
@@ -40,7 +40,7 @@ export default async function MenuPage() {
     <PageShell>
       <PageHeader
         title={<>{tenant.name} · Menu</>}
-        description={<>Items, variants, modifiers, combos, stations, availability and 86 toggles.</>}
+        description={<>Manage what you sell — organized into tabs so you can find things fast.</>}
       />
       <MenuManager
         currency={tenant.currency}
