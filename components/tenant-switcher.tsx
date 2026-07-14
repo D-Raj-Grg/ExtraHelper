@@ -42,11 +42,9 @@ export function TenantSwitcher({
             </div>
             <div className="grid flex-1 text-left text-sm leading-tight">
               <span className="truncate font-semibold">{active?.name}</span>
-              <span className="truncate text-xs text-muted-foreground">
-                {active?.slug ? `@${active.slug}` : null}
-                {active?.slug && active?.role ? " · " : ""}
-                <span className="capitalize">{active?.role}</span>
-              </span>
+              {active?.slug ? (
+                <span className="truncate text-xs text-muted-foreground">@{active.slug}</span>
+              ) : null}
             </div>
             <ChevronsUpDownIcon className="ml-auto size-4" />
           </DropdownMenuTrigger>
@@ -69,9 +67,7 @@ export function TenantSwitcher({
                   <StoreIcon className="size-4 shrink-0 text-muted-foreground" />
                   <div className="grid flex-1 leading-tight">
                     <span className="truncate text-sm">{t.name}</span>
-                    <span className="truncate text-xs text-muted-foreground">
-                      @{t.slug} · <span className="capitalize">{t.role}</span>
-                    </span>
+                    <span className="truncate text-xs text-muted-foreground">@{t.slug}</span>
                   </div>
                   {t.tenantId === activeId ? <CheckIcon className="size-4 shrink-0" /> : null}
                 </DropdownMenuItem>

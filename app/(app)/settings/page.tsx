@@ -44,6 +44,7 @@ export default async function SettingsPage() {
         description="Currency, timezone and charges. Region-configurable — nothing hardcoded."
       />
       <SettingsForm
+        restaurantName={tenant.name}
         currency={settings?.currency ?? "USD"}
         timezone={settings?.timezone ?? "UTC"}
         serviceCharge={Number(settings?.service_charge ?? 0)}

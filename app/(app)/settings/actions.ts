@@ -16,6 +16,7 @@ export async function updateSettings(
 ): Promise<SettingsState> {
   const tenant = await requireRole("owner", "manager")
 
+  const restaurantName = String(formData.get("restaurantName") ?? "").trim()
   const currency = String(formData.get("currency") ?? "").trim() || "USD"
   const timezone = String(formData.get("timezone") ?? "").trim() || "UTC"
   const serviceCharge = Number(formData.get("serviceCharge") ?? 0)
@@ -84,7 +85,19 @@ export async function updateSettings(
     .eq("tenant_id", tenant.tenantId)
   if (error) return { error: error.message }
 
+  // Restaurant name lives on `tenants`, not tenant_settings. Only owners may
+  // change it (tenants_owner_update RLS); a manager's attempt is a no-op.
+  if (restaurantName && restaurantName !== tenant.name) {
+    const { error: nameErr } = await supabase
+      .from("tenants")
+      .update({ name: restaurantName })
+      .eq("id", tenant.tenantId)
+    if (nameErr) return { error: nameErr.message }
+  }
+
   revalidatePath("/settings")
+  // Sidebar + tenant switcher read the name from the layout — refresh it.
+  revalidatePath("/", "layout")
   return { ok: true }
 }
 

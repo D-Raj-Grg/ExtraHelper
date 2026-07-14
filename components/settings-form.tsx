@@ -42,6 +42,7 @@ type TaxRule = { name: string; rate: number; inclusive: boolean }
 type Branch = { id: string; name: string; address: string | null; is_default: boolean }
 
 export function SettingsForm({
+  restaurantName,
   currency,
   timezone,
   serviceCharge,
@@ -54,6 +55,7 @@ export function SettingsForm({
   branches,
   canManageBranches,
 }: {
+  restaurantName: string
   currency: string
   timezone: string
   serviceCharge: number
@@ -89,6 +91,15 @@ export function SettingsForm({
       <input type="hidden" name="taxRules" value={JSON.stringify(rules)} />
 
       <FieldGroup>
+        <Field>
+          <FieldLabel htmlFor="restaurantName">Restaurant name</FieldLabel>
+          <Input
+            id="restaurantName"
+            name="restaurantName"
+            defaultValue={restaurantName}
+            placeholder="The Sekuwa Station"
+          />
+        </Field>
         <Field>
           <FieldLabel htmlFor="currency">Currency</FieldLabel>
           <Select name="currency" defaultValue={currency}>
