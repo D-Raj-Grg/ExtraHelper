@@ -35,7 +35,7 @@ export default async function OrderBuilderPage({
     supabase
       .from("menu_items")
       .select(
-        "id, name, base_price_cents, is_86, " +
+        "id, name, base_price_cents, is_86, image_url, " +
           "item_variants(id, name, price_delta_cents), " +
           "item_modifiers(modifier_id, modifiers(id, name, price_cents))",
       )

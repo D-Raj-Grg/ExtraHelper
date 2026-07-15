@@ -2,10 +2,26 @@
 
 import { useCallback, useEffect, useMemo, useOptimistic, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
+import {
+  AlertTriangleIcon,
+  ClockIcon,
+  MaximizeIcon,
+  MinimizeIcon,
+  PrinterIcon,
+  Undo2Icon,
+} from "lucide-react"
 import { toast } from "sonner"
 import { bumpKot, recallKot } from "@/app/(app)/kds/actions"
 import { createClient } from "@/lib/supabase/client"
-import { KOT_FLOW, type KotStatus } from "@/lib/kds-constants"
+import {
+  kotStatusLabel,
+  ticketAge,
+  KOT_FLOW,
+  KOT_STATUS_STYLE,
+  type KotStatus,
+} from "@/lib/kds-constants"
+import { cn } from "@/lib/utils"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 
 const KDS_SELECT =
@@ -38,17 +54,112 @@ function nextStatus(status: string): KotStatus | null {
   return KOT_FLOW[i + 1]
 }
 
-/** Aging border: green < 5m, amber < 10m, red beyond. */
-function ageStyle(createdAt: string, now: number): string {
-  const mins = (now - new Date(createdAt).getTime()) / 60000
-  if (mins < 5) return "border-green-500/60"
-  if (mins < 10) return "border-amber-500/70"
-  return "border-red-500/80"
-}
+/**
+ * One kitchen ticket. Read across a hot room at a glance, so the table is the
+ * loudest thing on it, quantities lead each line, and the bump button is the
+ * full width of the card — cooks hit it with the side of a hand.
+ */
+function TicketCard({
+  kot,
+  now,
+  pending,
+  onBump,
+}: {
+  kot: Kot
+  now: number
+  pending: boolean
+  onBump: (next: KotStatus) => void
+}) {
+  const next = nextStatus(kot.status)
+  const age = ticketAge(kot.created_at, now)
+  const table = kot.orders?.restaurant_tables?.label
+  const bumpLabel = next === "preparing" ? "Start" : next === "ready" ? "Ready" : "Bump"
 
-function ageLabel(createdAt: string, now: number): string {
-  const mins = Math.floor((now - new Date(createdAt).getTime()) / 60000)
-  return mins <= 0 ? "just now" : `${mins}m`
+  return (
+    <div className={cn("flex flex-col rounded-xl border-2 bg-card p-3", age.border)}>
+      <div className="mb-2 flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="truncate text-xl font-bold leading-tight">
+            {table ? `Table ${table}` : "Takeaway"}
+          </p>
+          <p className="truncate text-sm text-muted-foreground">
+            {kot.kitchen_stations?.name ?? "Expo"}
+          </p>
+        </div>
+        {/* Age carries an icon + minutes, not just a border colour. */}
+        <span className={cn("flex shrink-0 items-center gap-1 text-sm font-semibold", age.text)}>
+          {age.late ? (
+            <AlertTriangleIcon className="size-4" aria-hidden />
+          ) : (
+            <ClockIcon className="size-4" aria-hidden />
+          )}
+          <span className="tabular-nums">{age.label}</span>
+        </span>
+      </div>
+
+      <ul className="mb-3 flex flex-1 flex-col gap-1.5">
+        {kot.kot_items.map((ki) => {
+          const voided = ki.order_items?.is_void
+          return (
+            <li key={ki.id} className="flex items-baseline gap-2">
+              <span
+                className={cn(
+                  "shrink-0 text-base font-bold tabular-nums",
+                  voided ? "text-muted-foreground" : "text-foreground",
+                )}
+              >
+                {ki.qty}×
+              </span>
+              <span className="min-w-0 flex-1">
+                <span
+                  className={cn(
+                    "text-base leading-snug",
+                    voided && "text-muted-foreground line-through decoration-destructive",
+                  )}
+                >
+                  {ki.order_items?.name_snapshot ?? "item"}
+                </span>
+                {voided ? (
+                  <span className="mt-0.5 block">
+                    <Badge className="border-transparent bg-destructive/10 text-destructive no-underline">
+                      Void
+                      {ki.order_items?.void_reason ? ` · ${ki.order_items.void_reason}` : ""}
+                    </Badge>
+                  </span>
+                ) : null}
+              </span>
+            </li>
+          )
+        })}
+      </ul>
+
+      <div className="flex items-center gap-2">
+        <Badge className={cn("border-transparent", KOT_STATUS_STYLE[kot.status] ?? "bg-muted")}>
+          {kotStatusLabel(kot.status)}
+        </Badge>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="ml-auto size-11"
+          aria-label={`Print ticket for ${table ? `table ${table}` : "takeaway"}`}
+          onClick={() => window.open(`/kot/${kot.id}`, "_blank", "noopener")}
+        >
+          <PrinterIcon className="size-4" />
+        </Button>
+        {next ? (
+          <Button
+            className="h-12 flex-1 text-base"
+            disabled={pending}
+            onClick={() => onBump(next)}
+          >
+            {bumpLabel}
+            <span className="sr-only"> {table ? `table ${table}` : "takeaway"} ticket</span>
+          </Button>
+        ) : null}
+      </div>
+    </div>
+  )
 }
 
 export function KdsBoard({
@@ -70,7 +181,14 @@ export function KdsBoard({
   // fresh with a scoped refetch (joins mean a full row merge isn't enough).
   const [liveKots, setLiveKots] = useState<Kot[]>(kots)
   const [served, setServed] = useState<Kot[]>([])
-  useEffect(() => setLiveKots(kots), [kots])
+
+  // Reseed from the server during render, not in an effect — an effect would
+  // paint the stale board for a frame after a refresh.
+  const [seed, setSeed] = useState<Kot[]>(kots)
+  if (seed !== kots) {
+    setSeed(kots)
+    setLiveKots(kots)
+  }
 
   // Restore this screen's saved station after a reboot (URL default = "all").
   useEffect(() => {
@@ -116,11 +234,15 @@ export function KdsBoard({
   )
 
   // Aging tick (1s) + a long safety refetch in case the realtime socket drops.
+  // The first fetch is scheduled rather than run in the effect body: the board
+  // is already seeded from the server, so it doesn't need to block paint (and
+  // it pulls the recall list, which isn't in the props).
   useEffect(() => {
-    void refetch()
+    const initial = setTimeout(() => void refetch(), 0)
     const tick = setInterval(() => setNow(Date.now()), 1000)
     const safety = setInterval(() => void refetch(), 45000)
     return () => {
+      clearTimeout(initial)
       clearInterval(tick)
       clearInterval(safety)
     }
@@ -187,139 +309,96 @@ export function KdsBoard({
       data-full={isFull}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap gap-1">
+        <nav aria-label="Station" className="flex flex-wrap gap-1.5">
           {filters.map((f) => (
             <Button
               key={f.key}
               type="button"
-              size="sm"
-              variant={station === f.key ? "default" : "ghost"}
+              variant={station === f.key ? "default" : "outline"}
+              aria-pressed={station === f.key}
               onClick={() => selectStation(f.key)}
-              className="rounded-full"
+              className="min-h-11 rounded-full"
             >
               {f.label}
             </Button>
           ))}
-        </div>
-        <Button size="sm" variant="outline" onClick={toggleFullscreen}>
+        </nav>
+        <Button variant="outline" className="min-h-11" onClick={toggleFullscreen}>
+          {isFull ? <MinimizeIcon className="size-4" /> : <MaximizeIcon className="size-4" />}
           {isFull ? "Exit fullscreen" : "Fullscreen"}
         </Button>
       </div>
 
       {allDay.length > 0 ? (
-        <div className="flex flex-wrap gap-1.5 rounded-lg border bg-card/50 p-2 text-xs">
-          <span className="font-semibold text-muted-foreground">All day:</span>
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-card/50 p-2.5">
+          <span className="text-sm font-semibold text-muted-foreground">All day</span>
           {allDay.map(([name, qty]) => (
-            <span key={name} className="rounded bg-muted px-1.5 py-0.5">
-              {name} <span className="font-semibold">×{qty}</span>
+            <span key={name} className="rounded-md bg-muted px-2 py-1 text-sm">
+              {name} <span className="font-bold tabular-nums">×{qty}</span>
             </span>
           ))}
         </div>
       ) : null}
 
       {optKots.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No active tickets. All caught up.</p>
+        <div className="rounded-xl border border-dashed p-12 text-center">
+          <p className="text-lg font-semibold">All caught up</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            New tickets land here the moment they&apos;re fired.
+          </p>
+        </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {optKots.map((kot) => {
-            const next = nextStatus(kot.status)
-            return (
-              <div
-                key={kot.id}
-                className={`flex flex-col rounded-lg border-2 bg-card p-3 ${ageStyle(
-                  kot.created_at,
-                  now,
-                )}`}
-              >
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="font-semibold">{kot.kitchen_stations?.name ?? "Expo"}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {kot.orders?.restaurant_tables?.label ?? "—"} · {ageLabel(kot.created_at, now)}
-                  </span>
-                </div>
-                <ul className="mb-3 flex-1 space-y-1 text-sm">
-                  {kot.kot_items.map((ki) => {
-                    const voided = ki.order_items?.is_void
-                    return (
-                      <li
-                        key={ki.id}
-                        className={`flex justify-between ${voided ? "text-muted-foreground line-through decoration-red-500" : ""}`}
-                      >
-                        <span>
-                          {ki.order_items?.name_snapshot ?? "item"}
-                          {voided ? (
-                            <span className="ml-1 rounded bg-red-500/10 px-1 py-0.5 text-[10px] font-semibold text-red-600 no-underline dark:text-red-400">
-                              VOID{ki.order_items?.void_reason ? ` · ${ki.order_items.void_reason}` : ""}
-                            </span>
-                          ) : null}
-                        </span>
-                        <span className="text-muted-foreground">×{ki.qty}</span>
-                      </li>
-                    )
-                  })}
-                </ul>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium capitalize">
-                    {kot.status}
-                  </span>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      title="Print ticket"
-                      onClick={() => window.open(`/kot/${kot.id}`, "_blank", "noopener")}
-                    >
-                      Print
-                    </Button>
-                  {next ? (
-                    <Button
-                      size="sm"
-                      disabled={pending}
-                      onClick={() =>
-                        startTransition(async () => {
-                          applyBump({ id: kot.id, status: next })
-                          const res = await bumpKot(kot.id, next)
-                          if (res && "error" in res) toast.error(res.error)
-                        })
-                      }
-                    >
-                      {next === "preparing" ? "Start" : next === "ready" ? "Ready" : "Bump"}
-                    </Button>
-                  ) : null}
-                  </div>
-                </div>
-              </div>
-            )
-          })}
+          {optKots.map((kot) => (
+            <TicketCard
+              key={kot.id}
+              kot={kot}
+              now={now}
+              pending={pending}
+              onBump={(next) =>
+                startTransition(async () => {
+                  applyBump({ id: kot.id, status: next })
+                  const res = await bumpKot(kot.id, next)
+                  if (res && "error" in res) toast.error(res.error)
+                })
+              }
+            />
+          ))}
         </div>
       )}
 
       {served.length > 0 ? (
-        <div className="mt-2 border-t pt-2">
-          <p className="mb-1.5 text-xs font-semibold text-muted-foreground">
-            Recently served — recall if bumped early
+        <div className="mt-2 border-t pt-3">
+          <p className="mb-2 text-sm font-semibold text-muted-foreground">
+            Recently served — tap to recall one bumped early
           </p>
-          <div className="flex flex-wrap gap-1.5">
-            {served.map((k) => (
-              <Button
-                key={k.id}
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={pending}
-                onClick={() =>
-                  startTransition(async () => {
-                    const res = await recallKot(k.id)
-                    if (res && "error" in res) toast.error(res.error)
-                    else void refetch()
-                  })
-                }
-              >
-                ↩ {k.kitchen_stations?.name ?? "Expo"} ·{" "}
-                {k.orders?.restaurant_tables?.label ?? "—"}
-              </Button>
-            ))}
+          <div className="flex flex-wrap gap-2">
+            {served.map((k) => {
+              const table = k.orders?.restaurant_tables?.label
+              return (
+                <Button
+                  key={k.id}
+                  type="button"
+                  variant="outline"
+                  className="min-h-11"
+                  disabled={pending}
+                  onClick={() =>
+                    startTransition(async () => {
+                      const res = await recallKot(k.id)
+                      if (res && "error" in res) toast.error(res.error)
+                      else void refetch()
+                    })
+                  }
+                >
+                  <Undo2Icon className="size-4" />
+                  {table ? `Table ${table}` : "Takeaway"}
+                  <span className="text-muted-foreground">
+                    {k.kitchen_stations?.name ?? "Expo"}
+                  </span>
+                  <span className="sr-only"> — recall this ticket</span>
+                </Button>
+              )
+            })}
           </div>
         </div>
       ) : null}

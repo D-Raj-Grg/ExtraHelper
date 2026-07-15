@@ -1,7 +1,16 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useMemo, useState, useTransition } from "react"
 import Link from "next/link"
+import {
+  ArrowLeftIcon,
+  MinusIcon,
+  PauseIcon,
+  PlusIcon,
+  ReceiptIcon,
+  SearchIcon,
+  Trash2Icon,
+} from "lucide-react"
 import { toast } from "sonner"
 import {
   addItem,
@@ -14,9 +23,15 @@ import {
 } from "@/app/(app)/pos/actions"
 import { generateBill } from "@/app/(app)/bill/actions"
 import { money } from "@/lib/format"
+import { orderStatusLabel, ORDER_STATUS_STYLE } from "@/lib/order-constants"
+import { cn } from "@/lib/utils"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
+import { PageHeader } from "@/components/page-header"
+import { MenuTile } from "@/components/pos/menu-tile"
 
 type Order = {
   id: string
@@ -43,6 +58,7 @@ type MenuItem = {
   name: string
   base_price_cents: number
   is_86: boolean
+  image_url: string | null
   item_variants: { id: string; name: string; price_delta_cents: number }[]
   item_modifiers: {
     modifier_id: string
@@ -63,6 +79,12 @@ export function PosBuilder({
 }) {
   const [pending, startTransition] = useTransition()
   const [openItemId, setOpenItemId] = useState<string | null>(null)
+  const [query, setQuery] = useState("")
+
+  const visibleMenu = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    return q ? menu.filter((m) => m.name.toLowerCase().includes(q)) : menu
+  }, [menu, query])
 
   const editable = order.status === "draft" || order.status === "placed"
   const live = items.filter((i) => !i.is_void)
@@ -82,73 +104,98 @@ export function PosBuilder({
     run(() => addItem(order.id, m.id))
   }
 
+  const qtyInOrder = (itemId: string, name: string) =>
+    live.filter((l) => l.name_snapshot === name).reduce((s, l) => s + l.qty, 0)
+
+  const destination = order.restaurant_tables?.label
+    ? `Table ${order.restaurant_tables.label}`
+    : "Takeaway"
+
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">
-            {order.restaurant_tables?.label ? `Table ${order.restaurant_tables.label}` : "Takeaway"}
-          </h1>
-          <p className="text-sm capitalize text-muted-foreground">
-            {order.status.replace("_", " ")}
-          </p>
-        </div>
-        <Button variant="ghost" nativeButton={false} render={<Link href="/pos" />}>
-          ← All orders
-        </Button>
-      </div>
+      <PageHeader
+        title={destination}
+        description={`Add items, then fire to the kitchen. ${orderStatusLabel(order.status)}.`}
+        actions={
+          <Button variant="outline" nativeButton={false} render={<Link href="/pos" />}>
+            <ArrowLeftIcon className="size-4" /> All orders
+          </Button>
+        }
+      />
 
-      <div className="grid gap-6 md:grid-cols-[1fr_20rem]">
+      <div className="grid gap-6 lg:grid-cols-[1fr_22rem] lg:items-start">
         {/* Menu grid */}
-        <section>
-          <h2 className="mb-2 text-sm font-semibold text-muted-foreground">Add items</h2>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {menu.map((m) => {
-              const hasOptions = m.item_variants.length > 0 || m.item_modifiers.length > 0
-              const disabled = !editable || m.is_86 || pending
-              return (
-                <div key={m.id} className="flex flex-col">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={disabled}
-                    onClick={() =>
-                      hasOptions
-                        ? setOpenItemId((id) => (id === m.id ? null : m.id))
-                        : quickAdd(m)
-                    }
-                    className="flex h-auto flex-col items-start p-3 text-left"
-                  >
-                    <span className="text-sm font-medium">{m.name}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {money(m.base_price_cents, currency)}
-                      {m.is_86 ? " · 86" : ""}
-                      {hasOptions ? " · options" : ""}
-                    </span>
-                  </Button>
-                  {openItemId === m.id && editable ? (
-                    <ItemOptions
-                      item={m}
-                      currency={currency}
-                      pending={pending}
-                      onCancel={() => setOpenItemId(null)}
-                      onAdd={(opts) => {
-                        setOpenItemId(null)
-                        run(() => addItem(order.id, m.id, opts))
-                      }}
-                    />
-                  ) : null}
-                </div>
-              )
-            })}
+        <section className="min-w-0">
+          <div className="relative mb-4">
+            <SearchIcon className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Label htmlFor="builder-search" className="sr-only">
+              Search the menu
+            </Label>
+            <Input
+              id="builder-search"
+              className="h-11 pl-9"
+              placeholder="Search the menu…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
           </div>
+
+          {visibleMenu.length === 0 ? (
+            <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+              Nothing matches “{query}”.
+            </p>
+          ) : (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+              {visibleMenu.map((m) => {
+                const hasOptions = m.item_variants.length > 0 || m.item_modifiers.length > 0
+                return (
+                  <div key={m.id} className="flex min-w-0 flex-col">
+                    <MenuTile
+                      item={m}
+                      qty={qtyInOrder(m.id, m.name)}
+                      currency={currency}
+                      hasOptions={hasOptions}
+                      expanded={openItemId === m.id}
+                      disabled={!editable || pending}
+                      onAdd={() =>
+                        hasOptions
+                          ? setOpenItemId((id) => (id === m.id ? null : m.id))
+                          : quickAdd(m)
+                      }
+                    />
+                    {openItemId === m.id && editable ? (
+                      <ItemOptions
+                        item={m}
+                        currency={currency}
+                        pending={pending}
+                        onCancel={() => setOpenItemId(null)}
+                        onAdd={(opts) => {
+                          setOpenItemId(null)
+                          run(() => addItem(order.id, m.id, opts))
+                        }}
+                      />
+                    ) : null}
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </section>
 
         {/* Running order */}
-        <section className="flex flex-col rounded-lg border p-4">
-          <h2 className="mb-2 text-sm font-semibold">Order</h2>
+        <section className="flex flex-col rounded-xl border bg-card p-4 lg:sticky lg:top-6">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 className="font-semibold">Order</h2>
+            <Badge
+              className={cn("border-transparent", ORDER_STATUS_STYLE[order.status] ?? "bg-muted")}
+            >
+              {orderStatusLabel(order.status)}
+            </Badge>
+          </div>
           {live.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No items yet.</p>
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              Tap a dish to start this order.
+            </p>
           ) : (
             <ul className="mb-3 space-y-3">
               {live.map((l) => (
@@ -168,18 +215,19 @@ export function PosBuilder({
           )}
           <div className="mt-auto border-t pt-3">
             {heldCount > 0 ? (
-              <p className="mb-2 text-xs text-amber-600 dark:text-amber-500">
+              <p className="mb-2 flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400">
+                <PauseIcon className="size-3.5 shrink-0" />
                 {heldCount} item{heldCount === 1 ? "" : "s"} held — won&apos;t fire
               </p>
             ) : null}
-            <div className="mb-3 flex justify-between font-semibold">
-              <span>Subtotal</span>
-              <span>{money(total, currency)}</span>
+            <div className="mb-3 flex items-baseline justify-between">
+              <span className="text-sm text-muted-foreground">Subtotal</span>
+              <span className="text-xl font-bold tabular-nums">{money(total, currency)}</span>
             </div>
             {editable ? (
               <>
                 <Button
-                  className="w-full"
+                  className="h-12 w-full text-base"
                   disabled={pending || live.length === 0 || allHeld}
                   onClick={() =>
                     startTransition(async () => {
@@ -211,19 +259,21 @@ export function PosBuilder({
                 {order.status === "closed" ? "Closed · paid" : "Billed"}
               </p>
             ) : (
-              <div className="space-y-2">
-                <p className="text-center text-sm text-muted-foreground">
-                  Fired · {order.status.replace("_", " ")}
-                </p>
-                <Button
-                  className="w-full"
-                  variant="secondary"
-                  disabled={pending}
-                  onClick={() => startTransition(async () => { await generateBill(order.id) })}
-                >
-                  Generate bill
-                </Button>
-              </div>
+              <Button
+                className="h-12 w-full text-base"
+                disabled={pending}
+                onClick={() =>
+                  startTransition(async () => {
+                    // Was fire-and-forget: a failed bill left the cashier
+                    // tapping a button that looked like it did nothing.
+                    const res = await generateBill(order.id)
+                    if (res && "error" in res) toast.error(res.error)
+                  })
+                }
+              >
+                <ReceiptIcon className="size-4" />
+                {pending ? "Opening bill…" : "Generate bill"}
+              </Button>
             )}
           </div>
         </section>
@@ -439,19 +489,19 @@ function OrderLine({
               {line.qty}× {line.name_snapshot}
             </span>
             {line.is_held ? (
-              <span className="rounded bg-amber-500/15 px-1 text-[10px] font-semibold uppercase text-amber-600 dark:text-amber-500">
+              <Badge className="border-transparent bg-amber-500/10 text-amber-700 dark:text-amber-400">
                 Held
-              </span>
+              </Badge>
             ) : null}
             {line.course != null ? (
-              <span className="rounded bg-muted px-1 text-[10px] text-muted-foreground">
+              <Badge variant="outline" title={`Course ${line.course}`}>
                 C{line.course}
-              </span>
+              </Badge>
             ) : null}
             {line.seat != null ? (
-              <span className="rounded bg-muted px-1 text-[10px] text-muted-foreground">
+              <Badge variant="outline" title={`Seat ${line.seat}`}>
                 S{line.seat}
-              </span>
+              </Badge>
             ) : null}
           </div>
           {line.order_item_modifiers.map((mod) => (
@@ -464,33 +514,35 @@ function OrderLine({
             <div className="pl-3 text-xs italic text-muted-foreground">{line.notes}</div>
           ) : null}
         </div>
-        <span className="whitespace-nowrap text-muted-foreground">
+        <span className="whitespace-nowrap tabular-nums text-muted-foreground">
           {money(line.unit_price_cents * line.qty, currency)}
         </span>
       </div>
 
       {editable ? (
-        <div className="mt-1 flex flex-wrap items-center gap-1">
+        <div className="mt-2 flex flex-wrap items-center gap-1">
           <Button
             type="button"
             variant="outline"
-            size="icon-sm"
+            size="icon"
+            className="size-11"
             disabled={pending || line.qty <= 1}
             onClick={() => onQty(line.qty - 1)}
-            aria-label="Decrease quantity"
+            aria-label={`One less ${line.name_snapshot}`}
           >
-            −
+            <MinusIcon className="size-4" />
           </Button>
-          <span className="w-5 text-center text-xs tabular-nums">{line.qty}</span>
+          <span className="w-6 text-center text-sm font-semibold tabular-nums">{line.qty}</span>
           <Button
             type="button"
             variant="outline"
-            size="icon-sm"
+            size="icon"
+            className="size-11"
             disabled={pending}
             onClick={() => onQty(line.qty + 1)}
-            aria-label="Increase quantity"
+            aria-label={`One more ${line.name_snapshot}`}
           >
-            +
+            <PlusIcon className="size-4" />
           </Button>
           <Button
             type="button"
@@ -498,9 +550,10 @@ function OrderLine({
             size="sm"
             disabled={pending}
             onClick={onHold}
-            className="text-xs"
+            className="ml-auto"
           >
             {line.is_held ? "Release" : "Hold"}
+            <span className="sr-only"> {line.name_snapshot}</span>
           </Button>
           <Button
             type="button"
@@ -508,21 +561,23 @@ function OrderLine({
             size="sm"
             disabled={pending}
             onClick={() => setVoiding((v) => !v)}
-            className="text-xs text-destructive"
+            aria-expanded={voiding}
+            className="text-destructive"
           >
             Void
+            <span className="sr-only"> {line.name_snapshot}</span>
           </Button>
           {isDraft ? (
             <Button
               type="button"
               variant="ghost"
               size="icon-sm"
-              aria-label="Remove item"
+              aria-label={`Remove ${line.name_snapshot}`}
               disabled={pending}
               onClick={onRemove}
               className="text-destructive"
             >
-              ✕
+              <Trash2Icon className="size-4" />
             </Button>
           ) : null}
         </div>

@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server"
 import { requirePermission } from "@/lib/supabase/guards"
 import { PageShell, PageHeader } from "@/components/page-header"
 import { PosActiveOrders } from "@/components/pos-active-orders"
-import { QuickOrder } from "@/components/quick-order"
+import { QuickOrder } from "@/components/pos/quick-order"
 
 export const dynamic = "force-dynamic"
 
@@ -18,7 +18,7 @@ export default async function PosPage() {
       .order("label"),
     supabase
       .from("menu_items")
-      .select("id, name, base_price_cents, is_86")
+      .select("id, name, base_price_cents, is_86, image_url")
       .eq("tenant_id", tenant.tenantId)
       .eq("is_active", true)
       .order("name"),
@@ -40,8 +40,8 @@ export default async function PosPage() {
   return (
     <PageShell>
       <PageHeader
-        title={<>{tenant.name} · POS</>}
-        description="Build an order (works offline — queues and syncs on reconnect)."
+        title="POS"
+        description={`Build an order for ${tenant.name}. Works offline — orders queue and sync on reconnect.`}
       />
 
       <section className="mb-8">

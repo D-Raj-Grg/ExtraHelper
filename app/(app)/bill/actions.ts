@@ -10,13 +10,20 @@ import { getGateway } from "@/lib/integrations"
 export type BillState = { error: string } | { ok: true } | undefined
 
 /** Generate (or reuse) the bill for an order, then open it. */
-export async function generateBill(orderId: string): Promise<void> {
+/**
+ * Open (or reuse) the bill for a fired order and go to it. Returns an error
+ * instead of the old silent redirect back to the order: bouncing the cashier
+ * to the page they were already on read as the button being broken.
+ */
+export async function generateBill(orderId: string): Promise<{ error: string } | undefined> {
   await requirePermission("checkout.view")
   const supabase = await createClient()
   const { data, error } = await supabase.rpc("create_bill_for_order", {
     _order_id: orderId,
   })
-  if (error || !data) redirect(`/pos/${orderId}`)
+  if (error) return { error: error.message }
+  if (!data) return { error: "Couldn't open a bill for this order." }
+  // Throws NEXT_REDIRECT — must stay outside any try/catch.
   redirect(`/bill/${data}`)
 }
 

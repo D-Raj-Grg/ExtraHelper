@@ -3,6 +3,15 @@
 import { useRef, useState, useTransition } from "react"
 import Link from "next/link"
 import {
+  ArrowLeftIcon,
+  BanknoteIcon,
+  CheckCircle2Icon,
+  CreditCardIcon,
+  GlobeIcon,
+  ReceiptIcon,
+  WifiOffIcon,
+} from "lucide-react"
+import {
   addOrderToBill,
   applyCoupon,
   applyDiscount,
@@ -13,10 +22,31 @@ import {
   voidLine,
 } from "@/app/(app)/bill/actions"
 import { money } from "@/lib/format"
+import {
+  billStatusLabel,
+  orderStatusLabel,
+  BILL_STATUS_STYLE,
+  ORDER_STATUS_STYLE,
+} from "@/lib/order-constants"
+import { cn } from "@/lib/utils"
 import { BillSplit } from "@/components/bill-split"
 import { BillLoyalty } from "@/components/bill-loyalty"
 import { useOffline } from "@/components/offline-sync-provider"
+import { PageHeader } from "@/components/page-header"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
@@ -39,6 +69,27 @@ type Item = {
   total_cents: number
 }
 type Payment = { id: string; method: string; amount_cents: number }
+
+/** One money line in the totals block. Module scope — see CLAUDE.md. */
+function Row({
+  label,
+  cents,
+  currency,
+  bold,
+}: {
+  label: string
+  cents: number
+  currency: string
+  bold?: boolean
+}) {
+  return (
+    <div className="flex items-baseline justify-between gap-4">
+      <span className={bold ? "font-semibold" : "text-muted-foreground"}>{label}</span>
+      <span className={cn("tabular-nums", bold && "font-semibold")}>{money(cents, currency)}</span>
+    </div>
+  )
+}
+
 type MergeableOrder = {
   id: string
   order_type: string
@@ -238,70 +289,75 @@ export function BillView({
     })
   }
 
-  const Row = ({ label, cents, bold }: { label: string; cents: number; bold?: boolean }) => (
-    <div className={`flex justify-between ${bold ? "font-semibold" : ""}`}>
-      <span>{label}</span>
-      <span>{money(cents, currency)}</span>
-    </div>
-  )
+  const destination = bill.restaurant_tables?.label
+    ? `Table ${bill.restaurant_tables.label}`
+    : "Takeaway"
 
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">
-            Bill · {bill.restaurant_tables?.label ? `Table ${bill.restaurant_tables.label}` : "Takeaway"}
-          </h1>
-          <span
-            className={`text-sm font-medium capitalize ${
-              settled ? "text-green-600 dark:text-green-400" : "text-muted-foreground"
-            }`}
-          >
-            {bill.status}
-          </span>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" nativeButton={false} render={<Link href={`/receipt/${bill.id}`} />}>
-            Receipt
-          </Button>
-          <Button variant="ghost" nativeButton={false} render={<Link href="/pos" />}>
-            ← POS
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title={`Bill · ${destination}`}
+        description={
+          settled ? "Settled. Print or email the receipt." : "Take payment, or adjust the bill first."
+        }
+        actions={
+          <>
+            <Badge
+              className={cn("border-transparent", BILL_STATUS_STYLE[bill.status] ?? "bg-muted")}
+            >
+              {billStatusLabel(bill.status)}
+            </Badge>
+            <Button
+              variant="outline"
+              nativeButton={false}
+              render={<Link href={`/receipt/${bill.id}`} />}
+            >
+              <ReceiptIcon className="size-4" /> Receipt
+            </Button>
+            <Button variant="ghost" nativeButton={false} render={<Link href="/pos" />}>
+              <ArrowLeftIcon className="size-4" /> POS
+            </Button>
+          </>
+        }
+      />
 
-      <div className="rounded-lg border p-4">
-        <ul className="mb-3 space-y-1 text-sm">
+      <div className="rounded-xl border bg-card p-4">
+        <ul className="mb-3 flex flex-col gap-2 text-sm">
           {items.map((it) => (
             <li key={it.id}>
               <div className="flex items-center justify-between gap-2">
-                <span className="flex-1">
-                  {it.qty}× {it.description}
+                <span className="min-w-0 flex-1">
+                  <span className="tabular-nums">{it.qty}×</span> {it.description}
                 </span>
-                <span className="text-muted-foreground">{money(it.total_cents, currency)}</span>
+                <span className="tabular-nums text-muted-foreground">
+                  {money(it.total_cents, currency)}
+                </span>
                 {canDiscount && !settled && it.order_item_id ? (
-                  <>
+                  <span className="flex shrink-0 gap-1">
                     <Button
                       type="button"
-                      variant="link"
+                      variant="ghost"
                       size="sm"
                       disabled={pending}
+                      aria-expanded={discItemId === it.id}
                       onClick={() => setDiscItemId(discItemId === it.id ? null : it.id)}
-                      className="h-auto p-0 text-xs text-blue-600 dark:text-blue-400"
                     >
-                      disc
+                      Discount
+                      <span className="sr-only"> {it.description}</span>
                     </Button>
                     <Button
                       type="button"
-                      variant="link"
+                      variant="ghost"
                       size="sm"
                       disabled={pending}
+                      aria-expanded={voidingId === it.id}
                       onClick={() => setVoidingId(voidingId === it.id ? null : it.id)}
-                      className="h-auto p-0 text-xs text-destructive"
+                      className="text-destructive"
                     >
-                      void
+                      Void
+                      <span className="sr-only"> {it.description}</span>
                     </Button>
-                  </>
+                  </span>
                 ) : null}
               </div>
               {discItemId === it.id && it.order_item_id ? (
@@ -358,45 +414,54 @@ export function BillView({
             </li>
           ))}
         </ul>
-        <div className="space-y-1 border-t pt-3 text-sm">
-          <Row label="Subtotal" cents={bill.subtotal_cents} />
+        <div className="flex flex-col gap-1 border-t pt-3 text-sm">
+          <Row currency={currency} label="Subtotal" cents={bill.subtotal_cents} />
           {bill.service_charge_cents > 0 ? (
-            <Row label="Service + packaging" cents={bill.service_charge_cents} />
+            <Row currency={currency} label="Service + packaging" cents={bill.service_charge_cents} />
           ) : null}
-          {bill.tax_cents > 0 ? <Row label="Tax" cents={bill.tax_cents} /> : null}
+          {bill.tax_cents > 0 ? <Row currency={currency} label="Tax" cents={bill.tax_cents} /> : null}
           {bill.discount_cents > 0 ? (
-            <Row label="Discount" cents={-bill.discount_cents} />
+            <Row currency={currency} label="Discount" cents={-bill.discount_cents} />
           ) : null}
           <div className="border-t pt-2">
-            <Row label="Total" cents={bill.total_cents} bold />
+            <Row currency={currency} label="Total" cents={bill.total_cents} bold />
           </div>
-          {paidCents > 0 ? <Row label="Paid" cents={paidCents} /> : null}
-          {!settled ? <Row label="Due" cents={due} bold /> : null}
+          {paidCents > 0 ? <Row currency={currency} label="Paid" cents={paidCents} /> : null}
+          {/* Due is the number the cashier acts on — it gets the weight. */}
+          {!settled ? (
+            <div className="mt-1 flex items-baseline justify-between gap-4 border-t pt-2">
+              <span className="font-semibold">Due</span>
+              <span className="text-2xl font-bold tabular-nums">{money(due, currency)}</span>
+            </div>
+          ) : null}
         </div>
       </div>
 
       {payments.length > 0 ? (
-        <div className="mt-4 text-sm text-muted-foreground">
+        <div className="mt-4 flex flex-col gap-1 text-sm">
           {payments.map((p) => (
-            <div key={p.id} className="flex justify-between">
-              <span className="capitalize">{p.method}</span>
-              <span>{money(p.amount_cents, currency)}</span>
+            <div key={p.id} className="flex justify-between gap-4">
+              <span className="capitalize text-muted-foreground">{p.method}</span>
+              <span className="tabular-nums">{money(p.amount_cents, currency)}</span>
             </div>
           ))}
         </div>
       ) : null}
 
       {!settled ? (
-        <div className="mt-6 rounded-lg border border-dashed p-3">
-          <p className="mb-2 text-sm font-medium">Coupon</p>
-          <div className="flex flex-wrap items-center gap-2">
-            <Input
-              value={couponCode}
-              onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-              placeholder="CODE"
-              className="max-w-40 uppercase"
-            />
-            <Button size="sm" variant="secondary" disabled={pending} onClick={coupon}>
+        <div className="mt-6 rounded-xl border p-4">
+          <div className="flex flex-wrap items-end gap-2">
+            <Field className="max-w-40">
+              <FieldLabel htmlFor="coupon-code">Coupon</FieldLabel>
+              <Input
+                id="coupon-code"
+                value={couponCode}
+                onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                placeholder="CODE"
+                className="uppercase"
+              />
+            </Field>
+            <Button variant="secondary" disabled={pending} onClick={coupon}>
               Apply coupon
             </Button>
           </div>
@@ -404,19 +469,34 @@ export function BillView({
       ) : null}
 
       {!settled && mergeableOrders.length > 0 ? (
-        <div className="mt-6 rounded-lg border border-dashed p-3">
-          <p className="mb-2 text-sm font-medium">Merge another order onto this bill</p>
-          <div className="flex flex-col gap-1.5">
+        <div className="mt-6 rounded-xl border p-4">
+          <p className="text-sm font-semibold">Merge another order onto this bill</p>
+          <p className="mb-3 text-sm text-muted-foreground">
+            Combines both tabs into this one total.
+          </p>
+          <div className="flex flex-col gap-2">
             {mergeableOrders.map((o) => (
               <div key={o.id} className="flex items-center justify-between gap-2 text-sm">
-                <span>
+                <span className="flex items-center gap-2">
                   {o.restaurant_tables?.label ? `Table ${o.restaurant_tables.label}` : o.order_type}
-                  <span className="ml-2 text-xs capitalize text-muted-foreground">
-                    {o.status.replace("_", " ")}
-                  </span>
+                  <Badge
+                    className={cn(
+                      "border-transparent",
+                      ORDER_STATUS_STYLE[o.status] ?? "bg-muted",
+                    )}
+                  >
+                    {orderStatusLabel(o.status)}
+                  </Badge>
                 </span>
                 <Button size="sm" variant="secondary" disabled={pending} onClick={() => mergeOrder(o.id)}>
                   Add to bill
+                  <span className="sr-only">
+                    {" "}
+                    from{" "}
+                    {o.restaurant_tables?.label
+                      ? `Table ${o.restaurant_tables.label}`
+                      : o.order_type}
+                  </span>
                 </Button>
               </div>
             ))}
@@ -425,37 +505,53 @@ export function BillView({
       ) : null}
 
       {canDiscount && !settled ? (
-        <div className="mt-6 rounded-lg border border-dashed p-3">
-          <p className="mb-2 text-sm font-medium">Discount (manager)</p>
-          <div className="flex flex-wrap items-center gap-2">
-            <Select
-              value={discType}
-              onValueChange={(v) => setDiscType(v as "percent" | "flat")}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="percent">%</SelectItem>
-                <SelectItem value="flat">Flat</SelectItem>
-              </SelectContent>
-            </Select>
-            <Input
-              type="number"
-              min={0}
-              step="0.01"
-              value={discValue}
-              onChange={(e) => setDiscValue(e.target.value)}
-              placeholder={discType === "percent" ? "10" : "5.00"}
-              className="max-w-24"
-            />
-            <Input
-              value={discReason}
-              onChange={(e) => setDiscReason(e.target.value)}
-              placeholder="Reason"
-              className="max-w-40"
-            />
-            <Button size="sm" variant="secondary" disabled={pending} onClick={discount}>
+        <div className="mt-6 rounded-xl border p-4">
+          <p className="text-sm font-semibold">Discount the whole bill</p>
+          <p className="mb-3 text-sm text-muted-foreground">
+            Manager only. Recorded against your account with the reason.
+          </p>
+          <div className="flex flex-wrap items-end gap-2">
+            <Field className="w-32">
+              <FieldLabel htmlFor="disc-type">Type</FieldLabel>
+              <Select
+                value={discType}
+                onValueChange={(v) => setDiscType(v as "percent" | "flat")}
+              >
+                <SelectTrigger id="disc-type" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="percent">Percent</SelectItem>
+                  <SelectItem value="flat">Flat amount</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field className="w-24">
+              <FieldLabel htmlFor="disc-value">
+                {discType === "percent" ? "Percent" : currency}
+              </FieldLabel>
+              <Input
+                id="disc-value"
+                type="number"
+                inputMode="decimal"
+                min={0}
+                step="0.01"
+                value={discValue}
+                onChange={(e) => setDiscValue(e.target.value)}
+                placeholder={discType === "percent" ? "10" : "5.00"}
+                className="tabular-nums"
+              />
+            </Field>
+            <Field className="min-w-40 flex-1">
+              <FieldLabel htmlFor="disc-reason">Reason</FieldLabel>
+              <Input
+                id="disc-reason"
+                value={discReason}
+                onChange={(e) => setDiscReason(e.target.value)}
+                placeholder="Why this discount applies"
+              />
+            </Field>
+            <Button variant="secondary" disabled={pending} onClick={discount}>
               Apply
             </Button>
           </div>
@@ -463,34 +559,59 @@ export function BillView({
       ) : null}
 
       {!settled ? (
-        <div className="mt-6 space-y-3">
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Amount</span>
-            <Input
-              type="number"
-              min={0}
-              step="0.01"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              className="max-w-32"
-            />
+        <div className="mt-6 flex flex-col gap-3">
+          <div className="rounded-xl border bg-card p-4">
+            <Field className="mb-3 max-w-40">
+              <FieldLabel htmlFor="pay-amount">Amount ({currency})</FieldLabel>
+              <Input
+                id="pay-amount"
+                type="number"
+                inputMode="decimal"
+                min={0}
+                step="0.01"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                className="h-12 text-lg font-semibold tabular-nums"
+              />
+            </Field>
+            <div className="grid gap-2 sm:grid-cols-3">
+              <Button className="h-12 text-base" disabled={pending} onClick={() => pay("cash")}>
+                <BanknoteIcon className="size-4" />
+                {pending ? "Taking…" : "Cash"}
+              </Button>
+              <Button
+                className="h-12 text-base"
+                variant="secondary"
+                disabled={pending}
+                onClick={() => pay("card")}
+              >
+                <CreditCardIcon className="size-4" />
+                {pending ? "Taking…" : "Card"}
+              </Button>
+              <Button
+                className="h-12 text-base"
+                variant="outline"
+                disabled={pending || !online}
+                onClick={payOnline}
+                title={online ? undefined : "Card (online) needs a connection"}
+              >
+                <GlobeIcon className="size-4" />
+                {pending ? "Taking…" : "Card (online)"}
+              </Button>
+            </div>
+            {!online ? (
+              <p className="mt-2 flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400">
+                <WifiOffIcon className="size-3.5 shrink-0" />
+                Offline — cash and card queue and sync on reconnect. Card (online) needs a
+                connection.
+              </p>
+            ) : null}
+            {error ? (
+              <p className="mt-2 text-sm text-destructive" role="alert">
+                {error}
+              </p>
+            ) : null}
           </div>
-          <div className="flex gap-2">
-            <Button className="flex-1" disabled={pending} onClick={() => pay("cash")}>
-              {pending ? "…" : "Cash"}
-            </Button>
-            <Button className="flex-1" variant="secondary" disabled={pending} onClick={() => pay("card")}>
-              {pending ? "…" : "Card"}
-            </Button>
-            <Button className="flex-1" variant="outline" disabled={pending} onClick={payOnline}>
-              {pending ? "…" : "Card (online)"}
-            </Button>
-          </div>
-          {error ? (
-            <p className="text-sm text-destructive" role="alert">
-              {error}
-            </p>
-          ) : null}
           <BillLoyalty
             billId={bill.id}
             currency={currency}
@@ -508,32 +629,56 @@ export function BillView({
           />
         </div>
       ) : (
-        <div className="mt-6 space-y-3">
-          <p className="text-center font-medium text-green-600 dark:text-green-400">
+        <div className="mt-6 flex flex-col gap-3">
+          <p className="flex items-center justify-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3 font-medium text-emerald-700 dark:text-emerald-400">
+            <CheckCircle2Icon className="size-4 shrink-0" />
             Paid in full · order closed
           </p>
+          <Button
+            className="h-12 text-base"
+            nativeButton={false}
+            render={<Link href={`/receipt/${bill.id}`} />}
+          >
+            <ReceiptIcon className="size-4" /> Print or email the receipt
+          </Button>
+
           {canDiscount ? (
-            <div className="rounded-lg border border-dashed p-3">
-              <p className="mb-2 text-sm font-medium">Refund (manager)</p>
-              <div className="flex flex-wrap items-center gap-2">
-                <Input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={refundAmount}
-                  onChange={(e) => setRefundAmount(e.target.value)}
-                  placeholder={(bill.total_cents / 100).toFixed(2)}
-                  className="max-w-24"
+            <div className="rounded-xl border p-4">
+              <p className="text-sm font-semibold">Refund</p>
+              <p className="mb-3 text-sm text-muted-foreground">
+                Manager only. Refunds are audited against your account.
+              </p>
+              <div className="flex flex-wrap items-end gap-2">
+                <Field className="w-28">
+                  <FieldLabel htmlFor="refund-amount">Amount ({currency})</FieldLabel>
+                  <Input
+                    id="refund-amount"
+                    type="number"
+                    inputMode="decimal"
+                    min={0}
+                    step="0.01"
+                    value={refundAmount}
+                    onChange={(e) => setRefundAmount(e.target.value)}
+                    placeholder={(bill.total_cents / 100).toFixed(2)}
+                    className="tabular-nums"
+                  />
+                </Field>
+                <Field className="min-w-40 flex-1">
+                  <FieldLabel htmlFor="refund-reason">Reason</FieldLabel>
+                  <Input
+                    id="refund-reason"
+                    value={refundReason}
+                    onChange={(e) => setRefundReason(e.target.value)}
+                    placeholder="Why this is being refunded"
+                  />
+                </Field>
+                <RefundButton
+                  currency={currency}
+                  amount={refundAmount}
+                  reason={refundReason}
+                  pending={pending}
+                  onConfirm={doRefund}
                 />
-                <Input
-                  value={refundReason}
-                  onChange={(e) => setRefundReason(e.target.value)}
-                  placeholder="Reason"
-                  className="max-w-40"
-                />
-                <Button size="sm" variant="destructive" disabled={pending} onClick={doRefund}>
-                  Refund
-                </Button>
               </div>
               {error ? (
                 <p className="mt-2 text-sm text-destructive" role="alert">
@@ -545,5 +690,60 @@ export function BillView({
         </div>
       )}
     </div>
+  )
+}
+
+/**
+ * Refunds move real money out and can't be undone, so they confirm and state
+ * the amount back. Previously a single click on a small red button.
+ */
+function RefundButton({
+  currency,
+  amount,
+  reason,
+  pending,
+  onConfirm,
+}: {
+  currency: string
+  amount: string
+  reason: string
+  pending: boolean
+  onConfirm: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const cents = Math.round(Number(amount) * 100)
+  const valid = Number.isFinite(cents) && cents > 0 && reason.trim().length > 0
+
+  return (
+    <AlertDialog open={open} onOpenChange={setOpen}>
+      <AlertDialogTrigger
+        render={
+          <Button variant="destructive" disabled={pending || !valid}>
+            Refund
+          </Button>
+        }
+      />
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Refund {money(cents || 0, currency)}?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This returns {money(cents || 0, currency)} to the customer and is recorded against your
+            account with the reason “{reason.trim()}”. It can&apos;t be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            variant="destructive"
+            onClick={() => {
+              setOpen(false)
+              onConfirm()
+            }}
+          >
+            Refund {money(cents || 0, currency)}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   )
 }

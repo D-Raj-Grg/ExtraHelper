@@ -1,7 +1,15 @@
 import localforage from "localforage"
 
 // Caches the menu + tables so the POS order composer works offline (warm tab).
-export type CachedMenuItem = { id: string; name: string; base_price_cents: number; is_86: boolean }
+// `image_url` is optional: entries cached before photos shipped simply fall back
+// to the monogram placeholder rather than breaking the tile.
+export type CachedMenuItem = {
+  id: string
+  name: string
+  base_price_cents: number
+  is_86: boolean
+  image_url?: string | null
+}
 export type CachedTable = { id: string; label: string; state: string }
 export type MenuCache = { items: CachedMenuItem[]; tables: CachedTable[]; savedAt: number }
 
