@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 import { requirePermission } from "@/lib/supabase/guards"
-import { SettingsForm } from "@/components/settings-form"
+import { SettingsManager } from "@/components/settings/settings-manager"
 import { PageShell, PageHeader } from "@/components/page-header"
 
 export default async function SettingsPage() {
@@ -38,12 +38,12 @@ export default async function SettingsPage() {
   }
 
   return (
-    <PageShell width="narrow">
+    <PageShell width="standard">
       <PageHeader
-        title={<>{tenant.name} · Settings</>}
-        description="Currency, timezone and charges. Region-configurable — nothing hardcoded."
+        title="Settings"
+        description={`How ${tenant.name} handles money, tax, receipts and locations. Region-configurable — nothing hardcoded.`}
       />
-      <SettingsForm
+      <SettingsManager
         restaurantName={tenant.name}
         currency={settings?.currency ?? "USD"}
         timezone={settings?.timezone ?? "UTC"}

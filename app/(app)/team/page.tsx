@@ -1,7 +1,8 @@
 import { createClient } from "@/lib/supabase/server"
 import { requirePermission } from "@/lib/supabase/guards"
 import { PageShell, PageHeader } from "@/components/page-header"
-import { TeamManager } from "@/components/team-manager"
+import { TeamManager } from "@/components/team/team-manager"
+import type { Member, Permission } from "@/components/team/types"
 
 export const dynamic = "force-dynamic"
 
@@ -59,8 +60,8 @@ export default async function TeamPage() {
       <PageHeader title="Users & Roles" description="Manage staff, roles and permissions." />
       <TeamManager
         roles={rolesOut}
-        permissions={(perms ?? []) as never}
-        members={(members ?? []) as never}
+        permissions={(perms ?? []) as Permission[]}
+        members={(members ?? []) as Member[]}
         canEdit={canEditData === true}
       />
     </PageShell>
