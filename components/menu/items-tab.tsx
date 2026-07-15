@@ -32,7 +32,14 @@ export function ItemsTab({
   const [categoryFilter, setCategoryFilter] = useState("all")
   const [soldOutOnly, setSoldOutOnly] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
-  const [editing, setEditing] = useState<Item | null>(null)
+
+  // Track the open item by id, not by value. Holding the object itself froze a
+  // copy taken at click time, so anything the editor added (a variant, an
+  // add-on, a station route) only appeared after closing and reopening the
+  // sheet. Deriving from `items` means the server action's revalidate flows
+  // straight through.
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const editing = editingId === null ? null : (items.find((i) => i.id === editingId) ?? null)
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -131,7 +138,7 @@ export function ItemsTab({
               <h3 className="mb-2 text-sm font-medium text-muted-foreground">{g.name}</h3>
               <div className="divide-y overflow-hidden rounded-lg border">
                 {g.list.map((item) => (
-                  <ItemRow key={item.id} item={item} currency={currency} onEdit={() => setEditing(item)} />
+                  <ItemRow key={item.id} item={item} currency={currency} onEdit={() => setEditingId(item.id)} />
                 ))}
               </div>
             </div>
@@ -144,7 +151,7 @@ export function ItemsTab({
         item={editing}
         open={editing !== null}
         onOpenChange={(o) => {
-          if (!o) setEditing(null)
+          if (!o) setEditingId(null)
         }}
         categories={categories}
         stations={stations}

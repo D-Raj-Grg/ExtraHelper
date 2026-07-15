@@ -1,6 +1,7 @@
 "use client"
 
 import { useActionState, useEffect, useState, useTransition } from "react"
+import { Trash2Icon, XIcon } from "lucide-react"
 import {
   addAvailability,
   addItemStationRoute,
@@ -22,6 +23,7 @@ import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Field, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
   Sheet,
   SheetContent,
@@ -33,6 +35,9 @@ import { DAY_NAMES, dayLabel, FormError, InlineError, type Category, type Item, 
 
 const textareaClass =
   "border-input dark:bg-input/30 min-h-16 w-full rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
+
+/** Matches the server-side cap in uploadItemImage. */
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024
 
 // ============================================================================
 // Add-item sheet — create form (opened from the "+ Add item" button)
@@ -58,7 +63,7 @@ export function AddItemSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full gap-0 sm:max-w-lg">
+      <SheetContent size="lg" className="w-full gap-0">
         <SheetHeader>
           <SheetTitle>Add menu item</SheetTitle>
           <SheetDescription>
@@ -141,7 +146,9 @@ export function ItemEditorSheet({
 }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full gap-0 sm:max-w-lg">
+      {/* Half the viewport — the editor holds tables, which wrapped badly in
+          the default narrow sheet. */}
+      <SheetContent size="half" className="w-full gap-0">
         {item ? (
           <>
             <SheetHeader>
@@ -208,6 +215,7 @@ function ItemEditorBody({
 
   // Image upload form
   const [imgState, imgAction, imgPending] = useActionState<MenuState, FormData>(uploadItemImage, undefined)
+  const [imgErr, setImgErr] = useState<string | null>(null)
 
   const linkedModIds = new Set(item.item_modifiers.map((m) => m.modifier_id))
   const routedStationIds = new Set(item.item_station_routes.map((r) => r.station_id))
@@ -273,24 +281,56 @@ function ItemEditorBody({
       {/* Image ----------------------------------------------------------- */}
       <FieldSet>
         <FieldLegend variant="label">Photo</FieldLegend>
-        <div className="flex items-center gap-4">
+        <div className="flex items-start gap-4">
           {item.image_url ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={item.image_url} alt={item.name} className="size-16 rounded-md border object-cover" />
+            <img
+              src={item.image_url}
+              alt={`Photo of ${item.name}`}
+              className="size-20 shrink-0 rounded-md border object-cover"
+            />
           ) : (
-            <span className="flex size-16 items-center justify-center rounded-md border text-xs text-muted-foreground">
+            <span className="flex size-20 shrink-0 items-center justify-center rounded-md border border-dashed text-xs text-muted-foreground">
               None
             </span>
           )}
-          <form action={imgAction} className="flex flex-wrap items-center gap-2">
+          <form
+            action={imgAction}
+            className="flex min-w-0 flex-1 flex-col gap-2"
+            onSubmit={(e) => {
+              // Catch an oversized file here: past the Server Action body
+              // limit the request dies before the action runs, which read as
+              // the button doing nothing at all.
+              const input = e.currentTarget.elements.namedItem("file") as HTMLInputElement | null
+              const file = input?.files?.[0]
+              if (file && file.size > MAX_IMAGE_BYTES) {
+                e.preventDefault()
+                setImgErr(`That image is ${(file.size / 1024 / 1024).toFixed(1)} MB — the limit is 5 MB.`)
+                return
+              }
+              setImgErr(null)
+            }}
+          >
             <input type="hidden" name="itemId" value={item.id} />
             <Label htmlFor="edit-image" className="sr-only">
               Item photo file
             </Label>
-            <input id="edit-image" type="file" name="file" accept="image/*" className="text-sm" required />
-            <Button type="submit" size="sm" variant="secondary" disabled={imgPending}>
-              {imgPending ? "Uploading…" : "Upload"}
-            </Button>
+            <Input
+              id="edit-image"
+              type="file"
+              name="file"
+              accept="image/*"
+              required
+              className="max-w-xs"
+              onChange={() => setImgErr(null)}
+            />
+            <div className="flex items-center gap-3">
+              <Button type="submit" size="sm" variant="secondary" disabled={imgPending}>
+                {imgPending ? "Uploading…" : "Upload"}
+              </Button>
+              <span className="text-xs text-muted-foreground">JPG or PNG, up to 5 MB.</span>
+            </div>
+            <InlineError msg={imgErr} />
             <FormError state={imgState} />
           </form>
         </div>
@@ -300,33 +340,52 @@ function ItemEditorBody({
       <FieldSet>
         <FieldLegend variant="label">Sizes &amp; variants</FieldLegend>
         {item.item_variants.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No variants — the item sells at its base price.</p>
+          <p className="rounded-lg border border-dashed px-3 py-4 text-center text-sm text-muted-foreground">
+            No variants — the item sells at its base price.
+          </p>
         ) : (
-          <div className="flex flex-col gap-1">
-            {item.item_variants.map((v) => (
-              <div key={v.id} className="flex items-center gap-2 text-sm">
-                <span className="font-medium">{v.name}</span>
-                <span className="text-muted-foreground">
-                  {v.price_delta_cents >= 0 ? "+" : "−"}
-                  {money(Math.abs(v.price_delta_cents), currency)}
-                </span>
-                <Button
-                  size="sm"
-                  variant="link"
-                  className="text-destructive"
-                  disabled={vPending}
-                  aria-label={`Remove variant ${v.name}`}
-                  onClick={() =>
-                    startVariant(async () => {
-                      const res = await removeVariant(v.id)
-                      if (res && "error" in res) setVErr(res.error)
-                    })
-                  }
-                >
-                  Remove
-                </Button>
-              </div>
-            ))}
+          <div className="overflow-hidden rounded-lg border">
+            <Table className="text-sm">
+              <TableHeader className="bg-muted/50">
+                <TableRow>
+                  <TableHead className="px-3 py-2 font-medium">Variant</TableHead>
+                  <TableHead className="px-3 py-2 text-right font-medium">Price change</TableHead>
+                  <TableHead className="px-3 py-2 text-right font-medium">Sells for</TableHead>
+                  <TableHead className="w-10 px-3 py-2" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {item.item_variants.map((v) => (
+                  <TableRow key={v.id}>
+                    <TableCell className="px-3 py-2 font-medium">{v.name}</TableCell>
+                    <TableCell className="px-3 py-2 text-right tabular-nums text-muted-foreground">
+                      {v.price_delta_cents >= 0 ? "+" : "−"}
+                      {money(Math.abs(v.price_delta_cents), currency)}
+                    </TableCell>
+                    <TableCell className="px-3 py-2 text-right tabular-nums">
+                      {money(item.base_price_cents + v.price_delta_cents, currency)}
+                    </TableCell>
+                    <TableCell className="px-3 py-2 text-right">
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        className="text-destructive"
+                        disabled={vPending}
+                        onClick={() =>
+                          startVariant(async () => {
+                            const res = await removeVariant(v.id)
+                            if (res && "error" in res) setVErr(res.error)
+                          })
+                        }
+                      >
+                        <Trash2Icon className="size-4" />
+                        <span className="sr-only">Remove variant {v.name}</span>
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </div>
         )}
         <div className="flex flex-wrap items-end gap-3">
@@ -364,58 +423,82 @@ function ItemEditorBody({
       <FieldSet>
         <FieldLegend variant="label">Add-ons</FieldLegend>
         {modifiers.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
+          <p className="rounded-lg border border-dashed px-3 py-4 text-center text-sm text-muted-foreground">
             No add-ons in the library yet. Create them on the Modifiers tab first.
           </p>
         ) : (
-          <div className="flex flex-col gap-2">
-            {modifiers.map((mod) => {
-              const linked = linkedModIds.has(mod.id)
-              const current = item.item_modifiers.find((m) => m.modifier_id === mod.id)
-              return (
-                <div key={mod.id} className="flex flex-wrap items-center gap-3 text-sm">
-                  <label className="inline-flex items-center gap-2">
-                    <Checkbox
-                      checked={linked}
-                      disabled={modPending}
-                      aria-label={`${linked ? "Remove" : "Add"} add-on ${mod.name}`}
-                      onCheckedChange={(v) =>
-                        startMod(async () => {
-                          setModErr(null)
-                          const res = v ? await linkModifier(item.id, mod.id) : await unlinkModifier(item.id, mod.id)
-                          if (res && "error" in res) setModErr(res.error)
-                        })
-                      }
-                    />
-                    <span className="font-medium">{mod.name}</span>
-                    <span className="text-muted-foreground">{money(mod.price_cents, currency)}</span>
-                  </label>
-                  {linked ? (
-                    <label className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                      max qty
-                      <Input
-                        type="number"
-                        min={1}
-                        step="1"
-                        className="h-8 w-16"
-                        aria-label={`Max quantity for ${mod.name}`}
-                        defaultValue={current?.max_qty ?? 1}
-                        disabled={modPending}
-                        onBlur={(e) =>
-                          startMod(async () => {
-                            setModErr(null)
-                            const res = await linkModifier(item.id, mod.id, {
-                              maxQty: Math.max(1, Number(e.target.value) || 1),
+          <div className="overflow-hidden rounded-lg border">
+            <Table className="text-sm">
+              <TableHeader className="bg-muted/50">
+                <TableRow>
+                  <TableHead className="w-10 px-3 py-2" />
+                  <TableHead className="px-3 py-2 font-medium">Add-on</TableHead>
+                  <TableHead className="px-3 py-2 text-right font-medium">Price</TableHead>
+                  <TableHead className="px-3 py-2 text-right font-medium">Max qty</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {modifiers.map((mod) => {
+                  const linked = linkedModIds.has(mod.id)
+                  const current = item.item_modifiers.find((m) => m.modifier_id === mod.id)
+                  return (
+                    <TableRow key={mod.id} data-state={linked ? "selected" : undefined}>
+                      <TableCell className="px-3 py-2">
+                        <Checkbox
+                          id={`mod-${mod.id}`}
+                          checked={linked}
+                          disabled={modPending}
+                          onCheckedChange={(v) =>
+                            startMod(async () => {
+                              setModErr(null)
+                              const res = v
+                                ? await linkModifier(item.id, mod.id)
+                                : await unlinkModifier(item.id, mod.id)
+                              if (res && "error" in res) setModErr(res.error)
                             })
-                            if (res && "error" in res) setModErr(res.error)
-                          })
-                        }
-                      />
-                    </label>
-                  ) : null}
-                </div>
-              )
-            })}
+                          }
+                        />
+                      </TableCell>
+                      <TableCell className="px-3 py-2">
+                        <label
+                          htmlFor={`mod-${mod.id}`}
+                          className="block cursor-pointer font-medium"
+                        >
+                          {mod.name}
+                        </label>
+                      </TableCell>
+                      <TableCell className="px-3 py-2 text-right tabular-nums text-muted-foreground">
+                        {money(mod.price_cents, currency)}
+                      </TableCell>
+                      <TableCell className="px-3 py-2 text-right">
+                        {linked ? (
+                          <Input
+                            type="number"
+                            min={1}
+                            step="1"
+                            className="ml-auto h-8 w-16 tabular-nums"
+                            aria-label={`Max quantity for ${mod.name}`}
+                            defaultValue={current?.max_qty ?? 1}
+                            disabled={modPending}
+                            onBlur={(e) =>
+                              startMod(async () => {
+                                setModErr(null)
+                                const res = await linkModifier(item.id, mod.id, {
+                                  maxQty: Math.max(1, Number(e.target.value) || 1),
+                                })
+                                if (res && "error" in res) setModErr(res.error)
+                              })
+                            }
+                          />
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
           </div>
         )}
         <InlineError msg={modErr} />
@@ -432,9 +515,9 @@ function ItemEditorBody({
               <span key={r.station_id} className="inline-flex items-center gap-1 rounded-full bg-muted py-1 pr-1 pl-3 text-sm">
                 {r.kitchen_stations?.name ?? "?"}
                 <Button
-                  size="icon-sm"
+                  size="icon-xs"
                   variant="ghost"
-                  className="size-6 text-destructive"
+                  className="text-destructive"
                   disabled={stPending}
                   aria-label={`Remove routing to ${r.kitchen_stations?.name ?? "station"}`}
                   onClick={() =>
@@ -444,7 +527,7 @@ function ItemEditorBody({
                     })
                   }
                 >
-                  ✕
+                  <XIcon className="size-3.5" />
                 </Button>
               </span>
             ))
@@ -491,32 +574,53 @@ function ItemEditorBody({
       <FieldSet>
         <FieldLegend variant="label">Available hours</FieldLegend>
         {item.item_availability.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Always available.</p>
+          <p className="rounded-lg border border-dashed px-3 py-4 text-center text-sm text-muted-foreground">
+            Always available. Add a window to limit when this item can be ordered.
+          </p>
         ) : (
-          <div className="flex flex-col gap-1">
-            {item.item_availability.map((a) => (
-              <div key={a.id} className="flex items-center gap-2 text-sm">
-                <span className="font-medium">{dayLabel(a.day_of_week)}</span>
-                <span className="text-muted-foreground">
-                  {a.start_time}–{a.end_time}
-                </span>
-                <Button
-                  size="sm"
-                  variant="link"
-                  className="text-destructive"
-                  disabled={avPending}
-                  aria-label={`Remove ${dayLabel(a.day_of_week)} ${a.start_time}–${a.end_time} window`}
-                  onClick={() =>
-                    startAvail(async () => {
-                      const res = await removeAvailability(a.id)
-                      if (res && "error" in res) setAvErr(res.error)
-                    })
-                  }
-                >
-                  Remove
-                </Button>
-              </div>
-            ))}
+          <div className="overflow-hidden rounded-lg border">
+            <Table className="text-sm">
+              <TableHeader className="bg-muted/50">
+                <TableRow>
+                  <TableHead className="px-3 py-2 font-medium">Day</TableHead>
+                  <TableHead className="px-3 py-2 font-medium">From</TableHead>
+                  <TableHead className="px-3 py-2 font-medium">To</TableHead>
+                  <TableHead className="w-10 px-3 py-2" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {item.item_availability.map((a) => (
+                  <TableRow key={a.id}>
+                    <TableCell className="px-3 py-2 font-medium">{dayLabel(a.day_of_week)}</TableCell>
+                    <TableCell className="px-3 py-2 tabular-nums text-muted-foreground">
+                      {a.start_time}
+                    </TableCell>
+                    <TableCell className="px-3 py-2 tabular-nums text-muted-foreground">
+                      {a.end_time}
+                    </TableCell>
+                    <TableCell className="px-3 py-2 text-right">
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        className="text-destructive"
+                        disabled={avPending}
+                        onClick={() =>
+                          startAvail(async () => {
+                            const res = await removeAvailability(a.id)
+                            if (res && "error" in res) setAvErr(res.error)
+                          })
+                        }
+                      >
+                        <Trash2Icon className="size-4" />
+                        <span className="sr-only">
+                          Remove {dayLabel(a.day_of_week)} {a.start_time}–{a.end_time} window
+                        </span>
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </div>
         )}
         <div className="flex flex-wrap items-end gap-3">

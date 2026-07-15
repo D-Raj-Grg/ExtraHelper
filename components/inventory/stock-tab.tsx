@@ -30,7 +30,12 @@ export function StockTab({
   const [categoryFilter, setCategoryFilter] = useState("all")
   const [status, setStatus] = useState<StatusFilter>("all")
   const [addOpen, setAddOpen] = useState(false)
-  const [editing, setEditing] = useState<Item | null>(null)
+
+  // By id, not by value — a stored object would freeze the row as it looked
+  // when opened, so the sheet header would keep showing stale on-hand/cost
+  // after a server action refreshed the list underneath it.
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const editing = editingId === null ? null : (items.find((i) => i.id === editingId) ?? null)
 
   const categories = useMemo(
     () => [...new Set(items.map((i) => i.category).filter((c): c is string => Boolean(c)))].sort(),
@@ -157,7 +162,7 @@ export function StockTab({
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {filtered.map((item) => (
-            <StockCard key={item.id} item={item} currency={currency} onEdit={() => setEditing(item)} />
+            <StockCard key={item.id} item={item} currency={currency} onEdit={() => setEditingId(item.id)} />
           ))}
         </div>
       )}
@@ -167,7 +172,7 @@ export function StockTab({
         item={editing}
         open={editing !== null}
         onOpenChange={(o) => {
-          if (!o) setEditing(null)
+          if (!o) setEditingId(null)
         }}
         currency={currency}
         timezone={timezone}

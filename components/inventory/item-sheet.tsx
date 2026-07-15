@@ -34,7 +34,7 @@ export function AddIngredientSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full gap-0 sm:max-w-lg">
+      <SheetContent size="lg" className="w-full gap-0">
         <SheetHeader>
           <SheetTitle>Add ingredient</SheetTitle>
           <SheetDescription>
@@ -117,7 +117,7 @@ export function ItemSheet({
 }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full gap-0 sm:max-w-lg">
+      <SheetContent size="lg" className="w-full gap-0">
         {item ? (
           <>
             <SheetHeader>
