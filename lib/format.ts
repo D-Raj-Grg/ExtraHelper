@@ -33,7 +33,7 @@ export function formatDateTime(iso: string, timeZone = "UTC"): string {
 }
 
 /** Displacement (ms) of `date` when rendered in `timeZone` vs UTC. */
-function tzOffsetMs(date: Date, timeZone: string): number {
+export function tzOffsetMs(date: Date, timeZone: string): number {
   const p = Object.fromEntries(
     new Intl.DateTimeFormat("en-US", {
       timeZone,

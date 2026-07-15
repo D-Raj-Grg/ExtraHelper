@@ -6,7 +6,52 @@ import { Select as SelectPrimitive } from "@base-ui/react/select"
 import { cn } from "@/lib/utils"
 import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "lucide-react"
 
-const Select = SelectPrimitive.Root
+/**
+ * Walk the children looking for `SelectItem`s, collecting value → label.
+ * Recurses through wrappers (fragments, groups, arrays from `.map`) so it finds
+ * items at any depth.
+ */
+function collectItemLabels(
+  node: React.ReactNode,
+  acc: Record<string, React.ReactNode>,
+): Record<string, React.ReactNode> {
+  React.Children.forEach(node, (child) => {
+    if (!React.isValidElement(child)) return
+    const props = child.props as { value?: unknown; children?: React.ReactNode }
+    if (child.type === SelectItem) {
+      if (props.value !== undefined && props.value !== null) {
+        acc[String(props.value)] = props.children
+      }
+      return
+    }
+    if (props.children) collectItemLabels(props.children, acc)
+  })
+  return acc
+}
+
+/**
+ * Base UI's `<Select.Value>` renders the raw *value* unless the root is handed
+ * an `items` map — so a select keyed by id showed a bare UUID in the trigger,
+ * and one keyed by slug showed "sandbox" instead of "Sandbox (test)". Deriving
+ * the map from the `SelectItem` children means every select gets the right
+ * label without each call site repeating itself. An explicit `items` prop still
+ * wins if a caller wants control.
+ */
+function Select<Value, Multiple extends boolean | undefined = false>({
+  items,
+  children,
+  ...props
+}: SelectPrimitive.Root.Props<Value, Multiple>) {
+  const derived = React.useMemo(
+    () => items ?? collectItemLabels(children, {}),
+    [items, children],
+  )
+  return (
+    <SelectPrimitive.Root<Value, Multiple> items={derived} {...props}>
+      {children}
+    </SelectPrimitive.Root>
+  )
+}
 
 function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
   return (
