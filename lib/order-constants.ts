@@ -32,6 +32,18 @@ export const ORDER_STATUS_STYLE: Record<string, string> = {
   cancelled: "bg-muted text-muted-foreground",
 }
 
+/** Destination in plain English — the order_type enum never reaches staff. */
+const ORDER_TYPE_LABEL: Record<string, string> = {
+  dine_in: "Dine in",
+  pickup: "Takeaway",
+  delivery: "Delivery",
+  qr: "QR order",
+}
+
+export function orderTypeLabel(type: string): string {
+  return ORDER_TYPE_LABEL[type] ?? type.replace(/_/g, " ")
+}
+
 const BILL_STATUS_LABEL: Record<string, string> = {
   open: "Unpaid",
   partial: "Part paid",

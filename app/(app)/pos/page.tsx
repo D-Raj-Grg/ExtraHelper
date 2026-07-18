@@ -1,57 +1,40 @@
-import { createClient } from "@/lib/supabase/server"
 import { requirePermission } from "@/lib/supabase/guards"
 import { PageShell, PageHeader } from "@/components/page-header"
-import { PosActiveOrders } from "@/components/pos-active-orders"
-import { QuickOrder } from "@/components/pos/quick-order"
+import { MenuRealtimeRefresh } from "@/components/menu-realtime-refresh"
+import { PosScreen } from "@/components/pos/pos-screen"
+import type { PosTab } from "@/components/pos/pos-tabs"
+import { loadPosData } from "./data"
 
 export const dynamic = "force-dynamic"
 
-export default async function PosPage() {
+const TABS: PosTab[] = ["orders", "table", "kot"]
+
+export default async function PosPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ new?: string; tab?: string }>
+}) {
   const tenant = await requirePermission("order.view")
-  const supabase = await createClient()
-
-  const [{ data: tables }, { data: menu }, { data: orders }] = await Promise.all([
-    supabase
-      .from("restaurant_tables")
-      .select("id, label, state")
-      .eq("tenant_id", tenant.tenantId)
-      .order("label"),
-    supabase
-      .from("menu_items")
-      .select("id, name, base_price_cents, is_86, image_url")
-      .eq("tenant_id", tenant.tenantId)
-      .eq("is_active", true)
-      .order("name"),
-    supabase
-      .from("orders")
-      .select("id, order_type, status, created_at, restaurant_tables!orders_table_id_fkey(label)")
-      .eq("tenant_id", tenant.tenantId)
-      .in("status", ["draft", "placed", "in_kitchen", "preparing", "ready", "served"])
-      .order("created_at", { ascending: false }),
-  ])
-
-  // Supabase types the to-one embed as an array; runtime is a single object.
-  const orderRows = (orders ?? []) as unknown as {
-    id: string
-    status: string
-    restaurant_tables: { label: string } | null
-  }[]
+  const [data, params] = await Promise.all([loadPosData(tenant.tenantId), searchParams])
+  const initialTab: PosTab = TABS.includes(params.tab as PosTab) ? (params.tab as PosTab) : "orders"
 
   return (
     <PageShell>
       <PageHeader
         title="POS"
-        description={`Build an order for ${tenant.name}. Works offline — orders queue and sync on reconnect.`}
+        description={`Take orders for ${tenant.name}. Works offline — orders queue and sync on reconnect.`}
       />
-
-      <section className="mb-8">
-        <QuickOrder menu={menu ?? []} tables={tables ?? []} currency={tenant.currency} />
-      </section>
-
-      <section>
-        <h2 className="mb-2 text-lg font-semibold">Active orders</h2>
-        <PosActiveOrders initial={orderRows} tenantId={tenant.tenantId} />
-      </section>
+      {/* Moved up from [orderId]: an 86 has to grey the tile out on the board
+          too, not only inside an open order. */}
+      <MenuRealtimeRefresh tenantId={tenant.tenantId} />
+      <PosScreen
+        data={data}
+        currency={tenant.currency}
+        timeZone={tenant.timezone}
+        tenantId={tenant.tenantId}
+        startNew={params.new === "1"}
+        initialTab={initialTab}
+      />
     </PageShell>
   )
 }

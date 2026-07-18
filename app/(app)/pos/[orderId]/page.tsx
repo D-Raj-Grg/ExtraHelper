@@ -1,12 +1,17 @@
 import { notFound } from "next/navigation"
-import { createClient } from "@/lib/supabase/server"
 import { requirePermission } from "@/lib/supabase/guards"
-import { PosBuilder } from "@/components/pos-builder"
+import { PageShell, PageHeader } from "@/components/page-header"
 import { MenuRealtimeRefresh } from "@/components/menu-realtime-refresh"
-import { PageShell } from "@/components/page-header"
+import { PosScreen } from "@/components/pos/pos-screen"
+import { loadOrderDetail, loadPosData } from "../data"
 
 export const dynamic = "force-dynamic"
 
+/**
+ * A deep link to one order — the same board as /pos, with the composer already
+ * open on it. Kept because fireOrder and the offline sync both push here, and
+ * because a pasted link should work. Closing the modal drops back to /pos.
+ */
 export default async function OrderBuilderPage({
   params,
 }: {
@@ -14,46 +19,28 @@ export default async function OrderBuilderPage({
 }) {
   const { orderId } = await params
   const tenant = await requirePermission("order.view")
-  const supabase = await createClient()
 
-  const [{ data: order }, { data: items }, { data: menu }] = await Promise.all([
-    supabase
-      .from("orders")
-      .select("id, status, order_type, restaurant_tables!orders_table_id_fkey(label)")
-      .eq("id", orderId)
-      .eq("tenant_id", tenant.tenantId)
-      .maybeSingle(),
-    supabase
-      .from("order_items")
-      .select(
-        "id, name_snapshot, qty, unit_price_cents, status, is_void, is_held, notes, course, seat, " +
-          "order_item_modifiers(modifier_id, name_snapshot, price_cents)",
-      )
-      .eq("order_id", orderId)
-      .eq("tenant_id", tenant.tenantId)
-      .order("created_at"),
-    supabase
-      .from("menu_items")
-      .select(
-        "id, name, base_price_cents, is_86, image_url, " +
-          "item_variants(id, name, price_delta_cents), " +
-          "item_modifiers(modifier_id, modifiers(id, name, price_cents))",
-      )
-      .eq("tenant_id", tenant.tenantId)
-      .eq("is_active", true)
-      .order("name"),
+  const [data, detail] = await Promise.all([
+    loadPosData(tenant.tenantId),
+    loadOrderDetail(orderId, tenant.tenantId),
   ])
 
-  if (!order) notFound()
+  if (!detail) notFound()
 
   return (
     <PageShell>
+      <PageHeader
+        title="POS"
+        description={`Take orders for ${tenant.name}. Works offline — orders queue and sync on reconnect.`}
+      />
       <MenuRealtimeRefresh tenantId={tenant.tenantId} />
-      <PosBuilder
+      <PosScreen
+        data={data}
         currency={tenant.currency}
-        order={order as never}
-        items={(items ?? []) as never}
-        menu={(menu ?? []) as never}
+        timeZone={tenant.timezone}
+        tenantId={tenant.tenantId}
+        openOrderId={orderId}
+        initialDetail={detail}
       />
     </PageShell>
   )

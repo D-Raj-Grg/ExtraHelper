@@ -35,6 +35,8 @@ export async function bumpKot(kotId: string, status: KotStatus): Promise<KdsStat
   if (kot?.order_id) await supabase.rpc("sync_order_status_from_kots", { _order_id: kot.order_id })
 
   revalidatePath("/kds")
+  // The POS KOT tab reads the same tickets — keep its server-seeded list fresh.
+  revalidatePath("/pos")
   return { ok: true }
 }
 

@@ -1,25 +1,12 @@
 "use client"
 
 import { SlidersHorizontalIcon } from "lucide-react"
-import { money } from "@/lib/format"
+import { moneyRange } from "@/lib/format"
 import { cn } from "@/lib/utils"
-import type { CachedMenuItem } from "@/lib/offline/menu-cache"
-
-/**
- * Initials for the placeholder — "Buff Sekuwa" → "BS", "Aila (per shot)" → "A".
- * Parenthetical qualifiers are noise here, so they're dropped before picking.
- */
-function monogram(name: string): string {
-  const words = name
-    .replace(/\([^)]*\)/g, " ")
-    .split(/\s+/)
-    .filter((w) => /[a-z0-9]/i.test(w))
-  if (words.length === 0) return "?"
-  return words
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase() ?? "")
-    .join("")
-}
+import { itemPriceRange } from "@/components/pos/cart-types"
+import { DishThumb } from "@/components/pos/dish-thumb"
+import { VegMark } from "@/components/pos/veg-mark"
+import type { PosMenuItem } from "@/components/pos/types"
 
 /**
  * One tappable dish. Photo-first: staff recognise a dish by its picture faster
@@ -32,22 +19,34 @@ export function MenuTile({
   currency,
   onAdd,
   disabled = false,
-  hasOptions = false,
+  optionCount = 0,
   expanded = false,
 }: {
-  item: CachedMenuItem
+  item: PosMenuItem
   qty: number
   currency: string
   onAdd: () => void
   /** The order is fired/billed — the menu is visible but no longer addable. */
   disabled?: boolean
-  /** Tapping opens the variant/add-on picker rather than adding straight away. */
-  hasOptions?: boolean
+  /**
+   * How many variants + add-ons this dish has. Above zero, tapping opens the
+   * picker instead of adding straight away, and the count is shown — "3 options"
+   * tells a waiter whether it's worth the tap; a bare "options" doesn't.
+   */
+  optionCount?: number
   expanded?: boolean
 }) {
+  const hasOptions = optionCount > 0
   const inCart = qty > 0
   const soldOut = item.is_86
   const off = soldOut || disabled
+
+  // What this dish can actually cost. Not base_price_cents: with variants the
+  // picker forces a choice, so the base price alone is a figure no one can
+  // order — which is what this tile used to advertise.
+  const { min, max } = itemPriceRange(item)
+  const priceText = moneyRange(min, max, currency)
+  const isRange = min !== max
 
   return (
     <button
@@ -55,10 +54,9 @@ export function MenuTile({
       disabled={off}
       onClick={onAdd}
       aria-expanded={hasOptions ? expanded : undefined}
-      aria-label={`${hasOptions ? "Choose options for" : "Add"} ${item.name}, ${money(
-        item.base_price_cents,
-        currency,
-      )}${soldOut ? ", sold out" : ""}${inCart ? `, ${qty} in order` : ""}`}
+      aria-label={`${hasOptions ? "Choose options for" : "Add"} ${item.name}, ${priceText}${
+        item.is_veg === true ? ", vegetarian" : item.is_veg === false ? ", non-vegetarian" : ""
+      }${soldOut ? ", sold out" : ""}${inCart ? `, ${qty} in order` : ""}`}
       className={cn(
         "group relative flex flex-col overflow-hidden rounded-xl border-2 bg-card text-left",
         "transition-[border-color,transform] duration-150 ease-out motion-reduce:transition-none",
@@ -70,29 +68,15 @@ export function MenuTile({
       )}
     >
       <span className="relative block aspect-[4/3] w-full overflow-hidden bg-muted">
-        {item.image_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={item.image_url}
-            alt=""
-            loading="lazy"
-            decoding="async"
-            className={cn(
-              "size-full object-cover",
-              soldOut && "grayscale",
-              // Fixed aspect box above means this can't shift layout.
-              "transition-transform duration-200 ease-out motion-reduce:transition-none",
-              !off && "group-hover:scale-[1.03]",
-            )}
-          />
-        ) : (
-          // A designed absence, not a broken image: the dish's initials, big.
-          <span className="flex size-full items-center justify-center">
-            <span className="text-3xl font-bold tracking-tight text-muted-foreground/50 tabular-nums">
-              {monogram(item.name)}
-            </span>
-          </span>
-        )}
+        <DishThumb
+          item={item}
+          grayscale={soldOut}
+          className={cn(
+            // Fixed aspect box above means this can't shift layout.
+            item.image_url && "transition-transform duration-200 ease-out motion-reduce:transition-none",
+            item.image_url && !off && "group-hover:scale-[1.03]",
+          )}
+        />
 
         {soldOut ? (
           <span className="absolute inset-x-0 bottom-0 bg-destructive px-2 py-1 text-center text-xs font-bold uppercase tracking-wide text-white">
@@ -119,11 +103,24 @@ export function MenuTile({
       </span>
 
       <span className="flex flex-1 flex-col gap-0.5 p-3">
-        <span className="line-clamp-2 text-sm leading-snug font-semibold">{item.name}</span>
-        <span className="mt-auto flex items-center gap-1.5 text-sm font-medium tabular-nums text-muted-foreground">
-          {money(item.base_price_cents, currency)}
+        <span className="flex items-start gap-1.5">
+          {/* Beside the name rather than on the photo: both image corners are
+              already taken, and this is where /menu shows it too. */}
+          <VegMark isVeg={item.is_veg} className="mt-0.5" />
+          <span className="line-clamp-2 text-sm leading-snug font-semibold">{item.name}</span>
+        </span>
+        <span
+          className={cn(
+            "mt-auto flex flex-wrap items-center gap-x-1.5 font-medium tabular-nums text-muted-foreground",
+            // A full range is long for a narrow tile; drop a step so it fits.
+            isRange ? "text-xs" : "text-sm",
+          )}
+        >
+          {priceText}
           {hasOptions && !soldOut ? (
-            <span className="text-xs font-normal">· options</span>
+            <span className="text-xs font-normal">
+              · {optionCount} {optionCount === 1 ? "option" : "options"}
+            </span>
           ) : null}
         </span>
       </span>
