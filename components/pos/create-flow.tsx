@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { ArrowRightIcon, WifiOffIcon } from "lucide-react"
 
-import { placeStaffOrder } from "@/app/(app)/pos/actions"
+import { fireOrder, placeStaffOrder } from "@/app/(app)/pos/actions"
 import { Button } from "@/components/ui/button"
 import { useOffline } from "@/components/offline-sync-provider"
 import { DestinationStep } from "@/components/pos/destination-step"
@@ -59,7 +59,7 @@ export function CreateFlow({
   const table = data.tables.find((t) => t.id === tableId)
   const destinationLabel = table ? `Table ${table.label}` : "Takeaway"
 
-  function confirm() {
+  function confirm(alsoFire: boolean) {
     if (cart.lines.length === 0) return
     const items = toPlaceLines(cart.lines)
     const meta = {
@@ -90,6 +90,22 @@ export function CreateFlow({
           // Keep the cart and the key so a retry reuses it.
           toast.error(res.error)
           return
+        }
+        // One-tap path: fire the just-placed order to the kitchen before we
+        // leave the create modal, so the common "take order, send it now" case
+        // doesn't need a second tap on the amend screen. Fire needs the server,
+        // so it only runs online (this branch is online-only already).
+        if (alsoFire) {
+          const fr = await fireOrder(res.orderId)
+          if ("error" in fr) {
+            // Order IS created — surface the fire error and let the amend screen
+            // (below) open so the fire can be retried there. Never lost.
+            toast.error(fr.error)
+          } else {
+            // No print popups here — tickets land on the KDS/KOT board and print
+            // from there. Firing just routes items to the stations.
+            if (fr.kotIds.length) toast.success(`Placed · ${fr.kotIds.length} ticket(s) to kitchen`)
+          }
         }
         // Reopen against the real server rows: anything the server dropped — an
         // item 86'd while we were composing — is then visible rather than
@@ -147,14 +163,36 @@ export function CreateFlow({
       footer={
         <div className="flex shrink-0 flex-col gap-2 border-t p-3">
           {!online ? <OfflineNote /> : null}
-          <Button
-            size="lg"
-            className="w-full"
-            disabled={cart.lines.length === 0 || pending}
-            onClick={confirm}
-          >
-            {pending ? "Placing…" : online ? "Confirm order" : "Queue order"}
-          </Button>
+          {online ? (
+            <>
+              <Button
+                size="lg"
+                className="w-full"
+                disabled={cart.lines.length === 0 || pending}
+                onClick={() => confirm(true)}
+              >
+                {pending ? "Placing…" : "Confirm & fire"}
+              </Button>
+              <Button
+                size="lg"
+                variant="outline"
+                className="w-full"
+                disabled={cart.lines.length === 0 || pending}
+                onClick={() => confirm(false)}
+              >
+                Confirm only
+              </Button>
+            </>
+          ) : (
+            <Button
+              size="lg"
+              className="w-full"
+              disabled={cart.lines.length === 0 || pending}
+              onClick={() => confirm(false)}
+            >
+              Queue order
+            </Button>
+          )}
         </div>
       }
     />

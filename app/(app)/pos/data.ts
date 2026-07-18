@@ -65,6 +65,8 @@ export async function loadPosData(tenantId: string): Promise<PosData> {
       .select(ORDER_CARD_SELECT)
       .eq("tenant_id", tenantId)
       .in("status", ACTIVE_ORDER_STATUSES)
+      // Pinned orders float to the top; newest-first within each group.
+      .order("pinned_at", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false })
       // Without this the embedded lines come back in no defined order and
       // reshuffle between fetches.

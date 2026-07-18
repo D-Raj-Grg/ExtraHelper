@@ -15,7 +15,7 @@
  * restaurant_tables and PostgREST can't choose between them on its own.
  */
 export const ORDER_CARD_SELECT =
-  "id, order_type, status, created_at, guests, table_id, " +
+  "id, order_type, status, created_at, pinned_at, guests, table_id, " +
   "restaurant_tables!orders_table_id_fkey(label), " +
   "order_items(id, name_snapshot, qty, unit_price_cents, is_void)"
 

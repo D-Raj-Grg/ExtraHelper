@@ -411,3 +411,46 @@ export async function fireOrder(
   revalidatePos(orderId)
   return { ok: true, kotIds: (kots ?? []).map((k) => k.id) }
 }
+
+/** Cancel a whole order (manager approval + reason + audit + stock restore) via RPC. */
+export async function cancelOrder(orderId: string, reason: string): Promise<PosState> {
+  await requireRole(...ORDER_ROLES)
+  if (!reason.trim()) return { error: "Cancel reason is required." }
+  const supabase = await createClient()
+  const { error } = await supabase.rpc("cancel_order", {
+    _order_id: orderId,
+    _reason: reason.trim(),
+  })
+  if (error) return { error: error.message }
+  revalidatePos(orderId)
+  return { ok: true }
+}
+
+/** Pin (or unpin) an order so it sorts to the top of the POS board. */
+export async function pinOrder(orderId: string, pinned: boolean): Promise<PosState> {
+  const tenant = await requireRole(...ORDER_ROLES)
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from("orders")
+    .update({ pinned_at: pinned ? new Date().toISOString() : null })
+    .eq("id", orderId)
+    .eq("tenant_id", tenant.tenantId)
+  if (error) return { error: error.message }
+  revalidatePos(orderId)
+  return { ok: true }
+}
+
+/** KOT ids for an order, so the card can reprint its kitchen slips. */
+export async function listOrderKotIds(
+  orderId: string,
+): Promise<{ error: string } | { ok: true; kotIds: string[] }> {
+  const tenant = await requireRole(...ORDER_ROLES)
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("kots")
+    .select("id")
+    .eq("tenant_id", tenant.tenantId)
+    .eq("order_id", orderId)
+  if (error) return { error: error.message }
+  return { ok: true, kotIds: (data ?? []).map((k) => k.id) }
+}

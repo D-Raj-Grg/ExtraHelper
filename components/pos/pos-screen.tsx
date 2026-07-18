@@ -142,6 +142,7 @@ export function PosScreen({
       .select(ORDER_CARD_SELECT)
       .eq("tenant_id", tenantId)
       .in("status", ACTIVE_ORDER_STATUSES)
+      .order("pinned_at", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false })
       .order("created_at", { referencedTable: "order_items" })
     if (rows) setOrders(rows as unknown as PosOrderCard[])

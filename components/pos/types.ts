@@ -29,6 +29,7 @@ export type PosOrderCard = {
   order_type: string
   status: string
   created_at: string
+  pinned_at: string | null
   guests: number | null
   table_id: string | null
   restaurant_tables: { label: string } | null
