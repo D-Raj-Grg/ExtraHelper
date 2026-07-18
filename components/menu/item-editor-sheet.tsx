@@ -21,7 +21,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Field, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field"
+import { Field, FieldDescription, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
@@ -173,6 +173,23 @@ export function ItemEditorSheet({
   )
 }
 
+/** Select values for the tri-state veg marker. */
+const VEG_UNMARKED = "unmarked"
+const VEG_YES = "veg"
+const VEG_NO = "non-veg"
+
+function vegToValue(isVeg: boolean | null | undefined): string {
+  if (isVeg === true) return VEG_YES
+  if (isVeg === false) return VEG_NO
+  return VEG_UNMARKED
+}
+
+function valueToVeg(value: string): boolean | null {
+  if (value === VEG_YES) return true
+  if (value === VEG_NO) return false
+  return null
+}
+
 function ItemEditorBody({
   item,
   categories,
@@ -191,6 +208,10 @@ function ItemEditorBody({
   const [price, setPrice] = useState((item.base_price_cents / 100).toFixed(2))
   const [categoryId, setCategoryId] = useState(item.category_id ?? "")
   const [description, setDescription] = useState(item.description ?? "")
+  // Tri-state as a string because a Select value must be one. VEG_UNMARKED is
+  // the null case — a checkbox can't express "nobody has said", which is the
+  // state every dish starts in and most stay in.
+  const [isVeg, setIsVeg] = useState(vegToValue(item.is_veg))
   const [coreErr, setCoreErr] = useState<string | null>(null)
   const [corePending, startCore] = useTransition()
 
@@ -251,6 +272,22 @@ function ItemEditorBody({
           </Select>
         </Field>
         <Field>
+          <FieldLabel htmlFor="edit-veg">Vegetarian</FieldLabel>
+          <FieldDescription>
+            Unmarked shows nothing — better than guessing wrong.
+          </FieldDescription>
+          <Select value={isVeg} onValueChange={(v) => setIsVeg((v as string) ?? VEG_UNMARKED)}>
+            <SelectTrigger id="edit-veg" className="w-full">
+              <SelectValue placeholder="Unmarked" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={VEG_UNMARKED}>Unmarked</SelectItem>
+              <SelectItem value={VEG_YES}>Vegetarian</SelectItem>
+              <SelectItem value={VEG_NO}>Non-vegetarian</SelectItem>
+            </SelectContent>
+          </Select>
+        </Field>
+        <Field>
           <FieldLabel htmlFor="edit-description">Description</FieldLabel>
           <textarea
             id="edit-description"
@@ -267,7 +304,13 @@ function ItemEditorBody({
             onClick={() =>
               startCore(async () => {
                 setCoreErr(null)
-                const res = await updateItem(item.id, { name, price, categoryId: categoryId || null, description })
+                const res = await updateItem(item.id, {
+                  name,
+                  price,
+                  categoryId: categoryId || null,
+                  description,
+                  isVeg: valueToVeg(isVeg),
+                })
                 if (res && "error" in res) setCoreErr(res.error)
               })
             }

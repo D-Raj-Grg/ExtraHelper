@@ -47,7 +47,12 @@ async function replay(entry: QueueEntry): Promise<ReplayResult> {
       )
       return res && "error" in res ? "reject" : "ok"
     }
-    const res = await placeStaffOrder(entry.key, entry.payload.tableId, entry.payload.items)
+    const res = await placeStaffOrder(
+      entry.key,
+      entry.payload.tableId,
+      entry.payload.items,
+      entry.payload.meta ?? {},
+    )
     return "ok" in res ? "ok" : "reject"
   } catch {
     return "retry" // network/throw — don't count against the attempt cap

@@ -53,11 +53,15 @@ Staff use this mid-service, on a phone tableside **and** at a counter — both m
 
 **Tap targets ≥44px.** Quantity steppers, chips, and anything a waiter hits mid-rush. `size="icon-sm"` is for desk-only admin surfaces.
 
-**Money & numbers.** `tabular-nums` on every figure in a column; right-align numeric columns. Format via `money()` / `lib/format` — never hand-rolled `toFixed`. Currency, timezone, tax and fees come from tenant settings.
+**Money & numbers.** `tabular-nums` on every figure in a column; right-align numeric columns. Format via `money()` / `moneyRange()` / `lib/format` — never hand-rolled `toFixed`. Currency, timezone, tax and fees come from tenant settings. **Quote a price someone can actually pay**: a dish with variants forces a choice, so its base price is unbuyable — POS tiles show `itemPriceRange()` (`components/pos/cart-types.ts`), in the `aria-label` too.
 
-**Semantic colour, app-wide.** `emerald` = good/balanced/free · `amber` = warning/low/occupied/over · `destructive` = error/short/loss · `blue` = reserved/info · `orange` = bill requested. Tokens only — no raw `green-500`/`red-600`. **Never colour alone**: pair with an icon, label, or sign (`+`/`−`).
+**Semantic colour, app-wide.** `emerald` = good/balanced/free · `amber` = warning/low/occupied/over · `destructive` = error/short/loss · `blue` = reserved/info · `orange` = bill requested. Tokens only — no raw `green-500`/`red-600`. **Never colour alone**: pair with an icon, label, or sign (`+`/`−`). Red-vs-green is the worst offender — it's the most common colourblindness. `VegMark` (`components/pos/veg-mark.tsx`) is the pattern: **circle vs triangle** carries the meaning, colour only reinforces. If it fails a `grayscale(1)` screenshot, it's wrong.
 
-**Choosing.** Few options a waiter picks mid-service → **chips** (`components/pos/destination-picker.tsx`), built on native radios so arrow keys and screen readers work. Long or admin-only lists → `Select`. Picking a dish → **photo-first tile** (`components/pos/menu-tile.tsx`): image leads, name + price under, monogram placeholder when there's no photo, count badge + primary border when it's in the order.
+**A flag nobody has set is not `false`.** `menu_items.is_veg` is nullable on purpose — `not null default false` would have labelled every existing dish non-vegetarian. Where "unknown" is a real state, model it, render nothing for it, and use a Select (a checkbox can't say "unmarked").
+
+**Choosing.** Few options a waiter picks mid-service → **chips** (`components/pos/choice-chip.tsx`), built on native radios/checkboxes so arrow keys and screen readers work. Long or admin-only lists → `Select`. Picking a dish → **photo-first tile** (`components/pos/menu-tile.tsx`): image leads, name + price under, monogram placeholder when there's no photo, count badge + primary border when it's in the order.
+
+**Ordering is one surface.** `/pos` is a board of active order cards; **`components/pos/order-modal.tsx`** composes an order over it (destination → dishes + cart rail → confirm) and is the only file that knows create and amend are different. Below it, everything takes a **`CartController`** (`components/pos/cart-types.ts`) and reads *capabilities* — `setHold` present? `canDelete(id)`? — never a mode flag. Create batches locally and commits in one `place_staff_order` call; amend fires each edit as a server action, because a fired line is a KOT amendment needing a reason + audit. `/pos/[orderId]` is a deep link that renders the same screen with the modal open.
 
 **Enum values never reach staff.** `"bill_requested"` → "Bill requested" via a label map (`tableStateLabel`), not `.replace("_", " ")`.
 
@@ -71,6 +75,10 @@ Staff use this mid-service, on a phone tableside **and** at a counter — both m
 - Server Actions cap bodies at 1MB — `next.config.ts` raises it for uploads. Re-check when adding a file input.
 - Hold open editors **by id**, deriving the row from the live list. Storing the object freezes a snapshot, so revalidated data never appears until close/reopen.
 - Define components at module scope. Nested in a parent, they remount on every parent render and lose their state — brutal under Realtime.
+- **Never key a list row by its content.** A signature key (`item|variant|notes`) changes on every keystroke in that row's input → React remounts the row → the caret is lost mid-word. Key on a stable id; use the signature only to decide merges (`components/pos/cart-types.ts`).
+- A **client component may not import from a file that imports `lib/supabase/server`** — it drags `next/headers` into the browser bundle and the build fails. Shared constants belong in a plain module (`lib/pos-constants.ts`, `lib/table-constants.ts`, `lib/order-constants.ts`).
+- No `Button` size reaches the 44px tap target (`icon` is 32px, `lg` is 36px). POS steppers pass `size="icon" className="size-11"` — safe here, because both are plain `size-*` utilities that tailwind-merge dedupes, unlike the variant-prefixed `SheetContent` width above.
+- `create or replace function` **cannot change a function's arity** — it silently creates an *overload* and leaves the old body live. Changing an RPC's args means `drop` + `create`, then re-issuing `revoke`/`grant` **naming the full new signature**: a new arg list is a new function object, old grants don't carry over, and `public` holds EXECUTE by default.
 
 ## Verification
 - Test RLS isolation: user of tenant A cannot read tenant B rows — across every table.

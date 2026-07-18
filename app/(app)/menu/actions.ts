@@ -126,7 +126,18 @@ export async function createStation(
 /** Update an item's core fields (name / price / category / description). */
 export async function updateItem(
   itemId: string,
-  fields: { name?: string; price?: string; categoryId?: string | null; description?: string },
+  fields: {
+    name?: string
+    price?: string
+    categoryId?: string | null
+    description?: string
+    /**
+     * Tri-state, so `undefined` (leave alone) and `null` (unmark it) have to
+     * stay distinct — hence the `!== undefined` check rather than a truthiness
+     * one, which would silently make "unmark" impossible.
+     */
+    isVeg?: boolean | null
+  },
 ): Promise<MenuState> {
   const tenant = await requireRole("owner", "manager")
   const patch: Record<string, unknown> = {}
@@ -142,6 +153,7 @@ export async function updateItem(
   }
   if (fields.categoryId !== undefined) patch.category_id = fields.categoryId || null
   if (fields.description !== undefined) patch.description = fields.description.trim() || null
+  if (fields.isVeg !== undefined) patch.is_veg = fields.isVeg
   if (Object.keys(patch).length === 0) return { ok: true }
 
   const supabase = await createClient()

@@ -23,7 +23,9 @@ export default async function MenuPage() {
     supabase
       .from("menu_items")
       .select(
-        "id, name, description, base_price_cents, is_86, image_url, category_id, " +
+        // is_veg must be named here: the `as never` cast below means omitting a
+    // column is NOT a type error — the field would just be undefined at runtime.
+    "id, name, description, base_price_cents, is_86, is_veg, image_url, category_id, " +
           "item_station_routes(station_id, kitchen_stations(name)), " +
           "item_variants(id, name, price_delta_cents), " +
           "item_modifiers(modifier_id, is_default, max_qty, modifiers(id, name, price_cents)), " +

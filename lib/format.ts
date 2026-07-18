@@ -15,6 +15,27 @@ export function money(cents: number, currency: string): string {
 }
 
 /**
+ * A span of prices — "NPR 1,080.00 – NPR 1,680.00" — collapsing to a single
+ * price when the ends match.
+ *
+ * Built on money() rather than reaching for Intl again, so the pinned locale
+ * (and the hydration fix it exists for) carries over for free.
+ */
+export function moneyRange(minCents: number, maxCents: number, currency: string): string {
+  if (minCents === maxCents) return money(minCents, currency)
+  const lo = money(minCents, currency)
+  const hi = money(maxCents, currency)
+  // "NPR 1,080.00 – 1,680.00" rather than repeating the currency: on a POS tile
+  // read at arm's length the second "NPR" is three lines of wrap for no
+  // information. Only collapse when the currency actually leads both — where it
+  // trails the number, the prefix match fails and we keep the full form.
+  const prefix = hi.match(/^\D+/)?.[0] ?? ""
+  if (prefix && lo.startsWith(prefix)) return `${lo} – ${hi.slice(prefix.length)}`
+  // En dash: this is a range, not a subtraction.
+  return `${lo} – ${hi}`
+}
+
+/**
  * Date/time formatting for SSR'd client components. Locale AND timeZone are
  * pinned — `toLocaleString()`'s runtime defaults differ between the Node server
  * (often UTC) and the browser (user locale/TZ), which hydration-mismatches.

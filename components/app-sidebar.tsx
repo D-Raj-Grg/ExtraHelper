@@ -75,7 +75,7 @@ const data = {
     {
       label: "Operations",
       items: [
-        { title: "New Order", url: "/pos", icon: <ReceiptIcon /> },
+        { title: "POS", url: "/pos", icon: <ReceiptIcon /> },
         { title: "Kitchen (KDS)", url: "/kds", icon: <ChefHatIcon /> },
         { title: "Online Orders", url: "/online", icon: <ShoppingBagIcon /> },
         { title: "Cash Drawer", url: "/cash", icon: <BanknoteIcon /> },

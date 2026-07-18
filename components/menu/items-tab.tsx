@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { VegMark } from "@/components/pos/veg-mark"
 import { AddItemSheet, ItemEditorSheet } from "./item-editor-sheet"
 import type { Category, Item, Modifier, Station } from "./types"
 
@@ -174,6 +175,8 @@ function ItemRow({ item, currency, onEdit }: { item: Item; currency: string; onE
     <div className="flex items-center gap-3 px-4 py-2.5">
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
+          {/* Same slot as the POS tile, so admin and till read alike. */}
+          <VegMark isVeg={item.is_veg} />
           <span className="truncate font-medium">{item.name}</span>
           {item.is_86 ? <Badge variant="destructive">86</Badge> : null}
         </div>

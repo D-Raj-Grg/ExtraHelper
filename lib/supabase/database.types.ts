@@ -1159,6 +1159,7 @@ export type Database = {
           image_url: string | null
           is_86: boolean
           is_active: boolean
+          is_veg: boolean | null
           name: string
           spice_level: number | null
           tax_class: string | null
@@ -1175,6 +1176,7 @@ export type Database = {
           image_url?: string | null
           is_86?: boolean
           is_active?: boolean
+          is_veg?: boolean | null
           name: string
           spice_level?: number | null
           tax_class?: string | null
@@ -1191,6 +1193,7 @@ export type Database = {
           image_url?: string | null
           is_86?: boolean
           is_active?: boolean
+          is_veg?: boolean | null
           name?: string
           spice_level?: number | null
           tax_class?: string | null
@@ -1541,6 +1544,7 @@ export type Database = {
           branch_id: string | null
           created_at: string
           customer_id: string | null
+          guests: number | null
           id: string
           idempotency_key: string | null
           notes: string | null
@@ -1557,6 +1561,7 @@ export type Database = {
           branch_id?: string | null
           created_at?: string
           customer_id?: string | null
+          guests?: number | null
           id?: string
           idempotency_key?: string | null
           notes?: string | null
@@ -1573,6 +1578,7 @@ export type Database = {
           branch_id?: string | null
           created_at?: string
           customer_id?: string | null
+          guests?: number | null
           id?: string
           idempotency_key?: string | null
           notes?: string | null
@@ -2981,6 +2987,13 @@ export type Database = {
         Returns: boolean
       }
       is_platform_admin: { Args: never; Returns: boolean }
+      list_order_staff: {
+        Args: { _tenant: string }
+        Returns: {
+          name: string
+          user_id: string
+        }[]
+      }
       list_tenant_members: {
         Args: { _tenant: string }
         Returns: {
@@ -3028,11 +3041,16 @@ export type Database = {
       }
       place_staff_order: {
         Args: {
+          _customer?: string
+          _customer_name?: string
+          _customer_phone?: string
+          _guests?: number
           _idempotency_key: string
           _items: Json
           _order_type: Database["public"]["Enums"]["order_type"]
           _table_id: string
           _tenant: string
+          _waiter?: string
         }
         Returns: string
       }
