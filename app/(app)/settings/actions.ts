@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
 import { requireRole } from "@/lib/supabase/guards"
+import { writeAudit } from "@/lib/supabase/audit"
+import { RESET_DOMAIN_KEYS, RESET_EVERYTHING } from "@/lib/danger-constants"
 
 export type SettingsState = { error: string } | { ok: true } | undefined
 
@@ -177,6 +179,103 @@ export async function updateBranch(
     .eq("tenant_id", tenant.tenantId)
   if (error) return { error: error.message }
   revalidatePath("/settings")
+  return { ok: true }
+}
+
+// --- Dangerous Area (owner-only) -------------------------------------------
+
+/**
+ * Selectively wipe operational data (rule #5: audited). The RPC re-checks
+ * owner + does the tenant-scoped deletes; this guard is the UX floor only.
+ */
+export async function resetRestaurant(domains: string[]): Promise<SettingsState> {
+  const tenant = await requireRole("owner")
+  const everything = domains.includes(RESET_EVERYTHING)
+  const clean = everything
+    ? [RESET_EVERYTHING]
+    : domains.filter((d) => RESET_DOMAIN_KEYS.includes(d))
+  if (clean.length === 0) return { error: "Pick at least one thing to reset." }
+
+  const supabase = await createClient()
+  const { error } = await supabase.rpc("reset_tenant", {
+    _tenant: tenant.tenantId,
+    _domains: clean,
+  })
+  if (error) return { error: error.message }
+
+  await writeAudit({
+    tenantId: tenant.tenantId,
+    action: "tenant_reset",
+    entityType: "tenant",
+    entityId: tenant.tenantId,
+    metadata: { domains: clean },
+  })
+  revalidatePath("/settings")
+  revalidatePath("/", "layout")
+  return { ok: true }
+}
+
+/** Hand ownership to an active member; caller demotes to manager. */
+export async function transferOwnership(userId: string): Promise<SettingsState> {
+  const tenant = await requireRole("owner")
+  if (!userId) return { error: "Choose a member to transfer to." }
+
+  const supabase = await createClient()
+  const { error } = await supabase.rpc("transfer_tenant_ownership", {
+    _tenant: tenant.tenantId,
+    _to_user: userId,
+  })
+  if (error) return { error: error.message }
+
+  await writeAudit({
+    tenantId: tenant.tenantId,
+    action: "ownership_transfer",
+    entityType: "user",
+    entityId: userId,
+    metadata: { to: userId },
+  })
+  revalidatePath("/settings")
+  revalidatePath("/", "layout")
+  return { ok: true }
+}
+
+/** Schedule the restaurant for deletion after a 7-day grace period. */
+export async function requestDeleteRestaurant(): Promise<SettingsState> {
+  const tenant = await requireRole("owner")
+  const supabase = await createClient()
+  const { error } = await supabase.rpc("request_tenant_deletion", {
+    _tenant: tenant.tenantId,
+  })
+  if (error) return { error: error.message }
+
+  await writeAudit({
+    tenantId: tenant.tenantId,
+    action: "tenant_delete_requested",
+    entityType: "tenant",
+    entityId: tenant.tenantId,
+  })
+  revalidatePath("/settings")
+  revalidatePath("/", "layout")
+  return { ok: true }
+}
+
+/** Cancel a pending deletion during the grace window. */
+export async function cancelDeleteRestaurant(): Promise<SettingsState> {
+  const tenant = await requireRole("owner")
+  const supabase = await createClient()
+  const { error } = await supabase.rpc("cancel_tenant_deletion", {
+    _tenant: tenant.tenantId,
+  })
+  if (error) return { error: error.message }
+
+  await writeAudit({
+    tenantId: tenant.tenantId,
+    action: "tenant_delete_cancelled",
+    entityType: "tenant",
+    entityId: tenant.tenantId,
+  })
+  revalidatePath("/settings")
+  revalidatePath("/", "layout")
   return { ok: true }
 }
 

@@ -6,9 +6,10 @@ import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { BranchesTab } from "./branches-tab"
 import { ChargesTab } from "./charges-tab"
+import { DangerTab } from "./danger-tab"
 import { GeneralTab } from "./general-tab"
 import { ReceiptTab } from "./receipt-tab"
-import type { Branch, TaxRule } from "./types"
+import type { Branch, DangerData, TaxRule } from "./types"
 
 export function SettingsManager({
   restaurantName,
@@ -23,6 +24,7 @@ export function SettingsManager({
   logoUrl,
   branches,
   canManageBranches,
+  danger,
 }: {
   restaurantName: string
   currency: string
@@ -36,6 +38,8 @@ export function SettingsManager({
   logoUrl: string | null
   branches: Branch[]
   canManageBranches: boolean
+  /** Owner-only; null for non-owners (tab hidden). */
+  danger: DangerData | null
 }) {
   const [state, formAction, pending] = useActionState<SettingsState, FormData>(
     updateSettings,
@@ -44,8 +48,9 @@ export function SettingsManager({
   const [rules, setRules] = useState<TaxRule[]>(taxRules)
   const [tab, setTab] = useState("general")
 
-  // Branches save inline, so the shared save bar would be a dead control there.
-  const showSaveBar = tab !== "branches"
+  // Branches and the Dangerous Area run their own actions, so the shared save
+  // bar would be a dead control on those tabs.
+  const showSaveBar = tab !== "branches" && tab !== "danger"
 
   return (
     // Panels stay mounted: the action reads every field from one FormData, so
@@ -59,6 +64,7 @@ export function SettingsManager({
           <TabsTrigger value="charges">Charges &amp; tax</TabsTrigger>
           <TabsTrigger value="receipt">Receipt &amp; branding</TabsTrigger>
           {canManageBranches ? <TabsTrigger value="branches">Branches</TabsTrigger> : null}
+          {danger ? <TabsTrigger value="danger">Danger zone</TabsTrigger> : null}
         </TabsList>
 
         <TabsContent value="general" keepMounted>
@@ -84,6 +90,11 @@ export function SettingsManager({
         {canManageBranches ? (
           <TabsContent value="branches">
             <BranchesTab branches={branches} />
+          </TabsContent>
+        ) : null}
+        {danger ? (
+          <TabsContent value="danger">
+            <DangerTab restaurantName={restaurantName} data={danger} />
           </TabsContent>
         ) : null}
       </Tabs>

@@ -1,6 +1,24 @@
 export type TaxRule = { name: string; rate: number; inclusive: boolean }
 export type Branch = { id: string; name: string; address: string | null; is_default: boolean }
 
+/** Transfer-ownership candidate: an active, non-owner member. */
+export type TransferMember = { userId: string; email: string; roleName: string | null }
+
+/** Owner-only data behind the Dangerous Area. */
+export type DangerData = {
+  planLabel: string
+  usage: { customers: number; tables: number; staff: number; menuItems: number }
+  /** null denominator = unlimited (trial or unmetered). */
+  limits: {
+    customers: number | null
+    tables: number | null
+    staff: number | null
+    menuItems: number | null
+  }
+  members: TransferMember[]
+  deletionScheduledAt: string | null
+}
+
 export const CURRENCIES = ["USD", "EUR", "GBP", "INR", "NPR", "AED", "SGD", "AUD", "CAD", "JPY"]
 
 export const TIMEZONES = [
