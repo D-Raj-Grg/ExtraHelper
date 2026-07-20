@@ -6,8 +6,9 @@ import { payForOrder, type PayState } from "@/app/pay/actions"
 import { money } from "@/lib/format"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { VegMark } from "@/components/pos/veg-mark"
 
-type Item = { id: string; name: string; description: string | null; price_cents: number }
+type Item = { id: string; name: string; description: string | null; price_cents: number; is_veg: boolean | null }
 type Category = { id: string; name: string; items: Item[] }
 
 export function Storefront({
@@ -88,7 +89,10 @@ export function Storefront({
             {cat.items.map((it) => (
               <div key={it.id} className="flex items-center justify-between rounded-lg border p-3">
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium">{it.name}</p>
+                  <p className="flex items-center gap-1.5 font-medium">
+                    <VegMark isVeg={it.is_veg} />
+                    {it.name}
+                  </p>
                   <p className="text-sm text-muted-foreground">{money(it.price_cents, currency)}</p>
                 </div>
                 <div className="flex items-center gap-2">

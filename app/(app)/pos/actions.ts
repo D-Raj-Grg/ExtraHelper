@@ -70,6 +70,18 @@ export async function addItem(
   const modifierIds = [...new Set(opts.modifierIds ?? [])]
   let mods: { id: string; name: string; price_cents: number }[] = []
   if (modifierIds.length) {
+    // Every add-on must be linked to THIS item via item_modifiers, not merely
+    // owned by the tenant — otherwise "Extra cheese" prices onto a beer. Mirror
+    // of the check in place_staff_order; the two must agree to the cent.
+    const { data: links } = await supabase
+      .from("item_modifiers")
+      .select("modifier_id")
+      .eq("tenant_id", tenant.tenantId)
+      .eq("item_id", itemId)
+      .in("modifier_id", modifierIds)
+    if ((links?.length ?? 0) !== modifierIds.length) {
+      return { error: "That add-on isn't available for this item." }
+    }
     const { data: rows } = await supabase
       .from("modifiers")
       .select("id, name, price_cents")
@@ -303,19 +315,40 @@ export async function addCustomItem(
   }
 
   const supabase = await createClient()
-  const { error } = await supabase.from("order_items").insert({
-    tenant_id: tenant.tenantId,
-    order_id: orderId,
-    item_id: null,
-    name_snapshot: name,
-    qty: Math.max(1, Math.min(99, Math.floor(fields.qty ?? 1))),
-    unit_price_cents: price,
-    notes: fields.notes?.trim() || null,
-    course: fields.course ?? null,
-    seat: fields.seat ?? null,
-    status: "draft",
-  })
-  if (error) return { error: error.message }
+  const qty = Math.max(1, Math.min(99, Math.floor(fields.qty ?? 1)))
+  const { data: line, error } = await supabase
+    .from("order_items")
+    .insert({
+      tenant_id: tenant.tenantId,
+      order_id: orderId,
+      item_id: null,
+      name_snapshot: name,
+      qty,
+      unit_price_cents: price,
+      notes: fields.notes?.trim() || null,
+      course: fields.course ?? null,
+      seat: fields.seat ?? null,
+      status: "draft",
+    })
+    .select("id")
+    .single()
+  if (error || !line) return { error: error?.message ?? "Could not add the item." }
+
+  // Rule #5: a hand-typed price is a price change → audited. Mirrors the audit
+  // place_staff_order writes for the create path. Best-effort: a failed audit
+  // insert must not lose the line the staff already added.
+  const { data: auth } = await supabase.auth.getUser()
+  if (auth.user) {
+    await supabase.from("audit_logs").insert({
+      tenant_id: tenant.tenantId,
+      actor_id: auth.user.id,
+      action: "custom_price",
+      entity_type: "order_item",
+      entity_id: line.id,
+      metadata: { name, unit_price_cents: price, qty, order_id: orderId, source: "addCustomItem" },
+    })
+  }
+
   revalidatePos(orderId)
   return { ok: true }
 }
@@ -438,6 +471,31 @@ export async function pinOrder(orderId: string, pinned: boolean): Promise<PosSta
   if (error) return { error: error.message }
   revalidatePos(orderId)
   return { ok: true }
+}
+
+/**
+ * Type-ahead over the whole customer book. loadPosData ships only the first 200
+ * to the till (an unbounded select would hand every device the entire CRM); this
+ * searches the rest on demand by name or phone. Returns at most 20 matches.
+ */
+export async function searchCustomers(
+  query: string,
+): Promise<{ id: string; name: string | null; phone: string | null }[]> {
+  const tenant = await requireRole(...ORDER_ROLES)
+  // Strip the chars that terminate PostgREST's or()/ilike grammar, then escape
+  // LIKE wildcards so a literal % or _ in the query isn't treated as a pattern.
+  const q = query.trim().replace(/[,()"]/g, "")
+  if (q.length < 2) return []
+  const like = `%${q.replace(/[%_\\]/g, (m) => `\\${m}`)}%`
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from("customers")
+    .select("id, name, phone")
+    .eq("tenant_id", tenant.tenantId)
+    .or(`name.ilike.${like},phone.ilike.${like}`)
+    .order("name")
+    .limit(20)
+  return data ?? []
 }
 
 /** KOT ids for an order, so the card can reprint its kitchen slips. */

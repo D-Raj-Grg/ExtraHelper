@@ -12,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { CustomerPicker } from "@/components/pos/customer-picker"
 import type { PosCustomer, PosStaff } from "@/components/pos/types"
 
 /** Who the order is for and who's running it. */
@@ -31,13 +32,7 @@ export const EMPTY_CHECK_IN: CheckIn = {
   waiterId: null,
 }
 
-const NO_CUSTOMER = "__none__"
 const NO_STAFF = "__none__"
-
-function customerLabel(c: PosCustomer): string {
-  if (c.name && c.phone) return `${c.name} · ${c.phone}`
-  return c.name || c.phone || "Unnamed customer"
-}
 
 /**
  * Check-in panel.
@@ -71,31 +66,21 @@ export function CheckInDetails({
       {customers.length > 0 ? (
         <Field>
           <FieldLabel htmlFor="pos-customer">Existing customer</FieldLabel>
-          <Select
-            value={value.customerId ?? NO_CUSTOMER}
-            onValueChange={(v) =>
+          <CustomerPicker
+            id="pos-customer"
+            value={value.customerId}
+            recent={customers}
+            disabled={disabled}
+            onSelect={(c) =>
               set({
-                customerId: v === NO_CUSTOMER ? null : (v as string),
+                customerId: c?.id ?? null,
                 // An id and a typed-in name are two ways to say the same thing;
                 // picking one clears the other so the server isn't handed both.
                 customerName: "",
                 customerPhone: "",
               })
             }
-            disabled={disabled}
-          >
-            <SelectTrigger id="pos-customer" className="w-full">
-              <SelectValue placeholder="Walk-in" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={NO_CUSTOMER}>Walk-in</SelectItem>
-              {customers.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {customerLabel(c)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          />
         </Field>
       ) : null}
 
