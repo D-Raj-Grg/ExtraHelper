@@ -1,8 +1,9 @@
 "use client"
 
 import { useMemo, useState, useTransition } from "react"
-import { SearchIcon } from "lucide-react"
+import { PlusIcon, SearchIcon, ShoppingCartIcon, Trash2Icon } from "lucide-react"
 import { adjustStock } from "@/app/(app)/inventory/actions"
+import { createDraftPOFromLowStock } from "@/app/(app)/purchasing/actions"
 import { money } from "@/lib/format"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -11,7 +12,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { AddIngredientSheet, ItemSheet } from "./item-sheet"
-import { fmt, LOW_BADGE, MOVE_LABELS, type CostRow, type Item, type MoveType } from "./types"
+import { WasteSheet } from "./waste-sheet"
+import { fmt, LOW_BADGE, MOVE_LABELS, type CostRow, type Item, type MoveType, type SupplierOpt } from "./types"
 
 type StatusFilter = "all" | "low" | "oversold"
 
@@ -19,17 +21,32 @@ export function StockTab({
   currency,
   timezone,
   items,
+  suppliers,
   historyByItem,
 }: {
   currency: string
   timezone: string
   items: Item[]
+  suppliers: SupplierOpt[]
   historyByItem: Map<string, CostRow[]>
 }) {
   const [query, setQuery] = useState("")
   const [categoryFilter, setCategoryFilter] = useState("all")
   const [status, setStatus] = useState<StatusFilter>("all")
   const [addOpen, setAddOpen] = useState(false)
+  const [wasteOpen, setWasteOpen] = useState(false)
+  const [poMsg, setPoMsg] = useState<string | null>(null)
+  const [poPending, startPo] = useTransition()
+
+  function draftPO() {
+    startPo(async () => {
+      setPoMsg(null)
+      const res = await createDraftPOFromLowStock()
+      if ("error" in res) setPoMsg(res.error)
+      else if (res.created === 0) setPoMsg("Nothing to reorder — or it's already on an open PO.")
+      else setPoMsg(`Drafted ${res.created} purchase order${res.created === 1 ? "" : "s"}. Open Purchasing to review.`)
+    })
+  }
 
   // By id, not by value — a stored object would freeze the row as it looked
   // when opened, so the sheet header would keep showing stale on-hand/cost
@@ -141,24 +158,38 @@ export function StockTab({
             </Select>
           </>
         ) : null}
-        <Button className="ml-auto" onClick={() => setAddOpen(true)}>
-          + Add ingredient
-        </Button>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <Button variant="outline" onClick={() => setWasteOpen(true)}>
+            <Trash2Icon className="size-4" /> Log waste
+          </Button>
+          <Button variant="outline" disabled={poPending || lowCount === 0} onClick={draftPO}>
+            <ShoppingCartIcon className="size-4" /> {poPending ? "Drafting…" : "Draft PO from low stock"}
+          </Button>
+          <Button onClick={() => setAddOpen(true)}>
+            <PlusIcon className="size-4" /> Add ingredient
+          </Button>
+        </div>
       </div>
+
+      {poMsg ? (
+        <p className="-mt-2 text-sm text-muted-foreground" role="status">
+          {poMsg}
+        </p>
+      ) : null}
 
       {/* Cards ----------------------------------------------------------- */}
       {items.length === 0 ? (
-        <div className="rounded-xl border border-dashed p-8 text-center">
+        <Card className="border-dashed p-8 text-center">
           <p className="font-medium">No ingredients yet</p>
           <p className="mt-1 text-sm text-muted-foreground">Add your first ingredient to start tracking stock.</p>
-          <Button className="mt-4" onClick={() => setAddOpen(true)}>
-            + Add ingredient
+          <Button className="mt-4 self-center" onClick={() => setAddOpen(true)}>
+            <PlusIcon className="size-4" /> Add ingredient
           </Button>
-        </div>
+        </Card>
       ) : filtered.length === 0 ? (
-        <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+        <Card className="border-dashed p-6 text-center text-sm text-muted-foreground">
           No ingredients match your filters.
-        </p>
+        </Card>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {filtered.map((item) => (
@@ -168,6 +199,7 @@ export function StockTab({
       )}
 
       <AddIngredientSheet open={addOpen} onOpenChange={setAddOpen} />
+      <WasteSheet items={items} open={wasteOpen} onOpenChange={setWasteOpen} />
       <ItemSheet
         item={editing}
         open={editing !== null}
@@ -176,6 +208,7 @@ export function StockTab({
         }}
         currency={currency}
         timezone={timezone}
+        suppliers={suppliers}
         costHistory={editing ? (historyByItem.get(editing.id) ?? []) : []}
       />
     </div>
@@ -266,7 +299,7 @@ function StockCard({ item, currency, onEdit }: { item: Item; currency: string; o
           <span className="ml-1 text-sm text-muted-foreground">{item.uom}</span>
           <span className="mt-0.5 block text-xs text-muted-foreground tabular-nums">
             on hand · reorder {fmt(Number(item.reorder_level))}
-            {item.par_level != null ? ` · par ${fmt(Number(item.par_level))}` : ""}
+            {item.par_level ? ` · par ${fmt(Number(item.par_level))}` : ""}
           </span>
         </div>
       </CardContent>

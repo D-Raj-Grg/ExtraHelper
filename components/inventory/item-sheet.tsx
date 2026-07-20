@@ -1,11 +1,24 @@
 "use client"
 
 import { useActionState, useEffect, useState, useTransition } from "react"
-import { createInventoryItem, updateInventoryItem, type InvState } from "@/app/(app)/inventory/actions"
+import {
+  createInventoryItem,
+  getItemMovements,
+  updateInventoryItem,
+  type InvState,
+  type MovementRow,
+} from "@/app/(app)/inventory/actions"
 import { money, formatDateTime } from "@/lib/format"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Field, FieldDescription, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import {
   Sheet,
   SheetContent,
@@ -13,7 +26,17 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
-import { fmt, FormError, type CostRow, type Item } from "./types"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import { ALL_MOVE_LABELS, fmt, FormError, type CostRow, type Item, type SupplierOpt } from "./types"
+
+const NO_SUPPLIER = "__none__"
 
 // ============================================================================
 // Add-ingredient sheet
@@ -106,6 +129,7 @@ export function ItemSheet({
   onOpenChange,
   currency,
   timezone,
+  suppliers,
   costHistory,
 }: {
   item: Item | null
@@ -113,6 +137,7 @@ export function ItemSheet({
   onOpenChange: (open: boolean) => void
   currency: string
   timezone: string
+  suppliers: SupplierOpt[]
   costHistory: CostRow[]
 }) {
   return (
@@ -127,7 +152,8 @@ export function ItemSheet({
               </SheetDescription>
             </SheetHeader>
             <div className="flex flex-1 flex-col gap-8 overflow-y-auto px-6 pb-8">
-              <ItemEditBody key={item.id} item={item} onSaved={() => onOpenChange(false)} />
+              <ItemEditBody key={item.id} item={item} suppliers={suppliers} onSaved={() => onOpenChange(false)} />
+              <UsageHistory key={`u-${item.id}`} itemId={item.id} uom={item.uom} timezone={timezone} open={open} />
               <CostHistory costHistory={costHistory} currency={currency} timezone={timezone} />
             </div>
           </>
@@ -137,13 +163,14 @@ export function ItemSheet({
   )
 }
 
-function ItemEditBody({ item, onSaved }: { item: Item; onSaved: () => void }) {
+function ItemEditBody({ item, suppliers, onSaved }: { item: Item; suppliers: SupplierOpt[]; onSaved: () => void }) {
   const [name, setName] = useState(item.name)
   const [uom, setUom] = useState(item.uom)
   const [category, setCategory] = useState(item.category ?? "")
   const [reorder, setReorder] = useState(String(item.reorder_level))
-  const [par, setPar] = useState(item.par_level == null ? "" : String(item.par_level))
+  const [par, setPar] = useState(!item.par_level ? "" : String(item.par_level))
   const [cost, setCost] = useState((item.cost_cents / 100).toFixed(2))
+  const [supplierId, setSupplierId] = useState(item.supplier_id ?? NO_SUPPLIER)
   const [err, setErr] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
 
@@ -161,6 +188,7 @@ function ItemEditBody({ item, onSaved }: { item: Item; onSaved: () => void }) {
         reorder: reorderN,
         par: parN,
         cost: costN,
+        supplierId: supplierId === NO_SUPPLIER ? null : supplierId,
       })
       if (res && "error" in res) setErr(res.error)
       else onSaved()
@@ -180,10 +208,29 @@ function ItemEditBody({ item, onSaved }: { item: Item; onSaved: () => void }) {
           <Input id="edit-inv-uom" value={uom} onChange={(e) => setUom(e.target.value)} />
         </Field>
       </div>
-      <Field>
-        <FieldLabel htmlFor="edit-inv-category">Category</FieldLabel>
-        <Input id="edit-inv-category" value={category} onChange={(e) => setCategory(e.target.value)} placeholder="—" />
-      </Field>
+      <div className="flex flex-wrap gap-4">
+        <Field className="min-w-40 flex-1">
+          <FieldLabel htmlFor="edit-inv-category">Category</FieldLabel>
+          <Input id="edit-inv-category" value={category} onChange={(e) => setCategory(e.target.value)} placeholder="—" />
+        </Field>
+        <Field className="min-w-40 flex-1">
+          <FieldLabel htmlFor="edit-inv-supplier">Supplier</FieldLabel>
+          <Select value={supplierId} onValueChange={(v) => setSupplierId((v ?? NO_SUPPLIER) as string)}>
+            <SelectTrigger id="edit-inv-supplier" className="w-full">
+              <SelectValue placeholder="No supplier" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NO_SUPPLIER}>No supplier</SelectItem>
+              {suppliers.map((s) => (
+                <SelectItem key={s.id} value={s.id}>
+                  {s.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <FieldDescription>Used to group low-stock draft POs.</FieldDescription>
+        </Field>
+      </div>
       <div className="flex flex-wrap gap-4">
         <Field className="w-28">
           <FieldLabel htmlFor="edit-inv-reorder">Reorder at</FieldLabel>
@@ -206,6 +253,72 @@ function ItemEditBody({ item, onSaved }: { item: Item; onSaved: () => void }) {
         </Button>
         <FormError state={err ? { error: err } : undefined} />
       </div>
+    </FieldSet>
+  )
+}
+
+function UsageHistory({
+  itemId,
+  uom,
+  timezone,
+  open,
+}: {
+  itemId: string
+  uom: string
+  timezone: string
+  open: boolean
+}) {
+  const [rows, setRows] = useState<MovementRow[] | null>(null)
+  const [pending, startTransition] = useTransition()
+
+  useEffect(() => {
+    if (!open) return
+    startTransition(async () => {
+      const res = await getItemMovements(itemId)
+      setRows("ok" in res ? res.movements : [])
+    })
+  }, [itemId, open])
+
+  return (
+    <FieldSet>
+      <FieldLegend variant="label">Usage history</FieldLegend>
+      {rows === null && pending ? (
+        <p className="text-sm text-muted-foreground">Loading…</p>
+      ) : !rows || rows.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No stock movements yet.</p>
+      ) : (
+        <Table className="text-sm">
+          <TableHeader>
+            <TableRow>
+              <TableHead>When</TableHead>
+              <TableHead>Type</TableHead>
+              <TableHead className="text-right">Change</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((m) => {
+              const q = Number(m.qty)
+              return (
+                <TableRow key={m.id}>
+                  <TableCell className="whitespace-nowrap tabular-nums text-muted-foreground">
+                    {formatDateTime(m.created_at, timezone)}
+                  </TableCell>
+                  <TableCell>{ALL_MOVE_LABELS[m.type] ?? m.type}</TableCell>
+                  <TableCell
+                    className={
+                      "text-right tabular-nums font-medium " +
+                      (q < 0 ? "text-destructive" : "text-emerald-700 dark:text-emerald-400")
+                    }
+                  >
+                    {q > 0 ? "+" : ""}
+                    {fmt(q)} {uom}
+                  </TableCell>
+                </TableRow>
+              )
+            })}
+          </TableBody>
+        </Table>
+      )}
     </FieldSet>
   )
 }

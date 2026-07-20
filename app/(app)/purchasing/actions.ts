@@ -70,6 +70,23 @@ export async function addPOItem(
   return { ok: true }
 }
 
+/**
+ * Draft a purchase order for everything at/below reorder, grouped by supplier.
+ * Returns how many drafts were created (0 = nothing to reorder, or already on an
+ * open PO). Ordering qty mirrors the inventory report's reorder_qty.
+ */
+export async function createDraftPOFromLowStock(): Promise<
+  { error: string } | { ok: true; created: number }
+> {
+  const tenant = await requireRole(...PURCH_ROLES)
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc("create_draft_po_from_reorder", { _tenant: tenant.tenantId })
+  if (error) return { error: error.message }
+  revalidatePath("/purchasing")
+  revalidatePath("/inventory")
+  return { ok: true, created: (data as number) ?? 0 }
+}
+
 /** Receive a PO in full (GRN): trusted SQL increments stock + logs movements. */
 export async function receivePO(poId: string): Promise<PurchState> {
   await requireRole(...PURCH_ROLES)

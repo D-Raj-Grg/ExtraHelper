@@ -5,7 +5,17 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { StockTab } from "./stock-tab"
 import { RecipesTab } from "./recipes-tab"
 import { CountsTab } from "./counts-tab"
-import type { CostRow, CountRow, Item, MenuOpt, Recipe } from "./types"
+import type {
+  CostRow,
+  CountRow,
+  Item,
+  MenuOpt,
+  ModifierIngredient,
+  ModifierOpt,
+  Recipe,
+  SupplierOpt,
+  VariantOpt,
+} from "./types"
 
 export function InventoryManager({
   currency,
@@ -13,6 +23,10 @@ export function InventoryManager({
   items,
   menu,
   recipes,
+  variants,
+  modifiers,
+  modifierIngredients,
+  suppliers,
   costHistory,
   counts,
   canCount,
@@ -22,6 +36,10 @@ export function InventoryManager({
   items: Item[]
   menu: MenuOpt[]
   recipes: Recipe[]
+  variants: VariantOpt[]
+  modifiers: ModifierOpt[]
+  modifierIngredients: ModifierIngredient[]
+  suppliers: SupplierOpt[]
   costHistory: CostRow[]
   counts: CountRow[]
   canCount: boolean
@@ -47,10 +65,24 @@ export function InventoryManager({
         </TabsList>
 
         <TabsContent value="stock">
-          <StockTab currency={currency} timezone={timezone} items={items} historyByItem={historyByItem} />
+          <StockTab
+            currency={currency}
+            timezone={timezone}
+            items={items}
+            suppliers={suppliers}
+            historyByItem={historyByItem}
+          />
         </TabsContent>
         <TabsContent value="recipes">
-          <RecipesTab menu={menu} items={items} recipes={recipes} />
+          <RecipesTab
+            menu={menu}
+            items={items}
+            recipes={recipes}
+            variants={variants}
+            modifiers={modifiers}
+            modifierIngredients={modifierIngredients}
+            currency={currency}
+          />
         </TabsContent>
         {canCount ? (
           <TabsContent value="counts">

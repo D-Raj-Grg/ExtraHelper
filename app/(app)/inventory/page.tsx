@@ -9,19 +9,51 @@ export default async function InventoryPage() {
   const tenant = await requirePermission("inventory.view")
   const supabase = await createClient()
 
-  const [{ data: items }, { data: menu }, { data: recipes }, { data: counts }, { data: costHistory }] =
-    await Promise.all([
+  const [
+    { data: items },
+    { data: menu },
+    { data: recipes },
+    { data: variants },
+    { data: modifiers },
+    { data: modifierIngredients },
+    { data: suppliers },
+    { data: counts },
+    { data: costHistory },
+  ] = await Promise.all([
       supabase
         .from("inventory_items")
-        .select("id, name, uom, category, current_qty, reorder_level, par_level, cost_cents")
+        .select("id, name, uom, category, current_qty, reorder_level, par_level, cost_cents, supplier_id")
         .eq("tenant_id", tenant.tenantId)
         .order("name"),
-      supabase.from("menu_items").select("id, name").eq("tenant_id", tenant.tenantId).order("name"),
+      supabase
+        .from("menu_items")
+        .select("id, name, price_cents:base_price_cents")
+        .eq("tenant_id", tenant.tenantId)
+        .order("name"),
       supabase
         .from("recipes")
-        .select("id, qty, menu_items(name), inventory_items(name, uom)")
+        .select("id, qty, menu_item_id, inventory_item_id, menu_items(name), inventory_items(name, uom)")
         .eq("tenant_id", tenant.tenantId)
         .order("id"),
+      supabase
+        .from("item_variants")
+        .select("id, item_id, name, recipe_scale")
+        .eq("tenant_id", tenant.tenantId)
+        .order("name"),
+      supabase
+        .from("modifiers")
+        .select("id, name")
+        .eq("tenant_id", tenant.tenantId)
+        .order("name"),
+      supabase
+        .from("modifier_ingredients")
+        .select("id, modifier_id, inventory_item_id, qty")
+        .eq("tenant_id", tenant.tenantId),
+      supabase
+        .from("suppliers")
+        .select("id, name")
+        .eq("tenant_id", tenant.tenantId)
+        .order("name"),
       supabase
         .from("stock_counts")
         .select("id, created_at, posted_at")
@@ -44,15 +76,19 @@ export default async function InventoryPage() {
   return (
     <PageShell>
       <PageHeader
-        title={<>{tenant.name} · Inventory</>}
-        description="Track ingredients, map recipes so sales auto-deduct stock, and reconcile with counts."
+        title="Inventory"
+        description={`${tenant.name} — track ingredients, map recipes so sales auto-deduct stock, and reconcile with counts.`}
       />
       <InventoryManager
         currency={tenant.currency}
         timezone={tenant.timezone}
         items={(items ?? []) as never}
-        menu={menu ?? []}
+        menu={(menu ?? []) as never}
         recipes={(recipes ?? []) as never}
+        variants={(variants ?? []) as never}
+        modifiers={modifiers ?? []}
+        modifierIngredients={(modifierIngredients ?? []) as never}
+        suppliers={suppliers ?? []}
         costHistory={(costHistory ?? []) as never}
         counts={counts ?? []}
         canCount={canCount}
