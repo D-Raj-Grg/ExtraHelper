@@ -1,10 +1,6 @@
-import Link from "next/link"
 import { createClient } from "@/lib/supabase/server"
 import { requirePermission } from "@/lib/supabase/guards"
-import { InventoryManager } from "@/components/inventory-manager"
-import { startCount } from "@/app/(app)/inventory/actions"
-import { formatDateTime } from "@/lib/format"
-import { Button } from "@/components/ui/button"
+import { InventoryManager } from "@/components/inventory/inventory-manager"
 import { PageShell, PageHeader } from "@/components/page-header"
 
 export const dynamic = "force-dynamic"
@@ -13,81 +9,90 @@ export default async function InventoryPage() {
   const tenant = await requirePermission("inventory.view")
   const supabase = await createClient()
 
-  const [{ data: items }, { data: menu }, { data: recipes }, { data: counts }] = await Promise.all([
-    supabase
-      .from("inventory_items")
-      .select("id, name, uom, current_qty, reorder_level, cost_cents")
-      .eq("tenant_id", tenant.tenantId)
-      .order("name"),
-    supabase.from("menu_items").select("id, name").eq("tenant_id", tenant.tenantId).order("name"),
-    supabase
-      .from("recipes")
-      .select("id, qty, menu_items(name), inventory_items(name, uom)")
-      .eq("tenant_id", tenant.tenantId)
-      .order("id"),
-    supabase
-      .from("stock_counts")
-      .select("id, created_at, posted_at")
-      .eq("tenant_id", tenant.tenantId)
-      .order("created_at", { ascending: false })
-      .limit(5),
-  ])
+  const [
+    { data: items },
+    { data: menu },
+    { data: recipes },
+    { data: variants },
+    { data: modifiers },
+    { data: modifierIngredients },
+    { data: suppliers },
+    { data: counts },
+    { data: costHistory },
+  ] = await Promise.all([
+      supabase
+        .from("inventory_items")
+        .select("id, name, uom, category, current_qty, reorder_level, par_level, cost_cents, supplier_id")
+        .eq("tenant_id", tenant.tenantId)
+        .order("name"),
+      supabase
+        .from("menu_items")
+        .select("id, name, price_cents:base_price_cents")
+        .eq("tenant_id", tenant.tenantId)
+        .order("name"),
+      supabase
+        .from("recipes")
+        .select("id, qty, menu_item_id, inventory_item_id, menu_items(name), inventory_items(name, uom)")
+        .eq("tenant_id", tenant.tenantId)
+        .order("id"),
+      supabase
+        .from("item_variants")
+        .select("id, item_id, name, recipe_scale")
+        .eq("tenant_id", tenant.tenantId)
+        .order("name"),
+      supabase
+        .from("modifiers")
+        .select("id, name")
+        .eq("tenant_id", tenant.tenantId)
+        .order("name"),
+      supabase
+        .from("modifier_ingredients")
+        .select("id, modifier_id, inventory_item_id, qty")
+        .eq("tenant_id", tenant.tenantId),
+      supabase
+        .from("suppliers")
+        .select("id, name")
+        .eq("tenant_id", tenant.tenantId)
+        .order("name"),
+      supabase
+        .from("stock_counts")
+        .select("id, created_at, posted_at")
+        .eq("tenant_id", tenant.tenantId)
+        .order("created_at", { ascending: false })
+        .limit(5),
+      // Purchase movements form the unit-cost (price) history per item.
+      supabase
+        .from("stock_movements")
+        .select("inventory_item_id, qty, unit_cost_cents, created_at")
+        .eq("tenant_id", tenant.tenantId)
+        .eq("type", "purchase")
+        .not("unit_cost_cents", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(200),
+    ])
 
   const canCount = ["owner", "manager", "inventory"].includes(tenant.role)
 
   return (
     <PageShell>
       <PageHeader
-        title={<>{tenant.name} · Inventory</>}
-        description="Stock levels, low-stock alerts, and recipe (BOM) mapping. Sales auto-deduct."
+        title="Inventory"
+        description={`${tenant.name} — track ingredients, map recipes so sales auto-deduct stock, and reconcile with counts.`}
       />
       <InventoryManager
         currency={tenant.currency}
-        items={items ?? []}
-        menu={menu ?? []}
+        timezone={tenant.timezone}
+        items={(items ?? []) as never}
+        menu={(menu ?? []) as never}
         recipes={(recipes ?? []) as never}
+        variants={(variants ?? []) as never}
+        modifiers={modifiers ?? []}
+        modifierIngredients={(modifierIngredients ?? []) as never}
+        suppliers={suppliers ?? []}
+        costHistory={(costHistory ?? []) as never}
+        counts={counts ?? []}
+        canCount={canCount}
       />
-
-      {canCount ? (
-        <section className="mt-8">
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Stock counts</h2>
-            <form action={startCount}>
-              <Button size="sm" type="submit">
-                Start stock count
-              </Button>
-            </form>
-          </div>
-          <p className="mb-3 text-sm text-muted-foreground">
-            Snapshot on-hand, enter actual counts, then post to reconcile (variance → shrinkage/wastage).
-          </p>
-          {counts && counts.length > 0 ? (
-            <ul className="divide-y rounded-lg border text-sm">
-              {counts.map((c) => (
-                <li key={c.id}>
-                  <Link
-                    href={`/inventory/count/${c.id}`}
-                    className="flex items-center justify-between px-3 py-2 hover:bg-muted/50"
-                  >
-                    <span>{formatDateTime(c.created_at, tenant.timezone)}</span>
-                    <span
-                      className={
-                        c.posted_at
-                          ? "text-xs text-green-600 dark:text-green-400"
-                          : "text-xs text-amber-600 dark:text-amber-400"
-                      }
-                    >
-                      {c.posted_at ? "posted" : "draft"}
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-sm text-muted-foreground">No counts yet.</p>
-          )}
-        </section>
-      ) : null}
     </PageShell>
   )
 }

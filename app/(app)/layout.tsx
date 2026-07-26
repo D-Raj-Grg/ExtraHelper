@@ -7,11 +7,13 @@ import { ImpersonationBanner } from "@/components/impersonation-banner"
 import { TenantProvider } from "@/components/tenant-provider"
 import { PreferencesProvider } from "@/components/preferences-provider"
 import { OfflineSyncProvider } from "@/components/offline-sync-provider"
+import { PrintProvider } from "@/components/print/print-provider"
 import { RealtimeAuth } from "@/components/realtime-auth"
 import { createClient } from "@/lib/supabase/server"
 import { getActiveTenant, getTenantMemberships } from "@/lib/supabase/tenant"
 import { getUserPreferences } from "@/lib/supabase/preferences"
 import { getMyPermissions } from "@/lib/supabase/permissions"
+import { getProfile } from "@/lib/supabase/profile"
 import { PermissionProvider } from "@/components/permission-provider"
 
 /**
@@ -34,20 +36,21 @@ export default async function AppLayout({
   const tenant = await getActiveTenant()
   if (!tenant) redirect("/onboarding")
 
-  const [prefs, memberships, permissions] = await Promise.all([
+  const [prefs, memberships, permissions, profile] = await Promise.all([
     getUserPreferences(),
     getTenantMemberships(),
     getMyPermissions(tenant.tenantId),
+    getProfile(),
   ])
 
   const sidebarUser = {
     name:
-      tenant.name ??
+      profile?.fullName ??
       (user.user_metadata?.restaurant_name as string) ??
       user.email?.split("@")[0] ??
       "User",
     email: user.email ?? "",
-    avatar: "",
+    avatar: profile?.avatarUrl ?? "",
   }
 
   return (
@@ -55,6 +58,7 @@ export default async function AppLayout({
       <PreferencesProvider initialTheme={prefs.theme} initialScale={prefs.scale}>
       <PermissionProvider permissions={permissions}>
       <OfflineSyncProvider>
+      <PrintProvider>
       <RealtimeAuth />
       <SidebarProvider
         style={
@@ -77,6 +81,7 @@ export default async function AppLayout({
         </SidebarInset>
         <Toaster />
       </SidebarProvider>
+      </PrintProvider>
       </OfflineSyncProvider>
       </PermissionProvider>
       </PreferencesProvider>

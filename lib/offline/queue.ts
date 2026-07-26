@@ -1,5 +1,7 @@
 import localforage from "localforage"
 
+import type { OrderMeta, PlaceLine } from "@/app/(app)/pos/actions"
+
 // IndexedDB-backed FIFO queue for writes captured while offline. Each entry
 // carries a stable idempotency key so replay on reconnect can't double-apply.
 
@@ -12,7 +14,15 @@ export type QueueEntry =
       key: string
       createdAt: number
       attempts: number
-      payload: { tableId: string | null; items: { item_id: string; qty: number }[]; label: string }
+      // PlaceLine's fields are all optional bar `qty`, so an entry queued by an
+      // older build — items of `{item_id, qty}`, no `meta` — still satisfies
+      // this and replays cleanly. Don't tighten it without draining the queue.
+      payload: {
+        tableId: string | null
+        items: PlaceLine[]
+        label: string
+        meta?: OrderMeta
+      }
     }
   | {
       id: string

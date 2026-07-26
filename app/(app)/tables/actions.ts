@@ -68,6 +68,108 @@ export async function setTableState(
   return { ok: true }
 }
 
+/** Persist a table's position on the visual floor map (drag-and-drop). */
+export async function updateTablePosition(
+  tableId: string,
+  x: number,
+  y: number,
+): Promise<TablesState> {
+  const tenant = await requireRole("owner", "manager")
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from("restaurant_tables")
+    .update({ pos_x: Math.round(x), pos_y: Math.round(y) })
+    .eq("id", tableId)
+    .eq("tenant_id", tenant.tenantId)
+  if (error) return { error: error.message }
+  revalidatePath("/tables")
+  return { ok: true }
+}
+
+/** Resolve the current active (non-closed/cancelled) order on a table. */
+async function activeOrderForTable(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  tenantId: string,
+  tableId: string,
+): Promise<string | null> {
+  const { data } = await supabase
+    .from("orders")
+    .select("id")
+    .eq("tenant_id", tenantId)
+    .eq("table_id", tableId)
+    .not("status", "in", "(closed,cancelled)")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  return data?.id ?? null
+}
+
+/** Move a table's active order to another table (transfer). */
+export async function transferTable(
+  fromTableId: string,
+  toTableId: string,
+): Promise<TablesState> {
+  const tenant = await requireRole("owner", "manager", "receptionist", "waiter", "cashier")
+  if (fromTableId === toTableId) return { error: "Pick a different table." }
+  const supabase = await createClient()
+  const orderId = await activeOrderForTable(supabase, tenant.tenantId, fromTableId)
+  if (!orderId) return { error: "That table has no active order." }
+  const { error } = await supabase.rpc("transfer_order", {
+    _order_id: orderId,
+    _to_table: toTableId,
+  })
+  if (error) return { error: error.message }
+  revalidatePath("/tables")
+  return { ok: true }
+}
+
+/** Merge two tables' orders onto one combined bill. Returns the bill id. */
+export async function mergeTables(
+  primaryTableId: string,
+  otherTableId: string,
+): Promise<{ error: string } | { ok: true; billId: string }> {
+  const tenant = await requireRole("owner", "manager", "cashier")
+  if (primaryTableId === otherTableId) return { error: "Pick two different tables." }
+  const supabase = await createClient()
+  const [primaryOrder, otherOrder] = await Promise.all([
+    activeOrderForTable(supabase, tenant.tenantId, primaryTableId),
+    activeOrderForTable(supabase, tenant.tenantId, otherTableId),
+  ])
+  if (!primaryOrder || !otherOrder) return { error: "Both tables need an active order to merge." }
+  const { data: billId, error } = await supabase.rpc("create_bill_for_order", {
+    _order_id: primaryOrder,
+  })
+  if (error || !billId) return { error: error?.message ?? "Could not open a bill." }
+  const { error: addErr } = await supabase.rpc("add_order_to_bill", {
+    _bill_id: billId as string,
+    _order_id: otherOrder,
+  })
+  if (addErr) return { error: addErr.message }
+  revalidatePath("/tables")
+  return { ok: true, billId: billId as string }
+}
+
+/** Split selected items off a table's order to a new order on another table. */
+export async function splitTable(
+  fromTableId: string,
+  toTableId: string | null,
+  itemIds: string[],
+): Promise<TablesState> {
+  const tenant = await requireRole("owner", "manager", "receptionist", "waiter", "cashier")
+  if (!itemIds.length) return { error: "Select at least one item to split." }
+  const supabase = await createClient()
+  const orderId = await activeOrderForTable(supabase, tenant.tenantId, fromTableId)
+  if (!orderId) return { error: "That table has no active order." }
+  const { error } = await supabase.rpc("split_order_items", {
+    _order_id: orderId,
+    _to_table: toTableId,
+    _item_ids: itemIds,
+  })
+  if (error) return { error: error.message }
+  revalidatePath("/tables")
+  return { ok: true }
+}
+
 export async function deleteTable(tableId: string): Promise<TablesState> {
   const tenant = await requireRole("owner", "manager")
   const supabase = await createClient()

@@ -1,9 +1,11 @@
 "use client"
 
 import { useState, useTransition } from "react"
+import { CheckCircle2Icon, MailIcon, PrinterIcon } from "lucide-react"
 import { emailReceipt, type ReceiptState } from "@/app/receipt/actions"
 import { formatDateTime, money } from "@/lib/format"
 import { Button } from "@/components/ui/button"
+import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 
 type Bill = {
@@ -19,6 +21,26 @@ type Bill = {
 }
 type Item = { id: string; description: string; qty: number; unit_price_cents: number; total_cents: number }
 type Payment = { id: string; method: string; amount_cents: number }
+
+/** One printed money line. Module scope — see CLAUDE.md. */
+function Row({
+  label,
+  cents,
+  currency,
+  bold,
+}: {
+  label: string
+  cents: number
+  currency: string
+  bold?: boolean
+}) {
+  return (
+    <div className={`flex justify-between ${bold ? "font-bold" : ""}`}>
+      <span>{label}</span>
+      <span>{money(cents, currency)}</span>
+    </div>
+  )
+}
 
 export function ReceiptView({
   tenantName,
@@ -49,13 +71,6 @@ export function ReceiptView({
     })
   }
 
-  const Row = ({ label, cents, bold }: { label: string; cents: number; bold?: boolean }) => (
-    <div className={`flex justify-between ${bold ? "font-bold" : ""}`}>
-      <span>{label}</span>
-      <span>{money(cents, currency)}</span>
-    </div>
-  )
-
   return (
     <div className="w-full max-w-xs">
       {/* Printable receipt (thermal-width). */}
@@ -79,14 +94,14 @@ export function ReceiptView({
           ))}
         </div>
         <div className="mt-2 space-y-0.5 border-t border-dashed border-neutral-300 pt-2">
-          <Row label="Subtotal" cents={bill.subtotal_cents} />
+          <Row currency={currency} label="Subtotal" cents={bill.subtotal_cents} />
           {bill.service_charge_cents > 0 ? (
-            <Row label="Service + pkg" cents={bill.service_charge_cents} />
+            <Row currency={currency} label="Service + pkg" cents={bill.service_charge_cents} />
           ) : null}
-          {bill.tax_cents > 0 ? <Row label="Tax" cents={bill.tax_cents} /> : null}
-          {bill.discount_cents > 0 ? <Row label="Discount" cents={-bill.discount_cents} /> : null}
+          {bill.tax_cents > 0 ? <Row currency={currency} label="Tax" cents={bill.tax_cents} /> : null}
+          {bill.discount_cents > 0 ? <Row currency={currency} label="Discount" cents={-bill.discount_cents} /> : null}
           <div className="border-t border-neutral-400 pt-1">
-            <Row label="TOTAL" cents={bill.total_cents} bold />
+            <Row currency={currency} label="TOTAL" cents={bill.total_cents} bold />
           </div>
         </div>
         {payments.length > 0 ? (
@@ -105,30 +120,50 @@ export function ReceiptView({
         </div>
       </div>
 
-      {/* Controls (hidden when printing). */}
-      <div className="mt-4 space-y-3 print:hidden">
-        <Button className="w-full" onClick={() => window.print()}>
-          Print receipt
+      {/* Controls (hidden when printing). The receipt above stays mono/paper —
+          only the surrounding UI follows the app's design system. */}
+      <div className="mt-4 flex flex-col gap-3 print:hidden">
+        <Button className="h-12 w-full text-base" onClick={() => window.print()}>
+          <PrinterIcon className="size-4" /> Print receipt
         </Button>
-        <div className="flex gap-2">
-          <Input
-            type="email"
-            placeholder="customer@email.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          <Button variant="secondary" disabled={pending} onClick={sendEmail}>
-            {pending ? "…" : "Email"}
+
+        {/* A real form so Enter sends, and the field is actually labelled. */}
+        <form
+          className="flex items-end gap-2"
+          onSubmit={(e) => {
+            e.preventDefault()
+            sendEmail()
+          }}
+        >
+          <Field className="flex-1">
+            <FieldLabel htmlFor="receipt-email">Email a copy</FieldLabel>
+            <Input
+              id="receipt-email"
+              type="email"
+              placeholder="customer@email.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+          </Field>
+          <Button type="submit" variant="secondary" disabled={pending || !email.trim()}>
+            <MailIcon className="size-4" />
+            {pending ? "Sending…" : "Send"}
           </Button>
-        </div>
+        </form>
+
         {state && "error" in state ? (
           <p className="text-sm text-destructive" role="alert">
             {state.error}
           </p>
         ) : null}
         {state && "ok" in state ? (
-          <p className="text-sm text-green-600 dark:text-green-400" role="status">
-            Receipt sent.
+          <p
+            className="flex items-center gap-1.5 text-sm text-emerald-700 dark:text-emerald-400"
+            role="status"
+          >
+            <CheckCircle2Icon className="size-4 shrink-0" />
+            Receipt sent to {email}.
           </p>
         ) : null}
       </div>

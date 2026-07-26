@@ -70,11 +70,48 @@ export async function addPOItem(
   return { ok: true }
 }
 
-/** Receive a PO (GRN): trusted SQL increments stock + logs movements. */
+/**
+ * Draft a purchase order for everything at/below reorder, grouped by supplier.
+ * Returns how many drafts were created (0 = nothing to reorder, or already on an
+ * open PO). Ordering qty mirrors the inventory report's reorder_qty.
+ */
+export async function createDraftPOFromLowStock(): Promise<
+  { error: string } | { ok: true; created: number }
+> {
+  const tenant = await requireRole(...PURCH_ROLES)
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc("create_draft_po_from_reorder", { _tenant: tenant.tenantId })
+  if (error) return { error: error.message }
+  revalidatePath("/purchasing")
+  revalidatePath("/inventory")
+  return { ok: true, created: (data as number) ?? 0 }
+}
+
+/** Receive a PO in full (GRN): trusted SQL increments stock + logs movements. */
 export async function receivePO(poId: string): Promise<PurchState> {
   await requireRole(...PURCH_ROLES)
   const supabase = await createClient()
   const { error } = await supabase.rpc("receive_po", { _po_id: poId })
+  if (error) return { error: error.message }
+  revalidatePath("/purchasing")
+  revalidatePath("/inventory")
+  return { ok: true }
+}
+
+/**
+ * Partial GRN: receive specific quantities per line. Sets the PO to 'received'
+ * when every line is fully received, otherwise 'partial'. Records unit cost on
+ * each movement (feeds cost history).
+ */
+export async function receivePOPartial(
+  poId: string,
+  lines: { po_item_id: string; qty: number }[],
+): Promise<PurchState> {
+  await requireRole(...PURCH_ROLES)
+  const clean = lines.filter((l) => l.po_item_id && Number.isFinite(l.qty) && l.qty > 0)
+  if (!clean.length) return { error: "Enter a quantity to receive on at least one line." }
+  const supabase = await createClient()
+  const { error } = await supabase.rpc("receive_po_partial", { _po_id: poId, _lines: clean })
   if (error) return { error: error.message }
   revalidatePath("/purchasing")
   revalidatePath("/inventory")

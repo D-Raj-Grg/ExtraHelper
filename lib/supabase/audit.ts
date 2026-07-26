@@ -10,6 +10,13 @@ export type AuditAction =
   | "tenant_suspend"
   | "tenant_activate"
   | "role_change"
+  | "table_transfer"
+  | "table_merge"
+  | "table_split"
+  | "tenant_reset"
+  | "ownership_transfer"
+  | "tenant_delete_requested"
+  | "tenant_delete_cancelled"
 
 export type AuditEntry = {
   tenantId: string

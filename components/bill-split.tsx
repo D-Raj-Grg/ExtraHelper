@@ -6,8 +6,10 @@ import { money } from "@/lib/format"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 type SplitItem = { id: string; description: string; qty: number; total_cents: number }
+type TenderMethod = "cash" | "card" | "online" | "wallet"
 
 /** Distribute `total` cents into `n` parts that sum back to `total` exactly. */
 function distribute(total: number, n: number): number[] {
@@ -47,7 +49,7 @@ export function BillSplit({
 }) {
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
-  const [mode, setMode] = useState<"none" | "equal" | "item">("none")
+  const [mode, setMode] = useState<"none" | "equal" | "item" | "tender">("none")
   // Synchronous re-entrancy guard — `pending` from useTransition flips only on
   // the next render, so a fast double-tap can slip a second call past it.
   const inFlight = useRef(false)
@@ -72,7 +74,29 @@ export function BillSplit({
   const itemShare =
     linesTotal > 0 ? Math.min(due, Math.round((selectedSubtotal / linesTotal) * totalCents)) : 0
 
-  function take(cents: number, method: "cash" | "card", key: string, after?: () => void) {
+  // Split-across-methods: compose tenders (cash + card + wallet …) that each
+  // record as a partial payment; record_payment rolls the bill to paid on the
+  // last one and clamps overpay. Deterministic keys per tender slot de-dup.
+  const [tMethod, setTMethod] = useState<TenderMethod>("cash")
+  const [tAmount, setTAmount] = useState<string>("")
+  const tenderNonce = useRef<string>("")
+  const tenderIdx = useRef(0)
+
+  function payTender() {
+    const cents = Math.round(Number(tAmount) * 100)
+    if (!Number.isFinite(cents) || cents <= 0) {
+      setError("Enter a valid tender amount.")
+      return
+    }
+    if (!tenderNonce.current) tenderNonce.current = freshNonce()
+    const key = `${billId}:tender:${tenderNonce.current}:${tenderIdx.current}`
+    take(cents, tMethod, key, () => {
+      tenderIdx.current += 1
+      setTAmount("")
+    })
+  }
+
+  function take(cents: number, method: TenderMethod, key: string, after?: () => void) {
     if (cents <= 0 || inFlight.current) return
     inFlight.current = true
     setError(null)
@@ -101,7 +125,7 @@ export function BillSplit({
       <div className="mb-2 flex items-center gap-2">
         <p className="text-sm font-medium">Split bill</p>
         <div className="flex gap-1">
-          {(["equal", "item"] as const).map((m) => (
+          {(["equal", "item", "tender"] as const).map((m) => (
             <Button
               key={m}
               type="button"
@@ -115,7 +139,7 @@ export function BillSplit({
               }}
               className="rounded-full"
             >
-              {m === "equal" ? "Equally" : "By item"}
+              {m === "equal" ? "Equally" : m === "item" ? "By item" : "By method"}
             </Button>
           ))}
         </div>
@@ -252,6 +276,51 @@ export function BillSplit({
             Select each payer&apos;s items, take payment, repeat. Share includes proportional
             tax/service.
           </p>
+        </div>
+      ) : null}
+
+      {mode === "tender" ? (
+        <div className="space-y-2">
+          <p className="text-xs text-muted-foreground">
+            Add each tender (e.g. {money(Math.ceil(due / 2), currency)} cash +{" "}
+            {money(due - Math.ceil(due / 2), currency)} card). Remaining due:{" "}
+            <span className="font-medium">{money(due, currency)}</span>
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Select value={tMethod} onValueChange={(v) => setTMethod((v as TenderMethod) ?? "cash")}>
+              <SelectTrigger className="h-8 max-w-28 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="cash">Cash</SelectItem>
+                <SelectItem value="card">Card</SelectItem>
+                <SelectItem value="online">Card (online)</SelectItem>
+                <SelectItem value="wallet">Wallet</SelectItem>
+              </SelectContent>
+            </Select>
+            <Input
+              type="number"
+              min={0}
+              step="0.01"
+              value={tAmount}
+              onChange={(e) => setTAmount(e.target.value)}
+              placeholder={(due / 100).toFixed(2)}
+              className="h-8 max-w-24 text-xs"
+            />
+            <Button size="sm" disabled={pending || due <= 0} onClick={payTender}>
+              Add tender
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={pending || due <= 0}
+              onClick={() => {
+                setTAmount((due / 100).toFixed(2))
+              }}
+            >
+              Fill remaining
+            </Button>
+          </div>
         </div>
       ) : null}
 

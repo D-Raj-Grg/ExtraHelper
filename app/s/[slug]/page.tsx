@@ -11,7 +11,7 @@ type Menu = {
   categories: {
     id: string
     name: string
-    items: { id: string; name: string; description: string | null; price_cents: number }[]
+    items: { id: string; name: string; description: string | null; price_cents: number; is_veg: boolean | null }[]
   }[]
 }
 

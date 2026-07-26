@@ -5,7 +5,11 @@ import { headers } from "next/headers"
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 
-export type AuthState = { error: string } | { confirm: string } | undefined
+export type AuthState =
+  | { error: string }
+  | { confirm: string }
+  | { otpSent: string }
+  | undefined
 
 // Basic shape check — the real gate is Supabase, but this catches typos early.
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -68,6 +72,7 @@ export async function signup(
   const email = String(formData.get("email") ?? "").trim()
   const password = String(formData.get("password") ?? "")
   const restaurantName = String(formData.get("restaurantName") ?? "").trim()
+  const fullName = String(formData.get("fullName") ?? "").trim()
 
   if (!email || !password) return { error: "Email and password are required." }
   if (!EMAIL_RE.test(email)) return { error: "Enter a valid email address." }
@@ -80,7 +85,8 @@ export async function signup(
     email,
     password,
     options: {
-      data: { restaurant_name: restaurantName },
+      // full_name feeds the profiles row via the handle_new_user trigger.
+      data: { restaurant_name: restaurantName, full_name: fullName },
       emailRedirectTo: origin ? `${origin}/auth/confirm?next=/` : undefined,
     },
   })
@@ -110,6 +116,79 @@ export async function resendConfirmation(email: string): Promise<AuthState> {
   })
   if (error) return { error: error.message }
   return { confirm: clean }
+}
+
+/**
+ * Passwordless email OTP — step 1. Sends a 6-digit code to an existing account.
+ * `shouldCreateUser: false` keeps the login surface for existing accounts only;
+ * new accounts go through /signup.
+ */
+export async function sendEmailOtp(
+  _prev: AuthState,
+  formData: FormData,
+): Promise<AuthState> {
+  const email = String(formData.get("email") ?? "").trim()
+  if (!email || !EMAIL_RE.test(email))
+    return { error: "Enter a valid email address." }
+
+  const supabase = await createClient()
+  const { error } = await supabase.auth.signInWithOtp({
+    email,
+    options: { shouldCreateUser: false },
+  })
+  if (error) return { error: friendlyAuthError(error) }
+
+  return { otpSent: email }
+}
+
+/**
+ * Passwordless email OTP — step 2. Verifies the 6-digit code and signs the user
+ * in, then redirects to `next` (or home) on success.
+ */
+export async function verifyEmailOtp(
+  _prev: AuthState,
+  formData: FormData,
+): Promise<AuthState> {
+  const email = String(formData.get("email") ?? "").trim()
+  const token = String(formData.get("token") ?? "").trim()
+  const next = safeNext(String(formData.get("next") ?? "") || "/")
+
+  if (!email || !token) return { error: "Enter the code we emailed you." }
+
+  const supabase = await createClient()
+  const { error } = await supabase.auth.verifyOtp({
+    email,
+    token,
+    type: "email",
+  })
+  if (error) return { error: friendlyAuthError(error) }
+
+  // Attach any pending staff invites for this (now-verified) email.
+  await supabase.rpc("claim_invites")
+
+  revalidatePath("/", "layout")
+  redirect(next)
+}
+
+/**
+ * Google OAuth. Kicks off the PKCE flow and redirects the browser to Google's
+ * consent screen. Google redirects back to /auth/confirm, which exchanges the
+ * code for a session. Returns void (always redirects).
+ */
+export async function signInWithGoogle(formData: FormData): Promise<void> {
+  const next = safeNext(String(formData.get("next") ?? "") || "/")
+  const origin = (await headers()).get("origin") ?? ""
+
+  const supabase = await createClient()
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: `${origin}/auth/confirm?next=${encodeURIComponent(next)}`,
+    },
+  })
+
+  if (error || !data?.url) redirect("/login?error=oauth")
+  redirect(data.url)
 }
 
 export async function logout() {

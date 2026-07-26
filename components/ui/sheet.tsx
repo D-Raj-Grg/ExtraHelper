@@ -28,7 +28,7 @@ function SheetOverlay({ className, ...props }: SheetPrimitive.Backdrop.Props) {
     <SheetPrimitive.Backdrop
       data-slot="sheet-overlay"
       className={cn(
-        "fixed inset-0 z-50 bg-black/30 transition-opacity duration-150 data-ending-style:opacity-0 data-starting-style:opacity-0 supports-backdrop-filter:backdrop-blur-sm",
+        "fixed inset-0 z-50 bg-black/10 transition-opacity duration-150 data-ending-style:opacity-0 data-starting-style:opacity-0 supports-backdrop-filter:backdrop-blur-xs",
         className
       )}
       {...props}
@@ -36,14 +36,35 @@ function SheetOverlay({ className, ...props }: SheetPrimitive.Backdrop.Props) {
   )
 }
 
+/**
+ * Width of a left/right sheet.
+ *
+ * These have to carry the same `data-[side=…]:sm:` variant chain as the base
+ * class they replace: a plain `sm:max-w-lg` from a caller looks like a
+ * different utility to tailwind-merge, so both survive the merge and the
+ * base one wins on specificity (attribute selector + class beats class).
+ * That silently pinned every sheet in the app to `max-w-sm` no matter what
+ * the call site asked for — hence a prop rather than a className.
+ */
+const SHEET_SIZE: Record<string, string> = {
+  sm: "data-[side=left]:sm:max-w-sm data-[side=right]:sm:max-w-sm",
+  md: "data-[side=left]:sm:max-w-md data-[side=right]:sm:max-w-md",
+  lg: "data-[side=left]:sm:max-w-lg data-[side=right]:sm:max-w-lg",
+  xl: "data-[side=left]:sm:max-w-2xl data-[side=right]:sm:max-w-2xl",
+  // Roughly half the viewport once there's room for it.
+  half: "data-[side=left]:sm:max-w-2xl data-[side=right]:sm:max-w-2xl data-[side=left]:lg:max-w-[50vw] data-[side=right]:lg:max-w-[50vw]",
+}
+
 function SheetContent({
   className,
   children,
   side = "right",
+  size = "sm",
   showCloseButton = true,
   ...props
 }: SheetPrimitive.Popup.Props & {
   side?: "top" | "right" | "bottom" | "left"
+  size?: "sm" | "md" | "lg" | "xl" | "half"
   showCloseButton?: boolean
 }) {
   return (
@@ -53,7 +74,8 @@ function SheetContent({
         data-slot="sheet-content"
         data-side={side}
         className={cn(
-          "fixed z-50 flex flex-col bg-popover bg-clip-padding text-sm text-popover-foreground shadow-xl transition duration-200 ease-in-out data-ending-style:opacity-0 data-starting-style:opacity-0 data-[side=bottom]:inset-x-0 data-[side=bottom]:bottom-0 data-[side=bottom]:h-auto data-[side=bottom]:border-t data-[side=bottom]:data-ending-style:translate-y-[2.5rem] data-[side=bottom]:data-starting-style:translate-y-[2.5rem] data-[side=left]:inset-y-0 data-[side=left]:left-0 data-[side=left]:h-full data-[side=left]:w-3/4 data-[side=left]:border-r data-[side=left]:data-ending-style:translate-x-[-2.5rem] data-[side=left]:data-starting-style:translate-x-[-2.5rem] data-[side=right]:inset-y-0 data-[side=right]:right-0 data-[side=right]:h-full data-[side=right]:w-3/4 data-[side=right]:border-l data-[side=right]:data-ending-style:translate-x-[2.5rem] data-[side=right]:data-starting-style:translate-x-[2.5rem] data-[side=top]:inset-x-0 data-[side=top]:top-0 data-[side=top]:h-auto data-[side=top]:border-b data-[side=top]:data-ending-style:translate-y-[-2.5rem] data-[side=top]:data-starting-style:translate-y-[-2.5rem] data-[side=left]:sm:max-w-sm data-[side=right]:sm:max-w-sm",
+          "fixed z-50 flex flex-col gap-4 bg-popover bg-clip-padding text-sm text-popover-foreground shadow-lg transition duration-200 ease-in-out data-ending-style:opacity-0 data-starting-style:opacity-0 data-[side=bottom]:inset-x-0 data-[side=bottom]:bottom-0 data-[side=bottom]:h-auto data-[side=bottom]:border-t data-[side=bottom]:data-ending-style:translate-y-[2.5rem] data-[side=bottom]:data-starting-style:translate-y-[2.5rem] data-[side=left]:inset-y-0 data-[side=left]:left-0 data-[side=left]:h-full data-[side=left]:w-3/4 data-[side=left]:border-r data-[side=left]:data-ending-style:translate-x-[-2.5rem] data-[side=left]:data-starting-style:translate-x-[-2.5rem] data-[side=right]:inset-y-0 data-[side=right]:right-0 data-[side=right]:h-full data-[side=right]:w-3/4 data-[side=right]:border-l data-[side=right]:data-ending-style:translate-x-[2.5rem] data-[side=right]:data-starting-style:translate-x-[2.5rem] data-[side=top]:inset-x-0 data-[side=top]:top-0 data-[side=top]:h-auto data-[side=top]:border-b data-[side=top]:data-ending-style:translate-y-[-2.5rem] data-[side=top]:data-starting-style:translate-y-[-2.5rem]",
+          SHEET_SIZE[size],
           className
         )}
         {...props}
@@ -65,7 +87,7 @@ function SheetContent({
             render={
               <Button
                 variant="ghost"
-                className="absolute top-4 right-4 bg-secondary"
+                className="absolute top-3 right-3"
                 size="icon-sm"
               />
             }
@@ -84,7 +106,7 @@ function SheetHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="sheet-header"
-      className={cn("flex flex-col gap-1.5 p-6", className)}
+      className={cn("flex flex-col gap-0.5 p-4", className)}
       {...props}
     />
   )
@@ -94,7 +116,7 @@ function SheetFooter({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="sheet-footer"
-      className={cn("mt-auto flex flex-col gap-2 p-6", className)}
+      className={cn("mt-auto flex flex-col gap-2 p-4", className)}
       {...props}
     />
   )

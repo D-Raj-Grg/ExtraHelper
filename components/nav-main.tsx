@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import {
   SidebarGroup,
   SidebarGroupContent,
@@ -28,13 +29,16 @@ export function NavMain({
       <SidebarGroupContent className="flex flex-col gap-2">
         <SidebarMenu>
           <SidebarMenuItem>
+            {/* Opens the composer, not just the board — a button called "New
+                order" that lands you on a list and asks you to press another
+                button is lying about what it does. */}
             <SidebarMenuButton
-              tooltip="Quick Order"
+              tooltip="New order"
               className="min-w-8 bg-primary text-primary-foreground duration-200 ease-linear hover:bg-primary/90 hover:text-primary-foreground active:bg-primary/90 active:text-primary-foreground"
-              render={<a href="/pos" />}
+              render={<Link href="/pos?new=1" />}
             >
               <PlusIcon />
-              <span>Quick Order</span>
+              <span>New order</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

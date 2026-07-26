@@ -129,24 +129,36 @@ export async function deleteRole(roleId: string): Promise<TeamState> {
   return { ok: true }
 }
 
-/** Add a member by email (attach existing account, else create a pending invite). */
-export async function addMember(email: string, roleId: string): Promise<TeamState> {
+export type AddMemberState = { error: string } | { ok: true; invited: boolean } | undefined
+
+/**
+ * Add a member by email (attach existing account, else create a pending
+ * invite). Reports which of the two happened — "invited" means there's no
+ * account on that address yet, which the caller must say out loud.
+ */
+export async function addMember(email: string, roleId: string): Promise<AddMemberState> {
   const tenant = await requirePermission("staff.edit")
+  const trimmed = email.trim()
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(trimmed)) return { error: "Enter a valid email address." }
+  if (!roleId) return { error: "Pick a role for the new member." }
+
   const supabase = await createClient()
   const { data, error } = await supabase.rpc("add_member_by_email", {
     _tenant: tenant.tenantId,
-    _email: email,
+    _email: trimmed,
     _role_id: roleId,
   })
   if (error) return { error: error.message }
+
+  const invited = data === "invited"
   await writeAudit({
     tenantId: tenant.tenantId,
     action: "role_change",
     entityType: "user_tenant",
-    metadata: { event: data === "invited" ? "invite" : "add", email },
+    metadata: { event: invited ? "invite" : "add", email: trimmed },
   })
   revalidatePath("/team")
-  return { ok: true }
+  return { ok: true, invited }
 }
 
 export async function setMemberRole(userId: string, roleId: string): Promise<TeamState> {
@@ -192,6 +204,27 @@ export async function removeMember(userId: string): Promise<TeamState> {
   })
   revalidatePath("/team")
   return { ok: true }
+}
+
+export type JoinCodeState = { error: string } | { ok: true; code: string } | undefined
+
+/** Generate a shareable join code someone can enter to self-join as a pending member. */
+export async function generateJoinCode(roleId?: string | null): Promise<JoinCodeState> {
+  const tenant = await requirePermission("staff.edit")
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc("create_join_code", {
+    _tenant: tenant.tenantId,
+    _role_id: roleId || null,
+  })
+  if (error) return { error: error.message }
+  await writeAudit({
+    tenantId: tenant.tenantId,
+    action: "role_change",
+    entityType: "user_tenant",
+    metadata: { event: "join_code", role_id: roleId || null },
+  })
+  revalidatePath("/team")
+  return { ok: true, code: data as string }
 }
 
 export async function cancelInvite(email: string): Promise<TeamState> {
