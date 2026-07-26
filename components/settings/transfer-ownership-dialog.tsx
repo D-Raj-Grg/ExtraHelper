@@ -21,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { ConfirmPhraseDialog } from "./confirm-phrase-dialog"
 import type { TransferMember } from "./types"
 
 export function TransferOwnershipDialog({
@@ -34,14 +35,17 @@ export function TransferOwnershipDialog({
 }) {
   const [userId, setUserId] = useState("")
   const [agreed, setAgreed] = useState(false)
+  const [confirming, setConfirming] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
 
   const canTransfer = Boolean(userId) && agreed && !pending
+  const newOwner = members.find((m) => m.userId === userId)
 
   function reset() {
     setUserId("")
     setAgreed(false)
+    setConfirming(false)
     setError(null)
   }
 
@@ -58,6 +62,7 @@ export function TransferOwnershipDialog({
   }
 
   return (
+    <>
     <Dialog
       open={open}
       onOpenChange={(v) => {
@@ -120,7 +125,7 @@ export function TransferOwnershipDialog({
             </FieldLabel>
           </Field>
 
-          {error ? (
+          {error && !confirming ? (
             <p className="text-sm text-destructive" role="alert">
               {error}
             </p>
@@ -130,11 +135,37 @@ export function TransferOwnershipDialog({
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
             Cancel
           </Button>
-          <Button type="button" variant="destructive" onClick={submit} disabled={!canTransfer}>
-            {pending ? "Transferring…" : "Confirm transfer"}
+          <Button
+            type="button"
+            variant="destructive"
+            disabled={!canTransfer}
+            onClick={() => {
+              setError(null)
+              setConfirming(true)
+            }}
+          >
+            Confirm transfer
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <ConfirmPhraseDialog
+      open={confirming}
+      onOpenChange={(v) => {
+        if (!v) setError(null)
+        setConfirming(v)
+      }}
+      title="Hand over ownership?"
+      description={`${newOwner?.email ?? "This member"} becomes the owner and you drop to Manager. Only they can transfer it back.`}
+      phrase={newOwner?.email ?? ""}
+      phraseHint="the new owner's email"
+      confirmLabel="Transfer ownership"
+      pendingLabel="Transferring…"
+      pending={pending}
+      error={error}
+      onConfirm={submit}
+    />
+    </>
   )
 }
