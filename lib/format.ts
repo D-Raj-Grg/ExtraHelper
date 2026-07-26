@@ -35,6 +35,63 @@ export function moneyRange(minCents: number, maxCents: number, currency: string)
   return `${lo} – ${hi}`
 }
 
+const ONES = [
+  "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten",
+  "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen",
+  "Nineteen",
+]
+const TENS = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"]
+
+/** 0–999 in words. Helper for amountInWords. */
+function under1000(n: number): string {
+  if (n < 20) return ONES[n]
+  if (n < 100) {
+    const t = TENS[Math.floor(n / 10)]
+    const r = n % 10
+    return r ? `${t} ${ONES[r]}` : t
+  }
+  const h = `${ONES[Math.floor(n / 100)]} Hundred`
+  const r = n % 100
+  return r ? `${h} ${under1000(r)}` : h
+}
+
+/**
+ * "Seven Hundred Ninety Five NPR Only" — the amount-in-words line every printed
+ * invoice carries, so a total can't be altered by a pen stroke.
+ *
+ * Hand-rolled rather than `Intl.NumberFormat`: no browser exposes a words style,
+ * and a hand-rolled scale renders identically on server and client (the same
+ * hydration reason money() pins its locale). Currency is the tenant's CODE, not
+ * a hardcoded currency name — rule #2.
+ */
+export function amountInWords(cents: number, currency: string): string {
+  const neg = cents < 0
+  const whole = Math.floor(Math.abs(cents) / 100)
+  const minor = Math.abs(cents) % 100
+
+  const groups: [number, string][] = [
+    [1_000_000_000, "Billion"],
+    [1_000_000, "Million"],
+    [1_000, "Thousand"],
+  ]
+  let rest = whole
+  const parts: string[] = []
+  for (const [size, name] of groups) {
+    const q = Math.floor(rest / size)
+    if (q > 0) {
+      parts.push(`${under1000(q)} ${name}`)
+      rest -= q * size
+    }
+  }
+  if (rest > 0 || parts.length === 0) parts.push(under1000(rest))
+
+  const main = parts.join(" ")
+  // Minor units stay numeric ("and 40/100"): naming them (Paisa, Cents, Fils…)
+  // would hardcode one country's currency into every tenant's invoice.
+  const fraction = minor > 0 ? ` and ${String(minor).padStart(2, "0")}/100` : ""
+  return `${neg ? "Minus " : ""}${main}${fraction} ${currency} Only`
+}
+
 /**
  * Date/time formatting for SSR'd client components. Locale AND timeZone are
  * pinned — `toLocaleString()`'s runtime defaults differ between the Node server

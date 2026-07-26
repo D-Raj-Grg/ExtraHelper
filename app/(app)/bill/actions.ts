@@ -98,6 +98,77 @@ export async function applyCoupon(billId: string, code: string): Promise<BillSta
   return { ok: true }
 }
 
+/** Add a named extra charge (delivery, packing, corkage…) to an open bill. */
+export async function addCharge(
+  billId: string,
+  label: string,
+  amountCents: number,
+): Promise<BillState> {
+  await requirePermission("order.discount")
+  if (!label.trim()) return { error: "Name the charge." }
+  if (!Number.isInteger(amountCents) || amountCents <= 0)
+    return { error: "Charge must be a positive amount." }
+  const supabase = await createClient()
+  const { error } = await supabase.rpc("add_bill_charge", {
+    _bill_id: billId,
+    _label: label,
+    _amount_cents: amountCents,
+  })
+  if (error) return { error: error.message }
+  revalidatePath(`/bill/${billId}`)
+  return { ok: true }
+}
+
+/** Remove an extra charge (bill id only for the revalidate). */
+export async function removeCharge(chargeId: string, billId: string): Promise<BillState> {
+  await requirePermission("order.discount")
+  const supabase = await createClient()
+  const { error } = await supabase.rpc("remove_bill_charge", { _charge_id: chargeId })
+  if (error) return { error: error.message }
+  revalidatePath(`/bill/${billId}`)
+  return { ok: true }
+}
+
+/**
+ * Tip, round-off and the invoice remark — one call, because the checkout
+ * screen edits them together and each write recomputes the bill.
+ */
+export async function setBillExtras(
+  billId: string,
+  tipCents: number,
+  roundingCents: number,
+  note: string,
+): Promise<BillState> {
+  await requirePermission("payment.take")
+  if (!Number.isInteger(tipCents) || tipCents < 0) return { error: "Tip can't be negative." }
+  if (!Number.isInteger(roundingCents) || Math.abs(roundingCents) > 99)
+    return { error: "Round off must be under one currency unit." }
+  const supabase = await createClient()
+  const { error } = await supabase.rpc("set_bill_extras", {
+    _bill_id: billId,
+    _tip_cents: tipCents,
+    _rounding_cents: roundingCents,
+    _note: note || null,
+  })
+  if (error) return { error: error.message }
+  revalidatePath(`/bill/${billId}`)
+  return { ok: true }
+}
+
+/** Comp the whole bill — a full-gross discount, manager-gated, reason required. */
+export async function setComplimentary(billId: string, reason: string): Promise<BillState> {
+  await requirePermission("order.discount")
+  if (!reason.trim()) return { error: "A complimentary bill needs a reason." }
+  const supabase = await createClient()
+  const { error } = await supabase.rpc("set_bill_complimentary", {
+    _bill_id: billId,
+    _reason: reason,
+  })
+  if (error) return { error: error.message }
+  revalidatePath(`/bill/${billId}`)
+  return { ok: true }
+}
+
 /** Void a bill line (owner/manager; trusted recompute + audit). */
 export async function voidLine(
   orderItemId: string,
