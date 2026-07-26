@@ -2,8 +2,10 @@
 
 import { ShoppingBagIcon } from "lucide-react"
 
+import { cn } from "@/lib/utils"
 import { tableStateLabel } from "@/lib/table-constants"
 import { ChoiceChip } from "@/components/pos/choice-chip"
+import { TableGlyph } from "@/components/pos/table-glyph"
 import { TAKEAWAY, type PosFloor, type PosTable } from "@/components/pos/types"
 
 /** One state, one hue, app-wide — same map the floor map and tables grid use. */
@@ -15,7 +17,26 @@ const STATE_DOT: Record<string, string> = {
   cleaning: "bg-muted-foreground/40",
 }
 
+/** The glyph tint per state — muted on an unselected chip, inherited when selected. */
+const STATE_GLYPH: Record<string, string> = {
+  free: "text-emerald-600 dark:text-emerald-400",
+  occupied: "text-amber-600 dark:text-amber-400",
+  reserved: "text-blue-600 dark:text-blue-400",
+  bill_requested: "text-orange-600 dark:text-orange-400",
+  cleaning: "text-muted-foreground",
+}
+
+/** A seated table is one the glyph fills in — same rule as the tables board. */
+const SEATED = new Set(["occupied", "bill_requested"])
+
 const NO_FLOOR = "__none__"
+
+/**
+ * Auto-fill, not a fixed column count: a floor with one table gets one
+ * chip-sized chip instead of one stretched across the whole dialog, and a floor
+ * with twenty packs them without the layout being re-tuned per breakpoint.
+ */
+const GRID = "grid grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-2"
 
 function floorLabel(floors: PosFloor[], id: string): string {
   if (id === NO_FLOOR) return floors.length ? "Unassigned" : "Tables"
@@ -56,20 +77,20 @@ export function DestinationStep({
   return (
     <div className="space-y-6">
       <fieldset>
-        <legend className="mb-2 text-sm font-semibold">Takeaway</legend>
-        <ChoiceChip
-          name="pos-destination"
-          checked={value === TAKEAWAY}
-          onSelect={() => onChange(TAKEAWAY)}
-          label={
-            <span className="flex items-center gap-1.5">
-              <ShoppingBagIcon className="size-4 shrink-0" aria-hidden />
-              Takeaway
-            </span>
-          }
-          detail="No table"
-          className="w-full sm:w-56"
-        />
+        <legend className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Takeaway
+        </legend>
+        <div className={GRID}>
+          <ChoiceChip
+            name="pos-destination"
+            checked={value === TAKEAWAY}
+            onSelect={() => onChange(TAKEAWAY)}
+            label="Takeaway"
+            detail="No table"
+            showCheck
+            leading={<ShoppingBagIcon className="size-6 shrink-0" aria-hidden />}
+          />
+        </div>
       </fieldset>
 
       {tables.length === 0 ? (
@@ -80,25 +101,44 @@ export function DestinationStep({
       ) : (
         ordered.map((floorId) => (
           <fieldset key={floorId}>
-            <legend className="mb-2 text-sm font-semibold">{floorLabel(floors, floorId)}</legend>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-              {(groups.get(floorId) ?? []).map((t) => (
-                <ChoiceChip
-                  key={t.id}
-                  name="pos-destination"
-                  checked={value === t.id}
-                  onSelect={() => onChange(t.id)}
-                  label={`Table ${t.label}`}
-                  // The dot is never the only signal — the state is spelled out
-                  // next to it, and seats give the host the other half.
-                  detail={
-                    t.capacity
-                      ? `${tableStateLabel(t.state)} · ${t.capacity} seats`
-                      : tableStateLabel(t.state)
-                  }
-                  dot={STATE_DOT[t.state] ?? STATE_DOT.cleaning}
-                />
-              ))}
+            <legend className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {floorLabel(floors, floorId)}
+            </legend>
+            <div className={GRID}>
+              {(groups.get(floorId) ?? []).map((t) => {
+                const selected = value === t.id
+                return (
+                  <ChoiceChip
+                    key={t.id}
+                    name="pos-destination"
+                    checked={selected}
+                    onSelect={() => onChange(t.id)}
+                    label={`Table ${t.label}`}
+                    showCheck
+                    // Same top-down glyph as the tables board, so a table looks
+                    // like the same object in both places. Seat count is drawn,
+                    // not just written.
+                    leading={
+                      <TableGlyph
+                        seats={t.capacity ?? 2}
+                        filled={SEATED.has(t.state)}
+                        className={cn(
+                          "size-8 shrink-0",
+                          !selected && (STATE_GLYPH[t.state] ?? STATE_GLYPH.cleaning),
+                        )}
+                      />
+                    }
+                    // The dot is never the only signal — the state is spelled out
+                    // next to it, and seats give the host the other half.
+                    detail={
+                      t.capacity
+                        ? `${tableStateLabel(t.state)} · ${t.capacity} seats`
+                        : tableStateLabel(t.state)
+                    }
+                    dot={STATE_DOT[t.state] ?? STATE_DOT.cleaning}
+                  />
+                )
+              })}
             </div>
           </fieldset>
         ))

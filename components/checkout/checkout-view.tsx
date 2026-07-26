@@ -252,7 +252,7 @@ export function CheckoutView({
         }
         actions={
           <>
-            <Badge className={cn("border-transparent", BILL_STATUS_STYLE[bill.status] ?? "bg-muted")}>
+            <Badge className={cn("border-transparent", BILL_STATUS_STYLE[bill.status] ?? "bg-muted text-foreground")}>
               {billStatusLabel(bill.status)}
             </Badge>
             <Button variant="outline" nativeButton={false} render={<Link href={`/receipt/${bill.id}`} />}>
@@ -410,7 +410,7 @@ export function CheckoutView({
                     <span className="flex items-center gap-2">
                       {o.restaurant_tables?.label ? `Table ${o.restaurant_tables.label}` : o.order_type}
                       <Badge
-                        className={cn("border-transparent", ORDER_STATUS_STYLE[o.status] ?? "bg-muted")}
+                        className={cn("border-transparent", ORDER_STATUS_STYLE[o.status] ?? "bg-muted text-foreground")}
                       >
                         {orderStatusLabel(o.status)}
                       </Badge>

@@ -114,7 +114,7 @@ export function StaffTab({
                   </TableCell>
                   <TableCell className="px-3 py-2">
                     <Badge
-                      className={cn("border-transparent", STATUS_STYLES[m.status] ?? "bg-muted")}
+                      className={cn("border-transparent", STATUS_STYLES[m.status] ?? "bg-muted text-foreground")}
                     >
                       {MEMBER_STATUS_LABEL[m.status] ?? m.status}
                     </Badge>

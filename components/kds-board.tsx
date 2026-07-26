@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useOptimistic, useRef, useState, useTransition } from "react"
+import { useCallback, useEffect, useMemo, useOptimistic, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { MaximizeIcon, MinimizeIcon } from "lucide-react"
 import { toast } from "sonner"
@@ -205,18 +205,29 @@ export function KdsBoard({
     )
   }, [optKots, statusFilter])
 
-  const boardRef = useRef<HTMLDivElement>(null)
   const [isFull, setIsFull] = useState(false)
 
+  // Only the element put into fullscreen renders — a dialog or toast portalled
+  // to `document.body` sits outside the board and vanished. So the document
+  // element goes fullscreen (every portal is inside it) and the board covers
+  // the viewport with a fixed overlay instead. Overlay state is ours, so the
+  // board still fills the screen if the browser refuses the fullscreen request.
   useEffect(() => {
-    const onChange = () => setIsFull(Boolean(document.fullscreenElement))
+    const onChange = () => {
+      if (!document.fullscreenElement) setIsFull(false)
+    }
     document.addEventListener("fullscreenchange", onChange)
     return () => document.removeEventListener("fullscreenchange", onChange)
   }, [])
 
   function toggleFullscreen() {
-    if (document.fullscreenElement) void document.exitFullscreen()
-    else void boardRef.current?.requestFullscreen()
+    if (isFull) {
+      setIsFull(false)
+      if (document.fullscreenElement) void document.exitFullscreen()
+      return
+    }
+    setIsFull(true)
+    void document.documentElement.requestFullscreen?.().catch(() => {})
   }
 
   const stationFilters: { key: string; label: string }[] = [
@@ -299,8 +310,11 @@ export function KdsBoard({
 
   return (
     <div
-      ref={boardRef}
-      className="flex flex-col gap-3 bg-background data-[full=true]:h-screen data-[full=true]:overflow-auto data-[full=true]:p-4"
+      className={cn(
+        "flex flex-col gap-3 bg-background",
+        // z-40: under the z-50 dialogs and toasts that now render above it.
+        isFull && "fixed inset-0 z-40 overflow-auto p-4",
+      )}
       data-full={isFull}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -340,8 +354,12 @@ export function KdsBoard({
               {f.label}
               <Badge
                 className={cn(
-                  "border-transparent tabular-nums",
-                  active ? "bg-primary-foreground/20 text-primary-foreground" : "bg-muted",
+                  // Both branches set a foreground: the default variant's white
+                  // text on `bg-muted` was an invisible count.
+                  "min-w-5 border-transparent px-1.5 font-semibold tabular-nums",
+                  active
+                    ? "bg-primary-foreground/25 text-primary-foreground"
+                    : "bg-muted text-foreground",
                 )}
               >
                 {f.count}
