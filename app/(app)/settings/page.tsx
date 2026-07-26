@@ -2,14 +2,20 @@ import { createClient } from "@/lib/supabase/server"
 import { requirePermission } from "@/lib/supabase/guards"
 import { SettingsManager } from "@/components/settings/settings-manager"
 import { PageShell, PageHeader } from "@/components/page-header"
-import type { DangerData, TransferMember } from "@/components/settings/types"
+import type {
+  DangerData,
+  PrinterRow,
+  PrintJobRow,
+  TransferMember,
+} from "@/components/settings/types"
 
 export default async function SettingsPage() {
   const tenant = await requirePermission("settings.view")
   const isOwner = tenant.role === "owner"
 
   const supabase = await createClient()
-  const [{ data: settings }, { data: branches }] = await Promise.all([
+  const [{ data: settings }, { data: branches }, { data: printers }, { data: printJobs }] =
+    await Promise.all([
     supabase
       .from("tenant_settings")
       .select(
@@ -23,6 +29,23 @@ export default async function SettingsPage() {
       .eq("tenant_id", tenant.tenantId)
       .order("is_default", { ascending: false })
       .order("name"),
+    supabase
+      .from("printers")
+      .select(
+        "id, name, connection, host, port, system_name, paper_width, role, is_default, is_active",
+      )
+      .eq("tenant_id", tenant.tenantId)
+      .order("is_default", { ascending: false })
+      .order("name"),
+    // Enough history to spot a printer that keeps failing, not an audit trail.
+    supabase
+      .from("print_jobs")
+      .select(
+        "id, type, status, attempts, error, created_at, kot_id, bill_id, printer_id, printers(name)",
+      )
+      .eq("tenant_id", tenant.tenantId)
+      .order("created_at", { ascending: false })
+      .limit(20),
   ])
 
   // Owner-only Dangerous Area: usage counts, plan denominators, transfer
@@ -132,6 +155,9 @@ export default async function SettingsPage() {
         logoUrl={receipt.logo_url ?? null}
         branches={branches ?? []}
         canManageBranches={tenant.role === "owner" || tenant.role === "manager"}
+        printers={(printers ?? []) as unknown as PrinterRow[]}
+        printJobs={(printJobs ?? []) as unknown as PrintJobRow[]}
+        canManagePrinters={tenant.role === "owner" || tenant.role === "manager"}
         danger={danger}
       />
     </PageShell>

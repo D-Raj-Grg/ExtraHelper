@@ -6,13 +6,14 @@ import { CategoriesTab } from "./categories-tab"
 import { ModifiersTab } from "./modifiers-tab"
 import { CombosTab } from "./combos-tab"
 import { StationsTab } from "./stations-tab"
-import type { Category, Combo, Item, Modifier, Station } from "./types"
+import type { Category, Combo, Item, Modifier, Station, StationPrinter } from "./types"
 
 export function MenuManager({
   currency,
   categories,
   items,
   stations,
+  printers,
   modifiers,
   combos,
 }: {
@@ -20,6 +21,7 @@ export function MenuManager({
   categories: Category[]
   items: Item[]
   stations: Station[]
+  printers: StationPrinter[]
   modifiers: Modifier[]
   combos: Combo[]
 }) {
@@ -52,7 +54,7 @@ export function MenuManager({
         <CombosTab combos={combos} items={items} currency={currency} />
       </TabsContent>
       <TabsContent value="stations">
-        <StationsTab stations={stations} />
+        <StationsTab stations={stations} printers={printers} />
       </TabsContent>
     </Tabs>
   )

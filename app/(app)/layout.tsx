@@ -7,6 +7,7 @@ import { ImpersonationBanner } from "@/components/impersonation-banner"
 import { TenantProvider } from "@/components/tenant-provider"
 import { PreferencesProvider } from "@/components/preferences-provider"
 import { OfflineSyncProvider } from "@/components/offline-sync-provider"
+import { PrintProvider } from "@/components/print/print-provider"
 import { RealtimeAuth } from "@/components/realtime-auth"
 import { createClient } from "@/lib/supabase/server"
 import { getActiveTenant, getTenantMemberships } from "@/lib/supabase/tenant"
@@ -57,6 +58,7 @@ export default async function AppLayout({
       <PreferencesProvider initialTheme={prefs.theme} initialScale={prefs.scale}>
       <PermissionProvider permissions={permissions}>
       <OfflineSyncProvider>
+      <PrintProvider>
       <RealtimeAuth />
       <SidebarProvider
         style={
@@ -79,6 +81,7 @@ export default async function AppLayout({
         </SidebarInset>
         <Toaster />
       </SidebarProvider>
+      </PrintProvider>
       </OfflineSyncProvider>
       </PermissionProvider>
       </PreferencesProvider>

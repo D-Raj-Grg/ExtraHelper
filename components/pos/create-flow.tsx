@@ -8,6 +8,7 @@ import { ArrowRightIcon, WifiOffIcon } from "lucide-react"
 import { fireOrder, placeStaffOrder } from "@/app/(app)/pos/actions"
 import { Button } from "@/components/ui/button"
 import { useOffline } from "@/components/offline-sync-provider"
+import { usePrint } from "@/components/print/use-print"
 import { DestinationStep } from "@/components/pos/destination-step"
 import { DishStep } from "@/components/pos/dish-step"
 import { EMPTY_CHECK_IN, type CheckIn } from "@/components/pos/check-in-details"
@@ -46,6 +47,7 @@ export function CreateFlow({
   const router = useRouter()
   const { online, enqueueOrder } = useOffline()
   const [pending, startTransition] = useTransition()
+  const { printKots, connected: printerReady } = usePrint()
 
   const [step, setStep] = useState<Step>("destination")
   const [tableId, setTableId] = useState<string>(initialTableId ?? TAKEAWAY)
@@ -98,23 +100,29 @@ export function CreateFlow({
         if (alsoFire) {
           const fr = await fireOrder(res.orderId)
           if ("error" in fr) {
-            // Order IS created — surface the fire error and let the amend screen
-            // (below) open so the fire can be retried there. Never lost.
+            // Order IS created but the fire failed — the one case worth keeping
+            // the composer open for, on the amend screen where fire can be
+            // retried. Just the push, no onClose() first: onClose navigates
+            // too, and two navigations in one tick race and leave you on
+            // neither. The route change swaps this modal to amend mode.
             toast.error(fr.error)
-          } else {
-            // No print popups here — tickets land on the KDS/KOT board and print
-            // from there. Firing just routes items to the stations.
-            if (fr.kotIds.length) toast.success(`Placed · ${fr.kotIds.length} ticket(s) to kitchen`)
+            router.push(`/pos/${res.orderId}`)
+            return
           }
+          if (fr.kotIds.length) toast.success(`Placed · ${fr.kotIds.length} ticket(s) to kitchen`)
+          // Only print when a real printer is on the other end. Without an
+          // agent this would fall back to popup tabs mid-service — the
+          // tickets are on the KDS/KOT board and print from there instead.
+          if (printerReady) await printKots(fr.kotIds)
+        } else {
+          toast.success(`${destinationLabel} order placed`)
         }
-        // Reopen against the real server rows: anything the server dropped — an
-        // item 86'd while we were composing — is then visible rather than
-        // assumed to have landed.
-        //
-        // Just the push, no onClose() first: onClose navigates too, and two
-        // navigations in one tick race and leave you on neither. The route
-        // change swaps this modal to amend mode on its own.
-        router.push(`/pos/${res.orderId}`)
+        // Taking an order ends here: back to the board. Billing is a separate
+        // decision made later from the order card, not a step tacked onto
+        // ordering. onClose refetches (or drops the deep link back to /pos),
+        // so the new card — as the server actually stored it, 86'd items and
+        // all — is what you see.
+        onClose()
       } catch {
         // Network failure, maybe committed and maybe not. Queue with the SAME
         // key so replay dedups against any partial commit. Never silently lost.

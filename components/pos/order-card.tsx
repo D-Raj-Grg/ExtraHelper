@@ -42,6 +42,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { usePrint } from "@/components/print/use-print"
 import { RelativeTime } from "@/components/pos/relative-time"
 import type { PosOrderCard } from "@/components/pos/types"
 
@@ -65,6 +66,7 @@ export function OrderCard({
   onOpen: () => void
 }) {
   const [pending, startTransition] = useTransition()
+  const { printKots } = usePrint()
   const [clearOpen, setClearOpen] = useState(false)
   const [reason, setReason] = useState("")
 
@@ -87,7 +89,8 @@ export function OrderCard({
       const res = await listOrderKotIds(order.id)
       if ("error" in res) return void toast.error(res.error)
       if (!res.kotIds.length) return void toast.info("Nothing fired to the kitchen yet.")
-      res.kotIds.forEach((id) => window.open(`/kot/${id}`, "_blank", "noopener"))
+      // Re-print: the kitchen has seen these lines already, so mark the paper.
+      await printKots(res.kotIds, { reprint: true })
     })
   }
 

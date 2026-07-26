@@ -55,6 +55,51 @@ export type Database = {
           },
         ]
       }
+      bill_charges: {
+        Row: {
+          amount_cents: number
+          bill_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          label: string
+          tenant_id: string
+        }
+        Insert: {
+          amount_cents: number
+          bill_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          label: string
+          tenant_id: string
+        }
+        Update: {
+          amount_cents?: number
+          bill_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          label?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bill_charges_bill_id_fkey"
+            columns: ["bill_id"]
+            isOneToOne: false
+            referencedRelation: "bills"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bill_charges_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bill_items: {
         Row: {
           bill_id: string
@@ -119,12 +164,15 @@ export type Database = {
           created_at: string
           discount_cents: number
           id: string
+          note: string | null
+          rounding_cents: number
           service_charge_cents: number
           status: Database["public"]["Enums"]["bill_status"]
           subtotal_cents: number
           table_id: string | null
           tax_cents: number
           tenant_id: string
+          tip_cents: number
           total_cents: number
           updated_at: string
         }
@@ -133,12 +181,15 @@ export type Database = {
           created_at?: string
           discount_cents?: number
           id?: string
+          note?: string | null
+          rounding_cents?: number
           service_charge_cents?: number
           status?: Database["public"]["Enums"]["bill_status"]
           subtotal_cents?: number
           table_id?: string | null
           tax_cents?: number
           tenant_id: string
+          tip_cents?: number
           total_cents?: number
           updated_at?: string
         }
@@ -147,12 +198,15 @@ export type Database = {
           created_at?: string
           discount_cents?: number
           id?: string
+          note?: string | null
+          rounding_cents?: number
           service_charge_cents?: number
           status?: Database["public"]["Enums"]["bill_status"]
           subtotal_cents?: number
           table_id?: string | null
           tax_cents?: number
           tenant_id?: string
+          tip_cents?: number
           total_cents?: number
           updated_at?: string
         }
@@ -615,6 +669,7 @@ export type Database = {
           name: string
           par_level: number
           reorder_level: number
+          supplier_id: string | null
           tenant_id: string
           uom: string
           updated_at: string
@@ -629,6 +684,7 @@ export type Database = {
           name: string
           par_level?: number
           reorder_level?: number
+          supplier_id?: string | null
           tenant_id: string
           uom?: string
           updated_at?: string
@@ -643,6 +699,7 @@ export type Database = {
           name?: string
           par_level?: number
           reorder_level?: number
+          supplier_id?: string | null
           tenant_id?: string
           uom?: string
           updated_at?: string
@@ -653,6 +710,13 @@ export type Database = {
             columns: ["branch_id"]
             isOneToOne: false
             referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_items_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
             referencedColumns: ["id"]
           },
           {
@@ -807,6 +871,7 @@ export type Database = {
           item_id: string
           name: string
           price_delta_cents: number
+          recipe_scale: number
           tenant_id: string
         }
         Insert: {
@@ -814,6 +879,7 @@ export type Database = {
           item_id: string
           name: string
           price_delta_cents?: number
+          recipe_scale?: number
           tenant_id: string
         }
         Update: {
@@ -821,6 +887,7 @@ export type Database = {
           item_id?: string
           name?: string
           price_delta_cents?: number
+          recipe_scale?: number
           tenant_id?: string
         }
         Relationships: [
@@ -846,6 +913,7 @@ export type Database = {
           created_at: string
           id: string
           name: string
+          printer_id: string | null
           tenant_id: string
         }
         Insert: {
@@ -853,6 +921,7 @@ export type Database = {
           created_at?: string
           id?: string
           name: string
+          printer_id?: string | null
           tenant_id: string
         }
         Update: {
@@ -860,6 +929,7 @@ export type Database = {
           created_at?: string
           id?: string
           name?: string
+          printer_id?: string | null
           tenant_id?: string
         }
         Relationships: [
@@ -868,6 +938,13 @@ export type Database = {
             columns: ["branch_id"]
             isOneToOne: false
             referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kitchen_stations_printer_id_fkey"
+            columns: ["printer_id"]
+            isOneToOne: false
+            referencedRelation: "printers"
             referencedColumns: ["id"]
           },
           {
@@ -1294,6 +1371,55 @@ export type Database = {
           },
         ]
       }
+      modifier_ingredients: {
+        Row: {
+          created_at: string
+          id: string
+          inventory_item_id: string
+          modifier_id: string
+          qty: number
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          inventory_item_id: string
+          modifier_id: string
+          qty?: number
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          inventory_item_id?: string
+          modifier_id?: string
+          qty?: number
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "modifier_ingredients_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "modifier_ingredients_modifier_id_fkey"
+            columns: ["modifier_id"]
+            isOneToOne: false
+            referencedRelation: "modifiers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "modifier_ingredients_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       modifiers: {
         Row: {
           id: string
@@ -1549,6 +1675,7 @@ export type Database = {
           idempotency_key: string | null
           notes: string | null
           order_type: Database["public"]["Enums"]["order_type"]
+          pinned_at: string | null
           placed_at: string | null
           status: Database["public"]["Enums"]["order_status"]
           table_id: string | null
@@ -1566,6 +1693,7 @@ export type Database = {
           idempotency_key?: string | null
           notes?: string | null
           order_type?: Database["public"]["Enums"]["order_type"]
+          pinned_at?: string | null
           placed_at?: string | null
           status?: Database["public"]["Enums"]["order_status"]
           table_id?: string | null
@@ -1583,6 +1711,7 @@ export type Database = {
           idempotency_key?: string | null
           notes?: string | null
           order_type?: Database["public"]["Enums"]["order_type"]
+          pinned_at?: string | null
           placed_at?: string | null
           status?: Database["public"]["Enums"]["order_status"]
           table_id?: string | null
@@ -1844,6 +1973,143 @@ export type Database = {
           },
           {
             foreignKeyName: "po_items_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      print_jobs: {
+        Row: {
+          attempts: number
+          bill_id: string | null
+          created_at: string
+          error: string | null
+          id: string
+          kot_id: string | null
+          printed_at: string | null
+          printer_id: string | null
+          status: Database["public"]["Enums"]["print_job_status"]
+          tenant_id: string
+          type: string
+        }
+        Insert: {
+          attempts?: number
+          bill_id?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          kot_id?: string | null
+          printed_at?: string | null
+          printer_id?: string | null
+          status?: Database["public"]["Enums"]["print_job_status"]
+          tenant_id: string
+          type: string
+        }
+        Update: {
+          attempts?: number
+          bill_id?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          kot_id?: string | null
+          printed_at?: string | null
+          printer_id?: string | null
+          status?: Database["public"]["Enums"]["print_job_status"]
+          tenant_id?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "print_jobs_bill_id_fkey"
+            columns: ["bill_id"]
+            isOneToOne: false
+            referencedRelation: "bills"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "print_jobs_kot_id_fkey"
+            columns: ["kot_id"]
+            isOneToOne: false
+            referencedRelation: "kots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "print_jobs_printer_id_fkey"
+            columns: ["printer_id"]
+            isOneToOne: false
+            referencedRelation: "printers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "print_jobs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      printers: {
+        Row: {
+          branch_id: string | null
+          connection: Database["public"]["Enums"]["printer_connection"]
+          created_at: string
+          host: string | null
+          id: string
+          is_active: boolean
+          is_default: boolean
+          name: string
+          paper_width: number
+          port: number
+          role: Database["public"]["Enums"]["printer_role"]
+          system_name: string | null
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          branch_id?: string | null
+          connection?: Database["public"]["Enums"]["printer_connection"]
+          created_at?: string
+          host?: string | null
+          id?: string
+          is_active?: boolean
+          is_default?: boolean
+          name: string
+          paper_width?: number
+          port?: number
+          role?: Database["public"]["Enums"]["printer_role"]
+          system_name?: string | null
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          branch_id?: string | null
+          connection?: Database["public"]["Enums"]["printer_connection"]
+          created_at?: string
+          host?: string | null
+          id?: string
+          is_active?: boolean
+          is_default?: boolean
+          name?: string
+          paper_width?: number
+          port?: number
+          role?: Database["public"]["Enums"]["printer_role"]
+          system_name?: string | null
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "printers_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "printers_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -2729,6 +2995,7 @@ export type Database = {
       tenants: {
         Row: {
           created_at: string
+          deletion_scheduled_at: string | null
           id: string
           name: string
           slug: string
@@ -2737,6 +3004,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          deletion_scheduled_at?: string | null
           id?: string
           name: string
           slug: string
@@ -2745,6 +3013,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          deletion_scheduled_at?: string | null
           id?: string
           name?: string
           slug?: string
@@ -2887,6 +3156,10 @@ export type Database = {
     }
     Functions: {
       _build_bill_for_order: { Args: { _order_id: string }; Returns: string }
+      add_bill_charge: {
+        Args: { _amount_cents: number; _bill_id: string; _label: string }
+        Returns: string
+      }
       add_member_by_email: {
         Args: { _email: string; _role_id: string; _tenant: string }
         Returns: string
@@ -2943,6 +3216,11 @@ export type Database = {
         Args: { _email: string; _tenant: string }
         Returns: undefined
       }
+      cancel_order: {
+        Args: { _order_id: string; _reason: string }
+        Returns: undefined
+      }
+      cancel_tenant_deletion: { Args: { _tenant: string }; Returns: undefined }
       claim_invites: { Args: never; Returns: undefined }
       close_cash_session: {
         Args: { _counted_cents: number; _session_id: string }
@@ -2953,6 +3231,10 @@ export type Database = {
         }[]
       }
       create_bill_for_order: { Args: { _order_id: string }; Returns: string }
+      create_draft_po_from_reorder: {
+        Args: { _branch?: string; _tenant: string }
+        Returns: number
+      }
       create_join_code: {
         Args: { _role_id?: string; _tenant: string }
         Returns: string
@@ -3073,6 +3355,7 @@ export type Database = {
         Args: { _order_id: string; _reference: string }
         Returns: Json
       }
+      purge_scheduled_tenants: { Args: never; Returns: number }
       qr_menu: { Args: { _token: string }; Returns: Json }
       qr_request_bill: { Args: { _token: string }; Returns: boolean }
       receive_po: { Args: { _po_id: string }; Returns: number }
@@ -3103,6 +3386,7 @@ export type Database = {
         Args: { _amount_cents: number; _bill_id: string; _reason: string }
         Returns: Database["public"]["Enums"]["bill_status"]
       }
+      remove_bill_charge: { Args: { _charge_id: string }; Returns: undefined }
       remove_member: {
         Args: { _tenant: string; _user_id: string }
         Returns: undefined
@@ -3124,6 +3408,18 @@ export type Database = {
           orders: number
           points_redeemed: number
           spend_cents: number
+        }[]
+      }
+      report_dish_food_cost: {
+        Args: { _tenant: string }
+        Returns: {
+          food_cost_pct: number
+          ingredient_count: number
+          margin_cents: number
+          menu_item_id: string
+          name: string
+          plate_cost_cents: number
+          sale_price_cents: number
         }[]
       }
       report_extras: {
@@ -3216,6 +3512,11 @@ export type Database = {
           revenue_cents: number
         }[]
       }
+      request_tenant_deletion: { Args: { _tenant: string }; Returns: string }
+      reset_tenant: {
+        Args: { _domains: string[]; _tenant: string }
+        Returns: undefined
+      }
       run_dunning: {
         Args: never
         Returns: {
@@ -3224,6 +3525,26 @@ export type Database = {
         }[]
       }
       seed_system_roles: { Args: { _tenant: string }; Returns: undefined }
+      set_bill_complimentary: {
+        Args: { _bill_id: string; _reason: string }
+        Returns: number
+      }
+      set_bill_extras: {
+        Args: {
+          _bill_id: string
+          _note?: string
+          _rounding_cents: number
+          _tip_cents: number
+        }
+        Returns: number
+      }
+      set_kot_item_status: {
+        Args: {
+          _kot_item_id: string
+          _status: Database["public"]["Enums"]["kot_status"]
+        }
+        Returns: undefined
+      }
       set_member_role: {
         Args: { _role_id: string; _tenant: string; _user_id: string }
         Returns: undefined
@@ -3252,6 +3573,10 @@ export type Database = {
       }
       transfer_order: {
         Args: { _order_id: string; _to_table: string }
+        Returns: undefined
+      }
+      transfer_tenant_ownership: {
+        Args: { _tenant: string; _to_user: string }
         Returns: undefined
       }
       trigger_dunning: {
@@ -3294,6 +3619,9 @@ export type Database = {
       payment_method: "cash" | "card" | "online" | "wallet" | "points"
       payment_status: "pending" | "completed" | "failed" | "refunded"
       po_status: "draft" | "sent" | "partial" | "received" | "cancelled"
+      print_job_status: "queued" | "printed" | "failed"
+      printer_connection: "network" | "system"
+      printer_role: "kot" | "receipt" | "both"
       reservation_status:
         | "pending"
         | "confirmed"
@@ -3472,6 +3800,9 @@ export const Constants = {
       payment_method: ["cash", "card", "online", "wallet", "points"],
       payment_status: ["pending", "completed", "failed", "refunded"],
       po_status: ["draft", "sent", "partial", "received", "cancelled"],
+      print_job_status: ["queued", "printed", "failed"],
+      printer_connection: ["network", "system"],
+      printer_role: ["kot", "receipt", "both"],
       reservation_status: [
         "pending",
         "confirmed",

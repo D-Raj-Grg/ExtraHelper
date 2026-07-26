@@ -8,8 +8,9 @@ import { BranchesTab } from "./branches-tab"
 import { ChargesTab } from "./charges-tab"
 import { DangerTab } from "./danger-tab"
 import { GeneralTab } from "./general-tab"
+import { PrintersTab } from "./printers-tab"
 import { ReceiptTab } from "./receipt-tab"
-import type { Branch, DangerData, TaxRule } from "./types"
+import type { Branch, DangerData, PrinterRow, PrintJobRow, TaxRule } from "./types"
 
 export function SettingsManager({
   restaurantName,
@@ -24,6 +25,9 @@ export function SettingsManager({
   logoUrl,
   branches,
   canManageBranches,
+  printers,
+  printJobs,
+  canManagePrinters,
   danger,
 }: {
   restaurantName: string
@@ -38,6 +42,10 @@ export function SettingsManager({
   logoUrl: string | null
   branches: Branch[]
   canManageBranches: boolean
+  printers: PrinterRow[]
+  printJobs: PrintJobRow[]
+  /** Printer setup is owner/manager work — same gate as branches. */
+  canManagePrinters: boolean
   /** Owner-only; null for non-owners (tab hidden). */
   danger: DangerData | null
 }) {
@@ -48,9 +56,9 @@ export function SettingsManager({
   const [rules, setRules] = useState<TaxRule[]>(taxRules)
   const [tab, setTab] = useState("general")
 
-  // Branches and the Dangerous Area run their own actions, so the shared save
-  // bar would be a dead control on those tabs.
-  const showSaveBar = tab !== "branches" && tab !== "danger"
+  // Branches, printers and the Dangerous Area run their own actions, so the
+  // shared save bar would be a dead control on those tabs.
+  const showSaveBar = !["branches", "printers", "danger"].includes(tab)
 
   return (
     // Panels stay mounted: the action reads every field from one FormData, so
@@ -63,6 +71,7 @@ export function SettingsManager({
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="charges">Charges &amp; tax</TabsTrigger>
           <TabsTrigger value="receipt">Receipt &amp; branding</TabsTrigger>
+          {canManagePrinters ? <TabsTrigger value="printers">Printers</TabsTrigger> : null}
           {canManageBranches ? <TabsTrigger value="branches">Branches</TabsTrigger> : null}
           {danger ? <TabsTrigger value="danger">Danger zone</TabsTrigger> : null}
         </TabsList>
@@ -87,6 +96,11 @@ export function SettingsManager({
         <TabsContent value="receipt" keepMounted>
           <ReceiptTab receipt={receipt} logoUrl={logoUrl} />
         </TabsContent>
+        {canManagePrinters ? (
+          <TabsContent value="printers">
+            <PrintersTab printers={printers} jobs={printJobs} timezone={timezone} />
+          </TabsContent>
+        ) : null}
         {canManageBranches ? (
           <TabsContent value="branches">
             <BranchesTab branches={branches} />

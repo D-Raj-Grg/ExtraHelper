@@ -23,7 +23,7 @@ type KotRow = {
   id: string
   status: string
   created_at: string
-  kitchen_stations: { name: string } | null
+  kitchen_stations: { name: string; printers: { paper_width: number } | null } | null
   orders: { order_type: string; restaurant_tables: { label: string } | null } | null
   kot_items: Item[]
 }
@@ -40,7 +40,7 @@ export default async function KotPrintPage({
   const { data } = await supabase
     .from("kots")
     .select(
-      "id, status, created_at, kitchen_stations(name), orders(order_type, restaurant_tables!orders_table_id_fkey(label)), kot_items(id, qty, order_items(name_snapshot, notes, seat, course, order_item_modifiers(name_snapshot, qty)))",
+      "id, status, created_at, kitchen_stations(name, printers(paper_width)), orders(order_type, restaurant_tables!orders_table_id_fkey(label)), kot_items(id, qty, order_items(name_snapshot, notes, seat, course, order_item_modifiers(name_snapshot, qty)))",
     )
     .eq("id", kotId)
     .eq("tenant_id", tenant.tenantId)
@@ -48,17 +48,23 @@ export default async function KotPrintPage({
 
   if (!data) notFound()
   const kot = data as unknown as KotRow
+  // Match the paper the station's printer is actually loaded with, so the
+  // browser fallback and the agent path produce the same ticket.
+  const paperWidth = kot.kitchen_stations?.printers?.paper_width ?? 80
   const station = kot.kitchen_stations?.name ?? "Expo"
   const table = kot.orders?.restaurant_tables?.label
   const orderType = (kot.orders?.order_type ?? "dine_in").replace("_", " ")
   const shortId = kot.id.slice(0, 8).toUpperCase()
 
   return (
-    <div className="mx-auto w-[80mm] max-w-full bg-white p-3 font-mono text-black">
+    <div
+      className="mx-auto max-w-full bg-white p-3 font-mono text-black"
+      style={{ width: `${paperWidth}mm` }}
+    >
       <style>{`
         @media print {
           .no-print { display: none !important; }
-          @page { margin: 4mm; size: 80mm auto; }
+          @page { margin: 4mm; size: ${paperWidth}mm auto; }
           body { background: #fff; }
         }
       `}</style>

@@ -8,6 +8,7 @@ import { fireOrder, setOrderDetails } from "@/app/(app)/pos/actions"
 import { generateBill } from "@/app/(app)/bill/actions"
 import { orderStatusLabel } from "@/lib/order-constants"
 import { Button } from "@/components/ui/button"
+import { usePrint } from "@/components/print/use-print"
 import { DishStep } from "@/components/pos/dish-step"
 import { EMPTY_CHECK_IN, type CheckIn } from "@/components/pos/check-in-details"
 import { useAmendCart } from "@/components/pos/use-amend-cart"
@@ -34,6 +35,7 @@ export function AmendFlow({
   onClose: () => void
 }) {
   const [pending, startTransition] = useTransition()
+  const { printKots } = usePrint()
   const cart = useAmendCart(detail, refetch)
 
   const editable = EDITABLE.includes(detail.status)
@@ -92,10 +94,9 @@ export function AmendFlow({
         toast.error(res.error)
         return
       }
-      // A print view per station ticket. Blocked popups can still be printed
-      // from the KDS board, so this isn't the only route.
-      res.kotIds.forEach((id) => window.open(`/kot/${id}`, "_blank", "noopener"))
-      if (res.kotIds.length) toast.success(`Fired · printing ${res.kotIds.length} ticket(s)`)
+      // One ticket per station, straight to that station's printer. Falls back
+      // to a browser print view when no agent is connected.
+      await printKots(res.kotIds)
       refetch()
     })
   }

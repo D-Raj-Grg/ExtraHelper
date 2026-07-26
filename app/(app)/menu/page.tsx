@@ -13,6 +13,7 @@ export default async function MenuPage() {
     { data: stations },
     { data: modifiers },
     { data: combos },
+    { data: printers },
   ] = await Promise.all([
     supabase
       .from("menu_categories")
@@ -33,9 +34,21 @@ export default async function MenuPage() {
       )
       .eq("tenant_id", tenant.tenantId)
       .order("name"),
-    supabase.from("kitchen_stations").select("id, name").eq("tenant_id", tenant.tenantId).order("name"),
+    supabase
+      .from("kitchen_stations")
+      .select("id, name, printer_id")
+      .eq("tenant_id", tenant.tenantId)
+      .order("name"),
     supabase.from("modifiers").select("id, name, price_cents").eq("tenant_id", tenant.tenantId).order("name"),
     supabase.from("combos").select("id, name, price_cents, items, is_active").eq("tenant_id", tenant.tenantId).order("name"),
+    // Kitchen-capable printers only — a receipt printer is not a ticket route.
+    supabase
+      .from("printers")
+      .select("id, name")
+      .eq("tenant_id", tenant.tenantId)
+      .eq("is_active", true)
+      .in("role", ["kot", "both"])
+      .order("name"),
   ])
 
   return (
@@ -49,6 +62,7 @@ export default async function MenuPage() {
         categories={categories ?? []}
         items={(items ?? []) as never}
         stations={stations ?? []}
+        printers={printers ?? []}
         modifiers={modifiers ?? []}
         combos={(combos ?? []) as never}
       />

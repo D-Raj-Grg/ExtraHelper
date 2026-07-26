@@ -1,7 +1,9 @@
 import type { MenuState } from "@/app/(app)/menu/actions"
 
 export type Category = { id: string; name: string; sort: number | null; is_active: boolean }
-export type Station = { id: string; name: string }
+export type Station = { id: string; name: string; printer_id: string | null }
+/** Printer choices for station routing. */
+export type StationPrinter = { id: string; name: string }
 export type Modifier = { id: string; name: string; price_cents: number }
 export type Item = {
   id: string

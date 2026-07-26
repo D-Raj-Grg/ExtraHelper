@@ -1,3 +1,9 @@
+import type {
+  PrinterConnection,
+  PrinterRole,
+  PrintJobStatus,
+} from "@/lib/print/types"
+
 export type TaxRule = { name: string; rate: number; inclusive: boolean }
 export type Branch = { id: string; name: string; address: string | null; is_default: boolean }
 
@@ -17,6 +23,34 @@ export type DangerData = {
   }
   members: TransferMember[]
   deletionScheduledAt: string | null
+}
+
+/** Printer registry row, as the settings page selects it. */
+export type PrinterRow = {
+  id: string
+  name: string
+  connection: PrinterConnection
+  host: string | null
+  port: number
+  system_name: string | null
+  paper_width: number
+  role: PrinterRole
+  is_default: boolean
+  is_active: boolean
+}
+
+/** One entry in the print-job log. */
+export type PrintJobRow = {
+  id: string
+  type: string
+  status: PrintJobStatus
+  attempts: number
+  error: string | null
+  created_at: string
+  kot_id: string | null
+  bill_id: string | null
+  printer_id: string | null
+  printers: { name: string } | null
 }
 
 export const CURRENCIES = ["USD", "EUR", "GBP", "INR", "NPR", "AED", "SGD", "AUD", "CAD", "JPY"]

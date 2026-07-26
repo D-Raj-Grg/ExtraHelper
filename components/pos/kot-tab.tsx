@@ -11,6 +11,7 @@ import { KOT_CARD_SELECT, KOT_TAB_STATUSES } from "@/lib/pos-constants"
 import { KOT_FLOW } from "@/lib/kds-constants"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { usePrint } from "@/components/print/use-print"
 import { KotCard, type KotTicket, type KotTicketLine } from "@/components/pos/kot-card"
 import type { PosKot, PosStaff } from "@/components/pos/types"
 
@@ -63,6 +64,7 @@ export function KotTab({
   tenantId: string
 }) {
   const [pending, startTransition] = useTransition()
+  const { printKots } = usePrint()
   const [showCompleted, setShowCompleted] = useState(false)
   const [splitByType, setSplitByType] = useState(true)
   const [kots, setKots] = useState<PosKot[]>(initialKots)
@@ -186,9 +188,9 @@ export function KotTab({
   }
 
   function printTicket(ticket: KotTicket) {
-    // Opening the print view stamps printed_at (PrintOnLoad) — Realtime then
-    // lights the printed badge. One tab per station ticket.
-    for (const id of ticket.kotIds) window.open(`/kot/${id}`, "_blank", "noopener")
+    // A confirmed print stamps printed_at — Realtime then lights the printed
+    // badge. Always a re-print here: the ticket already went out on fire.
+    void printKots(ticket.kotIds, { reprint: true })
   }
 
   function cancelTicket(ticket: KotTicket, reason: string) {
