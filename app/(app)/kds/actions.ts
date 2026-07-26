@@ -40,6 +40,27 @@ export async function bumpKot(kotId: string, status: KotStatus): Promise<KdsStat
   return { ok: true }
 }
 
+/**
+ * Set one dish's status. The RPC derives the ticket from its lines and the
+ * order from its tickets, so a cook can plate dish by dish without the ticket
+ * lying about where the order is.
+ */
+export async function setKotItemStatus(
+  kotItemId: string,
+  status: KotStatus,
+): Promise<KdsState> {
+  await requireRole("owner", "manager", "kitchen")
+  const supabase = await createClient()
+  const { error } = await supabase.rpc("set_kot_item_status", {
+    _kot_item_id: kotItemId,
+    _status: status,
+  })
+  if (error) return { error: error.message }
+  revalidatePath("/kds")
+  revalidatePath("/pos")
+  return { ok: true }
+}
+
 /** Waiter marks an order delivered — advances order + tickets to served. */
 export async function markServed(orderId: string): Promise<KdsState> {
   await requireRole("owner", "manager", "kitchen", "waiter", "cashier")

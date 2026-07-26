@@ -2,12 +2,10 @@ import { createClient } from "@/lib/supabase/server"
 import { requirePermission } from "@/lib/supabase/guards"
 import { KdsBoard } from "@/components/kds-board"
 import { EightySixPanel } from "@/components/eighty-six-panel"
+import { KDS_SELECT } from "@/lib/kds-constants"
 
 // KDS should reflect the kitchen live; don't cache.
 export const dynamic = "force-dynamic"
-
-const KDS_SELECT =
-  "id, status, created_at, station_id, kitchen_stations(name), orders(table_id, restaurant_tables!orders_table_id_fkey(label)), kot_items(id, qty, status, order_items(name_snapshot, is_void, void_reason))"
 
 export default async function KdsPage({
   searchParams,
