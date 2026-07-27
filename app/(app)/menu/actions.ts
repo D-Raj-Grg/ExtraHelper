@@ -72,15 +72,20 @@ export async function createItem(
   return { ok: true }
 }
 
-/** 86 = mark out of stock. Realtime disables it on all ordering surfaces later. */
+/**
+ * 86 = mark out of stock. Realtime disables it on all ordering surfaces later.
+ *
+ * Goes through `set_item_86` so the rule lives in Postgres and the mobile app
+ * shares it. RLS on `menu_items` is tenant-scoped only, so the role check that
+ * used to live in this action guarded nothing against a direct API call.
+ */
 export async function toggleItem86(itemId: string, is86: boolean): Promise<MenuState> {
-  const tenant = await requireRole("owner", "manager", "kitchen")
+  await requireRole("owner", "manager", "kitchen")
   const supabase = await createClient()
-  const { error } = await supabase
-    .from("menu_items")
-    .update({ is_86: is86 })
-    .eq("id", itemId)
-    .eq("tenant_id", tenant.tenantId)
+  const { error } = await supabase.rpc("set_item_86", {
+    _item_id: itemId,
+    _is_86: is86,
+  })
   if (error) return { error: error.message }
   revalidatePath("/menu")
   revalidatePath("/pos")

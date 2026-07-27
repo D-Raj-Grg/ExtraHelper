@@ -3551,6 +3551,10 @@ export type Database = {
         }
         Returns: number
       }
+      set_item_86: {
+        Args: { _is_86: boolean; _item_id: string }
+        Returns: undefined
+      }
       set_kot_item_status: {
         Args: {
           _kot_item_id: string
@@ -3560,6 +3564,13 @@ export type Database = {
       }
       set_member_role: {
         Args: { _role_id: string; _tenant: string; _user_id: string }
+        Returns: undefined
+      }
+      set_table_state: {
+        Args: {
+          _state: Database["public"]["Enums"]["table_state"]
+          _table_id: string
+        }
         Returns: undefined
       }
       split_order_items: {

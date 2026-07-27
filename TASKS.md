@@ -6,6 +6,27 @@
 
 ---
 
+## Manager ops moved into Postgres (2026-07-27, mobile Milestone G)
+
+`set_item_86(_item_id, _is_86)` and `set_table_state(_table_id, _state)` — migration
+`20260727120000_manager_ops.sql`. Both `security definer`, `search_path = public`, revoked from
+`public, anon`, granted to `authenticated` by full signature.
+
+**Why:** RLS on `menu_items` and `restaurant_tables` is tenant-scoped only. The role checks lived in
+`toggleItem86` and `setTableState` as `requireRole(...)`, so any member of the restaurant could do
+either update straight through the API. The guard was in the client. Both RPCs now hold the rule,
+mirror the previous role sets exactly (86 = owner/manager/kitchen; state = owner/manager/
+receptionist/waiter/cashier), and write an `audit_logs` row — which the column updates never did.
+
+`set_table_state` additionally **refuses to free a table that still has a live order**. That was
+possible before and hid the order from the board while the kitchen was still cooking it.
+
+- [x] `app/(app)/menu/actions.ts` → `toggleItem86` calls the RPC.
+- [x] `app/(app)/tables/actions.ts` → `setTableState` calls the RPC.
+- [x] `lib/supabase/database.types.ts` updated. `tsc` + `eslint` clean.
+- [ ] Consider a dedicated `menu.86` permission key: the kitchen needs to 86 a dish but must not
+      hold `menu.edit`, so the RPC currently checks the role directly. A catalog decision.
+
 ## Milestone 0 — Foundation
 - [~] Create Supabase project (dev + prod); wire env/secrets (service role server-only) — dev project `ixrcdtwdcpsmlbocvejv` live, `.env.local` wired (publishable key only; RLS is the gate). TODO: separate prod project + secrets.
 - [~] Install/verify toolchain: Node LTS, Supabase CLI, Docker, Flutter SDK, Xcode, Android Studio — **mobile toolchain done (2026-07-26)**: Flutter 3.38.7 / Dart 3.10.7, Xcode 26.2 + **CocoaPods 1.17.0**, Android SDK 36.1.0 + **cmdline-tools 21.0** with licenses accepted (`ANDROID_HOME` in `~/.zshrc`); `flutter doctor` reports **no issues**. TODO: Supabase CLI + Docker (migrations still applied via Supabase MCP instead).
