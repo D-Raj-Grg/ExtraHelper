@@ -27,105 +27,60 @@ export type AddItemOpts = {
 }
 
 /**
- * Add a menu item to a draft order. Snapshots name + price at add time,
- * folding in the chosen variant delta and modifier prices. Modifiers are
- * recorded on `order_item_modifiers` for the kitchen ticket + receipt.
+ * Add a menu item to an open order.
+ *
+ * A thin wrapper over `amend_order_add_item` (migration 20260727090000). The
+ * pricing rules — variant delta, `name (variant)` snapshot, modifier-link
+ * validation, trusted modifier prices — live in that one SQL function, which
+ * the Flutter app calls too. They used to live here *and* in
+ * `place_staff_order`, with a comment that the two "must agree to the cent";
+ * a third copy in Dart was the point at which that stopped being maintainable.
+ *
+ * The RPC also fixes what this function could not do in two round-trips: the
+ * line and its `order_item_modifiers` now insert in one transaction, so a
+ * failure between them can no longer leave a line priced for add-ons the
+ * kitchen ticket never mentions.
+ *
+ * Signature and return shape are unchanged, so every caller stays put.
  */
 export async function addItem(
   orderId: string,
   itemId: string,
   opts: AddItemOpts = {},
 ): Promise<PosState> {
-  const tenant = await requireRole(...ORDER_ROLES)
+  await requireRole(...ORDER_ROLES)
   const supabase = await createClient()
 
-  const { data: item, error: itemErr } = await supabase
-    .from("menu_items")
-    .select("name, base_price_cents, is_86")
-    .eq("id", itemId)
-    .eq("tenant_id", tenant.tenantId)
-    .single()
-  if (itemErr || !item) return { error: "Item not found." }
-  if (item.is_86) return { error: `${item.name} is 86'd (out of stock).` }
-
-  const qty = Math.max(1, Math.floor(opts.qty ?? 1))
-  let unitPrice = item.base_price_cents
-  let nameSnapshot = item.name
-
-  // Variant: fold price delta + append name (validated to belong to this item).
-  if (opts.variantId) {
-    const { data: variant } = await supabase
-      .from("item_variants")
-      .select("name, price_delta_cents")
-      .eq("id", opts.variantId)
-      .eq("item_id", itemId)
-      .eq("tenant_id", tenant.tenantId)
-      .maybeSingle()
-    if (!variant) return { error: "Variant not found." }
-    unitPrice += variant.price_delta_cents
-    nameSnapshot = `${item.name} (${variant.name})`
-  }
-
-  // Modifiers: fetch trusted prices, fold into unit price.
-  const modifierIds = [...new Set(opts.modifierIds ?? [])]
-  let mods: { id: string; name: string; price_cents: number }[] = []
-  if (modifierIds.length) {
-    // Every add-on must be linked to THIS item via item_modifiers, not merely
-    // owned by the tenant — otherwise "Extra cheese" prices onto a beer. Mirror
-    // of the check in place_staff_order; the two must agree to the cent.
-    const { data: links } = await supabase
-      .from("item_modifiers")
-      .select("modifier_id")
-      .eq("tenant_id", tenant.tenantId)
-      .eq("item_id", itemId)
-      .in("modifier_id", modifierIds)
-    if ((links?.length ?? 0) !== modifierIds.length) {
-      return { error: "That add-on isn't available for this item." }
-    }
-    const { data: rows } = await supabase
-      .from("modifiers")
-      .select("id, name, price_cents")
-      .eq("tenant_id", tenant.tenantId)
-      .in("id", modifierIds)
-    mods = rows ?? []
-    unitPrice += mods.reduce((s, m) => s + m.price_cents, 0)
-  }
-
-  const { data: line, error } = await supabase
-    .from("order_items")
-    .insert({
-      tenant_id: tenant.tenantId,
-      order_id: orderId,
-      item_id: itemId,
-      variant_id: opts.variantId ?? null,
-      name_snapshot: nameSnapshot,
-      qty,
-      unit_price_cents: unitPrice,
-      notes: opts.notes?.trim() || null,
-      course: opts.course ?? null,
-      seat: opts.seat ?? null,
-      status: "draft",
-    })
-    .select("id")
-    .single()
-  if (error || !line) return { error: error?.message ?? "Could not add item." }
-
-  if (mods.length) {
-    const { error: modErr } = await supabase.from("order_item_modifiers").insert(
-      mods.map((m) => ({
-        tenant_id: tenant.tenantId,
-        order_item_id: line.id,
-        modifier_id: m.id,
-        name_snapshot: m.name,
-        qty: 1,
-        price_cents: m.price_cents,
-      })),
-    )
-    if (modErr) return { error: modErr.message }
-  }
+  const { error } = await supabase.rpc("amend_order_add_item", {
+    _order_id: orderId,
+    _item_id: itemId,
+    _qty: Math.max(1, Math.floor(opts.qty ?? 1)),
+    _variant_id: opts.variantId ?? undefined,
+    _modifier_ids: opts.modifierIds?.length ? [...new Set(opts.modifierIds)] : undefined,
+    _notes: opts.notes?.trim() || undefined,
+    _course: opts.course ?? undefined,
+    _seat: opts.seat ?? undefined,
+  })
+  if (error) return { error: friendlyAddItemError(error.message) }
 
   revalidatePos(orderId)
   return { ok: true }
+}
+
+/**
+ * The RPC raises in SQL prose ("modifier not available for this item"). Keep
+ * the wording the POS already showed for the cases staff actually hit.
+ */
+function friendlyAddItemError(message: string): string {
+  if (message.includes("modifier not available")) {
+    return "That add-on isn't available for this item."
+  }
+  if (message.includes("variant not found")) return "Variant not found."
+  if (message.includes("item not found")) return "Item not found."
+  if (message.includes("cannot be amended")) {
+    return "This order is closed — it can't be changed."
+  }
+  return message
 }
 
 /** Change a line's quantity (min 1). Editable states only. */

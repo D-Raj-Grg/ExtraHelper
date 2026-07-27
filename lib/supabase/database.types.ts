@@ -3177,6 +3177,19 @@ export type Database = {
         }
         Returns: number
       }
+      amend_order_add_item: {
+        Args: {
+          _course?: number
+          _item_id: string
+          _modifier_ids?: string[]
+          _notes?: string
+          _order_id: string
+          _qty?: number
+          _seat?: number
+          _variant_id?: string
+        }
+        Returns: string
+      }
       apply_bill_discount: {
         Args: {
           _bill_id: string
