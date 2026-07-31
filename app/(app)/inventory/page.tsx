@@ -22,7 +22,7 @@ export default async function InventoryPage() {
   ] = await Promise.all([
       supabase
         .from("inventory_items")
-        .select("id, name, uom, category, current_qty, reorder_level, par_level, cost_cents, supplier_id")
+        .select("id, name, uom, category, current_qty, reorder_level, par_level, cost_cents, supplier_id, barcode")
         .eq("tenant_id", tenant.tenantId)
         .order("name"),
       supabase

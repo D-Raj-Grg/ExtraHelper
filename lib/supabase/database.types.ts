@@ -660,6 +660,7 @@ export type Database = {
       }
       inventory_items: {
         Row: {
+          barcode: string | null
           branch_id: string | null
           category: string | null
           cost_cents: number
@@ -675,6 +676,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          barcode?: string | null
           branch_id?: string | null
           category?: string | null
           cost_cents?: number
@@ -690,6 +692,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          barcode?: string | null
           branch_id?: string | null
           category?: string | null
           cost_cents?: number
@@ -3264,6 +3267,10 @@ export type Database = {
         Returns: string
       }
       current_tenant_ids: { Args: never; Returns: string[] }
+      dashboard_summary: {
+        Args: { _days?: number; _tenant: string }
+        Returns: Json
+      }
       default_role_permissions: {
         Args: { _base: Database["public"]["Enums"]["app_role"] }
         Returns: string[]
@@ -3565,6 +3572,10 @@ export type Database = {
       set_member_role: {
         Args: { _role_id: string; _tenant: string; _user_id: string }
         Returns: undefined
+      }
+      set_stock_count_actual: {
+        Args: { _actual: number; _count_item_id: string }
+        Returns: number
       }
       set_table_state: {
         Args: {

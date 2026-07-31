@@ -84,6 +84,11 @@ export function AddIngredientSheet({
               <FieldLabel htmlFor="add-inv-category">Category</FieldLabel>
               <Input id="add-inv-category" name="category" placeholder="Dry goods" />
             </Field>
+            <Field className="w-44">
+              <FieldLabel htmlFor="add-inv-barcode">Barcode</FieldLabel>
+              <Input id="add-inv-barcode" name="barcode" placeholder="—" inputMode="numeric" />
+              <FieldDescription>Scannable on the phone during a count.</FieldDescription>
+            </Field>
           </div>
           <div className="flex flex-wrap gap-4">
             <Field className="w-28">
@@ -171,6 +176,7 @@ function ItemEditBody({ item, suppliers, onSaved }: { item: Item; suppliers: Sup
   const [par, setPar] = useState(!item.par_level ? "" : String(item.par_level))
   const [cost, setCost] = useState((item.cost_cents / 100).toFixed(2))
   const [supplierId, setSupplierId] = useState(item.supplier_id ?? NO_SUPPLIER)
+  const [barcode, setBarcode] = useState(item.barcode ?? "")
   const [err, setErr] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
 
@@ -189,6 +195,7 @@ function ItemEditBody({ item, suppliers, onSaved }: { item: Item; suppliers: Sup
         par: parN,
         cost: costN,
         supplierId: supplierId === NO_SUPPLIER ? null : supplierId,
+        barcode,
       })
       if (res && "error" in res) setErr(res.error)
       else onSaved()
@@ -229,6 +236,22 @@ function ItemEditBody({ item, suppliers, onSaved }: { item: Item; suppliers: Sup
             </SelectContent>
           </Select>
           <FieldDescription>Used to group low-stock draft POs.</FieldDescription>
+        </Field>
+      </div>
+      <div className="flex flex-wrap gap-4">
+        <Field className="min-w-40 flex-1">
+          <FieldLabel htmlFor="edit-inv-barcode">Barcode</FieldLabel>
+          <Input
+            id="edit-inv-barcode"
+            value={barcode}
+            onChange={(e) => setBarcode(e.target.value)}
+            placeholder="—"
+            inputMode="numeric"
+          />
+          <FieldDescription>
+            Scan this item on the phone during a count. Must be unique in this restaurant; clear it to
+            remove.
+          </FieldDescription>
         </Field>
       </div>
       <div className="flex flex-wrap gap-4">

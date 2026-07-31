@@ -27,6 +27,107 @@ possible before and hid the order from the board while the kitchen was still coo
 - [ ] Consider a dedicated `menu.86` permission key: the kitchen needs to 86 a dish but must not
       hold `menu.edit`, so the RPC currently checks the role directly. A catalog decision.
 
+## Dashboard moved into Postgres (2026-07-30, mobile Milestone I)
+
+`dashboard_summary(_tenant, _days)` — migration `20260730090000_dashboard_summary.sql`.
+`security invoker` (RLS is still the boundary), `stable`, `search_path = public`, gated on
+`has_permission(_tenant, 'reports.view')`, revoked from `public, anon`, granted to `authenticated`.
+
+**Why:** the dashboard did six parallel PostgREST reads and then bucketed bills into tenant-local
+days in TypeScript with `Intl.DateTimeFormat`. Flutter can't reproduce that — `package:intl` ships
+no IANA timezone database — so the mobile owner dashboard would have needed a second implementation
+of "which day is this bill in", i.e. exactly the drift rule 1 exists to prevent. Postgres owns
+`tenant_settings.timezone`, so the aggregation lives there and both clients render one payload.
+Timestamps come back pre-formatted in the tenant's zone (`to_char`) for the same reason.
+
+The RPC **returns null instead of raising** when the caller lacks `reports.view`, so a surface can
+degrade rather than explode.
+
+- [x] `app/(app)/page.tsx` calls the RPC; ~90 lines of query + bucketing deleted.
+- [x] `lib/supabase/database.types.ts` updated. `tsc` + `eslint` + `next build` clean.
+- [x] **Verified**: today revenue, today bill count and the 30-day series sum match a direct
+      tz-aware query to the cent; 30 buckets for a 30-day window; a non-platform-admin owner of
+      tenant A gets null for tenant B.
+- [x] **Behaviour change, owner-confirmed 2026-07-30:** `/` previously showed revenue, low stock and
+      recent payments to *every* member of a restaurant — the page only called `requireTenant()`,
+      which was a real leak. It is now gated on `reports.view` like the rest of reporting, and roles
+      without it see a "no access to reports" card. If a non-reporting role ever needs one figure
+      off this screen (low stock, say), that is a separate narrower RPC — never reopening revenue.
+
+## Inventory ops moved into Postgres (2026-07-30, mobile Milestone J)
+
+Migration `20260730214500_inventory_ops.sql`.
+
+**`adjust_inventory` had no authorization whatsoever.** It was `security invoker` with no
+`has_tenant_role` and no `has_permission` in its body, and RLS on `inventory_items` /
+`stock_movements` / `stock_counts` / `stock_count_items` is tenant-scoped only — so the
+`requireRole("owner","manager","inventory")` in `app/(app)/inventory/actions.ts` was the *only*
+guard, and anyone in the restaurant could move stock or log a waste write-off straight through the
+API. The comment on that call claimed "RLS + role enforced inside"; it did not. Third instance of
+the same class in three milestones, after 86/table-state (G) and revenue (I).
+
+- [x] `adjust_inventory` → `security definer`, gated on `has_permission(_tenant, 'inventory.edit')`
+      (the same holders as the old role list, so nothing regressed), and it now writes an
+      `audit_logs` row — `stock_adjust` / `stock_waste` with the item, delta, reason and resulting
+      quantity. That audit row is the **only** attribution that exists: `stock_movements` has no
+      actor column.
+- [x] **Order of operations, not just the guard.** The old body took the tenant from the update
+      itself (`update … returning tenant_id`), which was safe only because RLS fenced the update.
+      Under DEFINER that writes another tenant's row and asks afterwards. Now select → guard →
+      update. **Verified**: a non-platform-admin owner of tenant A passing a tenant-B item is
+      refused `42501` and the B row does not move.
+- [x] **`set_stock_count_actual(_count_item_id, _actual)`** — new, DEFINER, `inventory.edit`,
+      refuses a posted count, returns the variance. Replaces the direct `stock_count_items` update
+      in `setCountActual`, which any member could have made against any count in their restaurant.
+      Note `variance` is a **generated column** (`actual_qty - theoretical_qty`) — writing to it
+      raises `428C9`, which is exactly how the first version of this function failed.
+- [x] `post_stock_count` audits the posting itself (`stock_count_post`).
+- [x] `inventory_items.barcode` + a **partial unique index per tenant** where set. Barcode field
+      added to `components/inventory/item-sheet.tsx` (create and edit) — the mobile scanner has
+      nothing to match without it — and the raw constraint name is rewritten into an instruction.
+- [x] `database.types.ts` updated; `tsc` + `next build` clean.
+- [x] **Verified live** as an impersonated non-admin owner: an authorized adjustment applies and is
+      audited; a wastage carries its reason; a cross-tenant write is refused; a count line's
+      variance computes, replays identically, and overwrites on recount; posting reconciles on-hand
+      and writes a `count` movement; a posted count refuses further edits. All probe rows removed.
+
+**One decision left open for the owner.** `start_stock_count` seeds every line's `actual_qty` with
+the item's current on-hand, so **no line is ever "uncounted"** — which makes `post_stock_count`'s own
+skip-uncounted-lines branch unreachable, and makes any "N of M counted" progress indicator a lie
+(the Flutter app now reports how many lines *differ* instead). The clean fix is to seed null, but the
+web count page does `Number(r.actual_qty)`, so null would render there as a counted **0**. That is a
+two-client change and was deliberately not made half-way. See `../extrahelper_flutter/TASKS.md`
+Milestone J.
+
+## `report_sales` — the guard fix #5 missed (2026-07-30)
+
+Migration `20260730093000_report_sales_guard.sql`.
+
+`20260712120000_report_fixes.sql` set out to "add `reports.view` permission guard to every report RPC
+(direct-API defense)" and covered six of them — `report_sales_by_bill`, `by_category`,
+`report_inventory`, `report_staff`, `report_customers`, `report_extras` — but **not `report_sales`**,
+which is the one that returns the headline revenue figure. `bills` RLS is tenant-scoped only
+(`tenant_all`) and `reports.view` is Owner/Manager only, so until now any member of a restaurant
+could read the day's takings straight through the API. Same hole class as the dashboard leak above,
+found while scoping mobile Milestone I.
+
+- [x] Guard added. Same arity, so a plain `create or replace` — grants carry over, no re-issue needed.
+      Verified live: `has_permission` present in `prosrc`.
+- [x] ACL tightened: the original migration granted to `authenticated` and **never revoked**, so
+      `public` (hence `anon`) held EXECUTE by default. Now `authenticated` only. Harmless in practice
+      — `security invoker` + RLS gives anon no rows — but "revoke from anon alone does nothing" cuts
+      both ways: the grant nobody wrote is the one that bites.
+- [x] No regression: the only caller is `components/reports/sales-tab.tsx`, reached from
+      `app/(app)/reports/page.tsx`, which already does `requirePermission("reports.view")`.
+
+**Process note, worth more than the fix.** Two Claude sessions worked this milestone at the same time
+against the same dev project. The second one wrote a `dashboard_summary(_tenant, _days, _tz)` while
+this one's `(_tenant, _days)` was already live, which is the arity trap in `CLAUDE.md`: Postgres kept
+**both** function objects, and a PostgREST call naming `{_tenant, _days}` matches either, so `/` would
+have failed on an ambiguous function call. Caught and dropped ~14 minutes later; only one
+`dashboard_summary(uuid, int)` exists now. Before adding an RPC, check `pg_proc` for the name — the
+repo is not the whole truth about what is deployed.
+
 ## Milestone 0 — Foundation
 - [~] Create Supabase project (dev + prod); wire env/secrets (service role server-only) — dev project `ixrcdtwdcpsmlbocvejv` live, `.env.local` wired (publishable key only; RLS is the gate). TODO: separate prod project + secrets.
 - [~] Install/verify toolchain: Node LTS, Supabase CLI, Docker, Flutter SDK, Xcode, Android Studio — **mobile toolchain done (2026-07-26)**: Flutter 3.38.7 / Dart 3.10.7, Xcode 26.2 + **CocoaPods 1.17.0**, Android SDK 36.1.0 + **cmdline-tools 21.0** with licenses accepted (`ANDROID_HOME` in `~/.zshrc`); `flutter doctor` reports **no issues**. TODO: Supabase CLI + Docker (migrations still applied via Supabase MCP instead).
@@ -76,7 +177,7 @@ possible before and hid the order from the board while the kitchen was still coo
 - [~] **Verify:** bill → split payment → receipt; day-close reconciles — **browser E2E passed**: order→fire→generate bill (trusted tax/service)→pay cash→paid/closed/table-freed. Fixed 2 bugs found here: Base UI Button a11y (`nativeButton={false}` on link-buttons), currency hydration mismatch (`Intl.NumberFormat(undefined)` → shared `lib/format.ts` with pinned locale). **Day-close verified** (cash session reconcile). TODO: split bills, receipt.
 
 ## Milestone 3 — Inventory
-- [x] Inventory items: UoM, category, reorder level, par level, cost — `inventory_items` + `/inventory` UI (name, uom, on-hand, reorder, cost, add). TODO: category, par level fields in UI. ✅ Finished in partial-features sprint (2026-07-13).
+- [x] Inventory items: UoM, category, reorder level, par level, cost — `inventory_items` + `/inventory` UI (name, uom, on-hand, reorder, cost, add). TODO: category, par level fields in UI. ✅ Finished in partial-features sprint (2026-07-13). **Barcode added 2026-07-30** (unique per tenant where set) for the mobile scanner — see "Inventory ops moved into Postgres" above. **Mobile store room done**: on-hand + low stock, stock count through a shared RPC (offline-capable), adjust/waste online-only, in `../extrahelper_flutter/TASKS.md` Milestone J.
 - [x] Recipe/BOM mapping: menu item → ingredient quantities — `/inventory` recipe form (dish → ingredient × qty) + list; `addRecipe` action. **Verified**: "Classic Burger uses 1 unit of Burger Bun".
 - [x] Auto-deduct stock on sale (trusted trigger/function) — `trg_deduct_stock` trigger on `order_items` (fires on transition → in_kitchen), deducts recipe qty × ordered qty from `inventory_items`, logs `stock_movements` (type='sale'). SECURITY DEFINER, idempotent (once per transition). **Verified E2E**: browser sell burger → Bun 15→14; MCP 100→98, re-fire no double-deduct. (migration `20260710194337_inventory_deduct`)
 - [x] Stock movements: sale, wastage, staff meal, transfer — `stock_movements` logged on sale (auto) + manual purchase/wastage/adjustment via `/inventory` adjust. TODO: staff meal, transfer types in UI. ✅ Finished in partial-features sprint (2026-07-13).
@@ -95,7 +196,7 @@ possible before and hid the order from the board while the kitchen was still coo
 - [x] Inventory reports: consumption, COGS, wastage, valuation, reorder needs — `/reports` Inventory tab (`report_inventory`): per-item consumed/wasted/COGS/valuation/reorder-qty + COGS & valuation totals. CSV export.
 - [x] Staff reports: sales/waiter, orders handled, shift hours, tips — `/reports` Staff tab (`report_staff`, DEFINER owner/manager): revenue+orders per waiter (orders now record `waiter_id`), tips + shift hours from `staff_shifts`. CSV export.
 - [x] Customer/loyalty reports: repeat rate, top customers, redemption — `/reports` Customers tab (`report_customers`): orders/spend per customer, points redeemed, **repeat rate**. CSV export.
-- [~] Owner dashboard: KPI tiles + charts (web + mobile) — **web done**: `/` dashboard (KPI cards + 14/7/30/90-day revenue **area chart**, low-stock/reservations/recent-payments) + `/reports` KPI tiles + breakdowns. TODO: mobile (Flutter).
+- [x] Owner dashboard: KPI tiles + charts (web + mobile) — `/` dashboard (KPI cards + 7/14/30/90-day revenue **area chart**, low-stock/reservations/recent-payments) + `/reports` KPI tiles + breakdowns. **Mobile done (2026-07-30)**: the Flutter app renders the same `dashboard_summary` RPC (hand-painted chart, no charting dep), verified on the Android emulator light + dark + greyscale. See "Dashboard moved into Postgres" above and `../extrahelper_flutter/TASKS.md` Milestone I.
 - [x] Exports: CSV / PDF — `ExportButtons` (CSV download via `lib/csv` + Print/PDF via browser print, `print:hidden` chrome) on every report table.
 - [~] **Verify:** report totals reconcile vs seeded transactions across all windows — **verified E2E**: revenue $30.70 / 2 orders / avg $15.35 / service $2.90 / discount $1.20 reconcile against the 2 paid E2E bills; top items (Burger ×2 $24, Fries ×1 $5); Cash $30.70; window switch recomputes. RLS-scoped (non-member → zeros). TODO: multi-window seeded reconciliation.
 

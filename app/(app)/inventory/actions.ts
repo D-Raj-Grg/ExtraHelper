@@ -11,6 +11,17 @@ const INV_ROLES = ["owner", "manager", "inventory"] as const
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
+/**
+ * `inventory_items_tenant_barcode_uidx` is what stops two items answering the
+ * same scan. Postgres reports that as a raw constraint name, which tells a store
+ * keeper nothing about what to do next.
+ */
+function barcodeError(message: string): string {
+  return message.includes("inventory_items_tenant_barcode_uidx")
+    ? "Another item already uses that barcode. Scan a different code, or clear it from the other item first."
+    : message
+}
+
 /** Open a new stock count (snapshots on-hand as theoretical) and go edit it. */
 export async function startCount(): Promise<void> {
   const tenant = await requireRole(...INV_ROLES)
@@ -20,20 +31,27 @@ export async function startCount(): Promise<void> {
   redirect(`/inventory/count/${data}`)
 }
 
-/** Record the counted (actual) quantity for a line. */
+/**
+ * Record the counted (actual) quantity for a line.
+ *
+ * Goes through `set_stock_count_actual` rather than updating the row directly:
+ * RLS on `stock_count_items` is tenant-scoped only, so the direct write let any
+ * member of the restaurant edit the numbers a manager then posts. The RPC gates
+ * on `inventory.edit`, refuses a count that is already posted, and computes the
+ * variance server-side so the web and the phone cannot disagree about it.
+ */
 export async function setCountActual(
   countItemId: string,
   countId: string,
   actual: number,
 ): Promise<InvState> {
-  const tenant = await requireRole(...INV_ROLES)
+  await requireRole(...INV_ROLES)
   if (!Number.isFinite(actual) || actual < 0) return { error: "Enter a valid quantity." }
   const supabase = await createClient()
-  const { error } = await supabase
-    .from("stock_count_items")
-    .update({ actual_qty: actual })
-    .eq("id", countItemId)
-    .eq("tenant_id", tenant.tenantId)
+  const { error } = await supabase.rpc("set_stock_count_actual", {
+    _count_item_id: countItemId,
+    _actual: actual,
+  })
   if (error) return { error: error.message }
   revalidatePath(`/inventory/count/${countId}`)
   return { ok: true }
@@ -63,6 +81,8 @@ export async function createInventoryItem(
   const par = parRaw === "" ? null : Number(parRaw)
   const cost = Math.round(Number(formData.get("cost") ?? 0) * 100)
   const qty = Number(formData.get("qty") ?? 0)
+  // Unique per tenant where set, so a blank must store null, not "".
+  const barcode = String(formData.get("barcode") ?? "").trim() || null
 
   if (!name) return { error: "Item name is required." }
   if (Number.isNaN(reorder) || reorder < 0) return { error: "Invalid reorder level." }
@@ -81,8 +101,9 @@ export async function createInventoryItem(
     par_level: par ?? 0,
     current_qty: qty,
     cost_cents: Number.isNaN(cost) ? 0 : cost,
+    barcode,
   })
-  if (error) return { error: error.message }
+  if (error) return { error: barcodeError(error.message) }
 
   revalidatePath("/inventory")
   return { ok: true }
@@ -99,6 +120,7 @@ export async function updateInventoryItem(
     par?: number | null
     cost?: number
     supplierId?: string | null
+    barcode?: string | null
   },
 ): Promise<InvState> {
   const tenant = await requireRole(...INV_ROLES)
@@ -125,6 +147,9 @@ export async function updateInventoryItem(
     patch.par_level = fields.par ?? 0
   }
   if (fields.cost !== undefined) patch.cost_cents = Math.max(0, Math.round(fields.cost))
+  // Cleared barcode stores null: the unique index is partial, so "" would be a
+  // real value and two blank items would collide.
+  if (fields.barcode !== undefined) patch.barcode = fields.barcode?.trim() || null
   if (Object.keys(patch).length === 0) return { ok: true }
 
   const supabase = await createClient()
@@ -133,7 +158,7 @@ export async function updateInventoryItem(
     .update(patch)
     .eq("id", itemId)
     .eq("tenant_id", tenant.tenantId)
-  if (error) return { error: error.message }
+  if (error) return { error: barcodeError(error.message) }
   revalidatePath("/inventory")
   return { ok: true }
 }
@@ -150,8 +175,16 @@ export async function adjustStock(
     return { error: "Enter a non-zero quantity." }
 
   const supabase = await createClient()
-  // Atomic: current_qty = current_qty + delta (+ movement log) in one statement,
-  // so concurrent adjusts can't clobber each other. RLS + role enforced inside.
+  // Atomic: current_qty = current_qty + delta (+ movement log + audit row) in one
+  // statement, so concurrent adjusts can't clobber each other.
+  //
+  // This comment used to claim "RLS + role enforced inside". It was not: the RPC
+  // was SECURITY INVOKER with no role or permission check, and RLS on
+  // `inventory_items` is tenant-scoped only — so the `requireRole` above was the
+  // *only* guard, and anyone could adjust stock through the API directly.
+  // `adjust_inventory` now gates on `inventory.edit` itself and writes an
+  // `audit_logs` row (migration `20260730214500_inventory_ops.sql`). The
+  // requireRole here is defense in depth, not the boundary.
   const { error } = await supabase.rpc("adjust_inventory", {
     _item: itemId,
     _delta: deltaQty,
