@@ -106,26 +106,44 @@ export function TicketCard({
       )}
     >
       <div className="mb-2 flex items-start justify-between gap-2">
-        <div className="min-w-0">
+        <div className="min-w-0 pt-1">
           <p className="truncate text-xl font-bold leading-tight">{where}</p>
           <p className="truncate text-sm text-muted-foreground">
             {kot.kitchen_stations?.name ?? "Expo"}
           </p>
         </div>
-        {/* Age carries an icon + minutes, not just a border colour. */}
-        <span
-          className={cn(
-            "flex shrink-0 items-center gap-1 text-sm font-semibold",
-            muted ? "text-muted-foreground" : age.text,
-          )}
-        >
-          {age.late && !muted ? (
-            <AlertTriangleIcon className="size-4" aria-hidden />
-          ) : (
-            <ClockIcon className="size-4" aria-hidden />
-          )}
-          <span className="tabular-nums">{age.label}</span>
-        </span>
+        <div className="flex shrink-0 items-center gap-1">
+          {/* Age carries an icon + minutes, not just a border colour. */}
+          <span
+            className={cn(
+              "flex items-center gap-1 text-sm font-semibold",
+              muted ? "text-muted-foreground" : age.text,
+            )}
+          >
+            {age.late && !muted ? (
+              <AlertTriangleIcon className="size-4" aria-hidden />
+            ) : (
+              <ClockIcon className="size-4" aria-hidden />
+            )}
+            <span className="tabular-nums">{age.label}</span>
+          </span>
+
+          {/* Voiding the whole ticket lives with the ticket's identity, not
+              among the per-dish actions in the footer. */}
+          {canVoid && liveLines.length > 0 ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="-mr-1 size-11 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+              aria-label={`Cancel the ${where} ticket`}
+              disabled={pending}
+              onClick={() => setCancelOpen(true)}
+            >
+              <XIcon className="size-4" />
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       <ul className="mb-3 flex flex-1 flex-col divide-y divide-border/60">
@@ -194,20 +212,6 @@ export function TicketCard({
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-
-        {canVoid && liveLines.length > 0 ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="size-11 text-destructive hover:bg-destructive/10 hover:text-destructive"
-            aria-label={`Cancel the ${where} ticket`}
-            disabled={pending}
-            onClick={() => setCancelOpen(true)}
-          >
-            <XIcon className="size-4" />
-          </Button>
-        ) : null}
 
         {muted && actions.onRecall ? (
           <Button
