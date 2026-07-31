@@ -128,10 +128,137 @@ have failed on an ambiguous function call. Caught and dropped ~14 minutes later;
 `dashboard_summary(uuid, int)` exists now. Before adding an RPC, check `pg_proc` for the name — the
 repo is not the whole truth about what is deployed.
 
+## Single-environment decision (owner, 2026-07-31)
+
+**One Supabase project is prod.** No dev/prod split, no staging project, no local Docker stack.
+`ixrcdtwdcpsmlbocvejv` serves `https://extra-helper.vercel.app/`. Staging is deferred until after
+launch, once the feature backlog settles — the owner's call, made knowingly.
+
+**What it costs, so nobody rediscovers it the hard way:**
+- **Every migration's first execution is against live data.** There is no rollback target and no
+  place to rehearse. `CLAUDE.md`'s "use Supabase local/dev branch for tests" is suspended by this
+  decision, not satisfied — treat it as re-read-the-SQL-twice instead.
+- **The repo is not the truth about what is deployed** — now measured, see "Migration ledger drift"
+  below. Before adding an RPC, check `pg_proc`; the repo will not tell you.
+- **Free tier has no point-in-time recovery.** `bills` and `payments` are the tables that cannot be
+  reconstructed. This is the strongest argument for Pro, stronger than the password item below.
+
+**Launch gates — all must clear before the first real restaurant, none are code:**
+- [ ] **Repair the migration ledger** (see below). Do this first — it gates every other schema change.
+- [ ] Clear the three test tenants. Measured 2026-07-31, all three are on prod:
+      `d-raj` "The Sekuwa Station" (36 orders / 23 bills), `d-raj-a859` **same name, a duplicate from
+      testing `provision_tenant(_force_new)`** (6 / 4), both owned by `clixacom@gmail.com`; and
+      `demo-diner` "Demo Diner" (9 / 4) owned by `extrahelper.demo.owner@gmail.com`. Use Settings →
+      Dangerous Area → `reset_tenant`. Then delete auth user `extrahelper.demo.owner@gmail.com`
+      (`117c236d-c1dd-478e-9f03-645a540f8e08`) — a tenant wipe does **not** touch `auth.users`.
+      (The slug `extrahelper-test-diner` this line used to name has never existed.)
+- [x] Confirm `SUPABASE_SERVICE_ROLE_KEY` is server-side only, no `NEXT_PUBLIC_` prefix anywhere.
+      **Verified 2026-07-31**: the only reference in the whole app is
+      `app/api/webhooks/[gateway]/route.ts:31`, a route handler. Still set it in Vercel's env as a
+      plain (unprefixed) variable — the prefix is what would leak it, not the name.
+- [ ] Upgrade Supabase to Pro — buys PITR (see above) and unblocks leaked-password protection,
+      which is `[!]` in the Backlog for exactly this reason.
+- [ ] Drive the deployed site end to end (auth → POS → KDS → bill → pay). SSR cookie handling is the
+      usual first casualty of local→Vercel drift, and it has never been exercised there.
+- [ ] Pick the launch payment gateway + keys — the sandbox adapter is what is live today.
+
+## `apply_bill_discount` lost its permission guard — found + fixed 2026-07-31
+
+Found while verifying the ledger drift below. **`create or replace` silently reverted a security
+guard**, twice, and nobody noticed because the function still existed and still worked.
+
+The trail, all in the repo:
+
+| migration | what it did to `apply_bill_discount` |
+|---|---|
+| `20260712100000_rpc_permission_checks.sql:43` | **added** `has_permission(_tenant, 'order.discount')` |
+| `20260713100000_item_discounts_coupons.sql:35` | redefined the body — **guard gone** |
+| `20260722120000_checkout_extras.sql:104` | redefined again — **still gone**. This is the live body |
+
+Verified against `pg_proc.prosrc` on prod: `apply_bill_discount` has `has_tenant_role` and **no**
+`has_permission`. `apply_item_discount` (created at `20260713100000:67`) **never had one**.
+
+**Impact.** A custom role whose `order.discount` permission is revoked but whose `base_role` is
+owner or manager can still discount a bill — and now an item — straight through the API. The UI hides
+the control via `useHasPermission`, so the guard is in the client again. This is the same class
+closed three times already (86/table-state, revenue, inventory ops), reached from a new direction:
+not a missing guard, a **reverted** one.
+
+It also makes this claim in "Team + custom roles" below **false as written**: `has_permission` is
+live in `void_order_item`, `refund_payment` and `record_payment` — confirmed — but not in
+`apply_bill_discount`.
+
+**Fixed in `20260731160000_restore_permission_guards.sql`.**
+
+- [x] `has_permission(_tenant, 'order.discount')` restored on `apply_bill_discount` and **added** to
+      `apply_item_discount` (which never had one). The `has_tenant_role` floor stays — `has_permission`
+      refines within a base role, it does not replace it. Same arity, so `create or replace`; grants
+      re-issued anyway.
+- [x] **Swept all 80 DEFINER functions + every report RPC**, comparing each `has_permission` the
+      migrations *intend* against what `pg_proc.prosrc` actually holds. `apply_bill_discount` was the
+      only regression. `void_order_item`, `refund_payment`, `record_payment`, `adjust_inventory`,
+      `set_kot_item_status`, `set_stock_count_actual` and the rest all still carry theirs.
+- [x] **The sweep found two more**, same class as the `report_sales` hole: `report_by_branch` and
+      `report_top_items` were the 8th and 9th report RPCs and `20260712120000_report_fixes.sql` never
+      covered them. Both read `bills`, whose RLS is tenant-scoped only, so any member could read
+      revenue per branch or per dish straight through the API. Guarded the `report_sales` way — the
+      predicate in the WHERE clause, so an unauthorized caller gets **zero rows rather than an
+      error** and the surface degrades instead of exploding.
+- [x] **Verified live**: all four hold exactly one overload (no arity trap), ACL is
+      `authenticated` only with no `anon`/`public`, and with an unpermitted caller `report_by_branch`
+      and `report_top_items` return **0 rows against 17 real paid bills**. `report_sales` returns its
+      single aggregate row with every figure zeroed, so it leaks nothing either.
+- [ ] Make it a habit: after redefining any DEFINER function, re-read `prosrc` and confirm every
+      guard an earlier migration added is still in the body. A repo grep cannot find this class —
+      the bug is that the repo says the guard is there twice, and the later definition wins.
+
+## Migration ledger drift — measured 2026-07-31
+
+This file claimed since Milestone 0 that the migration files "match remote history". **They do not.**
+
+```
+remote (supabase_migrations.schema_migrations):  93
+repo   (supabase/migrations/*.sql):              92
+versions present in both:                        36   <- by version number
+names   present in both:                         89   <- by migration name
+```
+
+**Nothing is unapplied.** Matching on *name* instead of version, 89 of 92 line up; the three that
+don't — `amend_order_add_item`, `item_discounts_coupons`, `report_sales_guard` — were each confirmed
+live in the catalog anyway (`amend_order_add_item` exists; `apply_item_discount` + `apply_coupon`
+exist; `report_sales` carries its `has_permission`). Remote also holds **two rows both named
+`dashboard_summary`** (`20260730090521`, `20260730092707`) — the duplicate-overload incident, still
+visible in the ledger.
+
+What diverged is the **version stamp**: the Supabase MCP's `apply_migration` writes its own
+server-side timestamp while the repo file carries a hand-authored one. Same migration, two numbers.
+The split is clean chronologically — everything through `20260711030000` matches; everything after is
+when the workflow moved to MCP.
+
+**Why this is now dangerous rather than untidy.** `supabase db push` against the linked project would
+attempt **56 migrations the ledger says never ran, against a database that already holds every one of
+their objects**. The `create table` / `create policy` / `create type` ones would error; the
+`create or replace function` ones would silently re-apply, including at an old arity — the exact trap
+that produced the duplicate `dashboard_summary` overload. On prod, with 23 paid bills in it.
+
+- [ ] `brew install supabase/tap/supabase`, then `supabase link --project-ref ixrcdtwdcpsmlbocvejv`.
+- [ ] `supabase migration list --linked` — confirm the 56/57 split from the CLI's own mouth.
+- [ ] `supabase migration repair --status applied <version>` for each of the 56 repo-only versions.
+      **This executes no SQL** — it only inserts the version into the ledger, teaching it what the
+      database already knows. **`db push` must never be the command here.**
+- [ ] `--status reverted` for the 57 MCP-stamped remote-only versions, so the ledger stops carrying
+      two entries per migration.
+- [ ] Re-run `migration list --linked` (expect a clean match), then `supabase gen types --linked` and
+      diff against `lib/supabase/database.types.ts`. A diff there means the drift is worse than a
+      ledger problem.
+
+Until that passes, keep applying new migrations through the MCP exactly as today — **do not mix the
+two paths mid-repair.**
+
 ## Milestone 0 — Foundation
-- [~] Create Supabase project (dev + prod); wire env/secrets (service role server-only) — dev project `ixrcdtwdcpsmlbocvejv` live, `.env.local` wired (publishable key only; RLS is the gate). TODO: separate prod project + secrets.
-- [~] Install/verify toolchain: Node LTS, Supabase CLI, Docker, Flutter SDK, Xcode, Android Studio — **mobile toolchain done (2026-07-26)**: Flutter 3.38.7 / Dart 3.10.7, Xcode 26.2 + **CocoaPods 1.17.0**, Android SDK 36.1.0 + **cmdline-tools 21.0** with licenses accepted (`ANDROID_HOME` in `~/.zshrc`); `flutter doctor` reports **no issues**. TODO: Supabase CLI + Docker (migrations still applied via Supabase MCP instead).
-- [~] Set up Supabase CLI local stack + migration workflow + seed script — migration files in `supabase/migrations/` (versioned, match remote history), `supabase/seed.sql` (idempotent demo data), `supabase/tests/rls_isolation_test.sql`. TODO: `supabase link` + local Docker stack (needs CLI install).
+- [x] Create Supabase project; wire env/secrets (service role server-only) — project `ixrcdtwdcpsmlbocvejv` live, `.env.local` wired (publishable key only client-side; RLS is the gate). **Owner decision 2026-07-31: this project IS prod.** No separate prod project, no staging — the app is already deployed at `https://extra-helper.vercel.app/` against it. Staging comes after launch, once the feature backlog settles. What this costs is written down under "Single-environment decision" below so nobody rediscovers it.
+- [~] Install/verify toolchain: Node LTS, Supabase CLI, Docker, Flutter SDK, Xcode, Android Studio — **mobile toolchain done (2026-07-26)**: Flutter 3.38.7 / Dart 3.10.7, Xcode 26.2 + **CocoaPods 1.17.0** (Docker dropped by owner decision 2026-07-31 — see the CLI line below), Android SDK 36.1.0 + **cmdline-tools 21.0** with licenses accepted (`ANDROID_HOME` in `~/.zshrc`); `flutter doctor` reports **no issues**. TODO: Supabase CLI + Docker (migrations still applied via Supabase MCP instead).
+- [~] Set up Supabase CLI + migration workflow + seed script — migration files in `supabase/migrations/` (92), `supabase/seed.sql` (idempotent demo data), `supabase/tests/rls_isolation_test.sql`. **Docker/local stack dropped (owner, 2026-07-31)** — both ends are hosted (Supabase + Vercel), so a local Postgres buys nothing. CLI itself is still wanted and is Docker-free (`link`, `migration list`, `migration repair`, `db dump`, `gen types`; only `db diff` and `start` need Docker). **Blocked on the ledger repair below — see "Migration ledger drift".**
 - [x] Design core schema (tenancy → users → tables/menu/orders/bills/inventory) as SQL migrations — 45 tables across 9 domains in `supabase/migrations/` (foundation, operations_menu, orders_billing, inventory_customers); applied via Supabase MCP. TS types in `lib/supabase/database.types.ts`.
 - [x] Add `tenant_id` (+ `branch_id`) to every business table — denormalized onto child tables too, so RLS keys on one column everywhere.
 - [x] Baseline **RLS policies** on every table — resolved via `user_tenants` membership (not JWT claim; a user may hold different roles per tenant). Helpers `current_tenant_ids()` / `has_tenant_role()` / `is_platform_admin()` (SECURITY DEFINER). `apply_tenant_rls()` applies the standard tenant-isolation policy. 0 public tables without RLS.
@@ -241,7 +368,7 @@ repo is not the whole truth about what is deployed.
 - [x] **Demo seed data** for tenant "D raj" (clixacom@gmail.com, INR/Asia-Kolkata) — via MCP `execute_sql` (remote rows, not a migration): 4 stations, 4 categories, **20 Nepali sekuwa + beer menu items**, station routing, floor + 6 tables; live POS/KDS orders (T1 in_kitchen, T2 preparing, T3 draft) → 6 KOTs across grill/bar/kitchen; 12 inventory items + 11 recipes/BOM (3 low-stock); 3 paid bills + payments (today revenue); 5 customers + loyalty; 3 reservations; 2 online orders (delivery w/ tracking + pickup); 2 cash sessions. Tenant set to **Enterprise** plan (features unlocked). Note: demo rows are remote-only — **not seeded in `supabase/seed.sql`**.
 - [x] **Notifications** — header **bell** (`NotificationBell`) with live badge = count of orders awaiting acknowledgement (`status='placed'`, incl. QR self-orders); new order → badge + toast, auto-clears when opened/fired; realtime off the authed socket; hidden for roles that can't open the screen (kitchen/inventory/receptionist). **`/notifications` screen** (`NotificationTabs`): **Order** tab (recent orders, live) for owner/manager/cashier/waiter + **Activity** tab (`audit_logs` feed, live) owner/manager only (hidden otherwise, matches RLS). `audit_logs` added to realtime publication (`20260712080000`); `ACTION_STYLES` extracted to `lib/audit-constants.ts`; sidebar nav item. No migration for orders (already published). **Verified**: tsc + build clean; both tabs realtime.
 
-- [x] **Team + custom roles + granular permissions** (RestroX-style Users & Roles). **Architecture**: existing `app_role` RLS stays the security floor; custom roles carry a `base_role` that bounds DB access, and a granular **permission matrix** refines at the app layer (can only restrict within the base role). **Schema** (`20260712090000`+`_091000`+`_092000`+`_093000`): `permissions` catalog (35 keys grouped), per-tenant `roles` (name/color/base_role/is_system) + `role_permissions`, `user_tenants.role_id`+`status`, `staff_invites`; 7 default system roles seeded per tenant (mirroring current requireRole behavior) + backfill; RPCs `has_permission`/`get_my_permissions` (base-role fallback), `list_tenant_members` (emails via auth.users), `add_member_by_email`/`set_member_role`/`approve_member`/`remove_member`/`cancel_invite`/`claim_invites` (owner/manager + **last-owner** + **owner-only-modifies-owner** + **verified-email-invite** guards — from commit security review). **App layer**: `requirePermission` guard replaces requireRole on all 17 pages; `PermissionProvider`/`useHasPermission` gates sidebar nav + buttons; money-ops (void/discount/refund/payment) gated; pending memberships excluded from access until approved. **UI**: `/team` — role cards + `RoleEditor` (permission matrix, system roles read-only) + staff table (add by email → attach or pending-invite, admin approves — no email required). **Verified**: tsc+build clean; RLS on all new tables; 35 perms/7 roles seeded; owner→"Owner" role. **RPC-level enforcement**: `has_permission` gate added inside the sensitive DEFINER RPCs (`void_order_item`/`apply_bill_discount`/`refund_payment`/`record_payment`, `20260712100000`) so granular denies hold even against direct API calls (not just the UI). Verified: 4 RPCs gated; cashier default can pay but not void, manager can void.
+- [x] **Team + custom roles + granular permissions** (RestroX-style Users & Roles). **Architecture**: existing `app_role` RLS stays the security floor; custom roles carry a `base_role` that bounds DB access, and a granular **permission matrix** refines at the app layer (can only restrict within the base role). **Schema** (`20260712090000`+`_091000`+`_092000`+`_093000`): `permissions` catalog (35 keys grouped), per-tenant `roles` (name/color/base_role/is_system) + `role_permissions`, `user_tenants.role_id`+`status`, `staff_invites`; 7 default system roles seeded per tenant (mirroring current requireRole behavior) + backfill; RPCs `has_permission`/`get_my_permissions` (base-role fallback), `list_tenant_members` (emails via auth.users), `add_member_by_email`/`set_member_role`/`approve_member`/`remove_member`/`cancel_invite`/`claim_invites` (owner/manager + **last-owner** + **owner-only-modifies-owner** + **verified-email-invite** guards — from commit security review). **App layer**: `requirePermission` guard replaces requireRole on all 17 pages; `PermissionProvider`/`useHasPermission` gates sidebar nav + buttons; money-ops (void/discount/refund/payment) gated; pending memberships excluded from access until approved. **UI**: `/team` — role cards + `RoleEditor` (permission matrix, system roles read-only) + staff table (add by email → attach or pending-invite, admin approves — no email required). **Verified**: tsc+build clean; RLS on all new tables; 35 perms/7 roles seeded; owner→"Owner" role. **RPC-level enforcement**: `has_permission` gate added inside the sensitive DEFINER RPCs (`void_order_item`/`apply_bill_discount`/`refund_payment`/`record_payment`, `20260712100000`) so granular denies hold even against direct API calls (not just the UI). Verified: 4 RPCs gated; cashier default can pay but not void, manager can void. ⚠️ **The `apply_bill_discount` gate was later reverted by two `create or replace` redefinitions and was missing on prod until 2026-07-31** — see "`apply_bill_discount` lost its permission guard" above. The other three held.
 
 - [x] **POS order flow → modal-driven, one-shot create** (2026-07-16). Replaced the two-surface flow (compose on `/pos` → navigate to `/pos/[orderId]` to reach variants/modifiers) with one composer. **Schema/RPC** (`20260716090000_pos_order_flow`): `orders.guests` + sanity check; `place_staff_order` dropped and recreated at 10 args — per-line `variant_id`/`modifier_ids`/`notes`/`course`/`seat`, off-menu custom lines (`item_id` null, price clamped 0–10M), order-level `guests`/`waiter`/`customer` (explicit id tenant-checked, else find-or-create by phone mirroring `attach_bill_customer`); rejects non-dine-in/pickup and table+pickup contradictions; replay fast-path returns before any write so a re-send can't mutate a committed order or orphan a customer. **This finally sets `waiter_id`** — the only previous writer was the dead `startOrder` (deleted), so every order until now had `waiter_id = null` and the staff report was silently empty. `20260716091000_list_order_staff`: narrow names-only reader, because `list_tenant_members` is owner/manager-gated and returns **zero rows with no error** for the waiters who'd use the picker. **App**: `components/ui/dialog.tsx` (new Base UI primitive, `size` prop incl. fullscreen, 100dvh); `components/pos/*` — modal owns create *and* amend via a capability-shaped `CartController` (create batches locally → one atomic call; amend fires each edit as a server action, since a fired line needs a reasoned + audited void). `/pos` is now a Realtime card grid; `/pos/[orderId]` a deep link onto the same screen. Offline preserved: cache + queue fields all optional so an older build's IndexedDB blob still deserializes and replays. Deleted `quick-order` (291), `pos-builder` (611), `pos-active-orders` (76), `destination-picker` (106). **Verified**: RPC pricing parity vs `addItem` to the cent (38000 base + 130000 variant + 15000 + 5000 mods = 188000, `name_snapshot` "Buff Sekuwa (KG)", both modifier rows snapshotted); 11 negative cases raise correctly (cross-tenant table/customer/waiter, price clamps, order-type guards, variant-from-another-item); idempotent replay returns same id and adds no lines; grants are `authenticated`-only on the new signature; tsc + lint + build clean.
 
@@ -255,7 +382,7 @@ repo is not the whole truth about what is deployed.
 - [x] Locked trigger fn `trg_deduct_stock` to no-execute (migration `20260710195814`). **Re-verified 2026-07-13**: after the fn was redefined in `20260712060000` (block-negative-stock), the ACL is still `{postgres=X, service_role=X}` — anon/authenticated/public have no EXECUTE (create-or-replace preserves ACL; no re-grant). Reminder stands: every new SECURITY DEFINER fn needs an explicit `revoke execute from anon`.
 - [x] Signup email-confirm flow — `signup` now detects no-session (confirmation required) and shows a "Check your email" screen instead of bouncing to `/login`; sets `emailRedirectTo` → new route `app/auth/confirm/route.ts` handles both `token_hash`/verifyOtp and `code`/exchangeCodeForSession, then redirects; bad/expired link → `/login?error=confirm` notice. **Note:** for the token_hash flow set the Supabase confirm-email template to `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email&next=/` (dashboard config). **Resend button** added on the confirm screen (`resendConfirmation` action → `auth.resend`).
 - [x] Handle signup errors gracefully in UI: `signup` action now validates email shape (`EMAIL_RE`) before hitting Supabase, and maps terse auth errors via `friendlyAuthError` — rejected domains (.dev/.local/disposable → `email_address_invalid`) → "try another email", already-registered → "sign in instead", weak-password → guidance. Errors already render in `signup-form.tsx`. → Milestone 0 auth
-- [ ] Remove test user `extrahelper.demo.owner@gmail.com` + demo tenant `extrahelper-test-diner` (owner-provisioned via onboarding) before real data seeding
+- [ ] Remove test user `extrahelper.demo.owner@gmail.com` + demo tenant `extrahelper-test-diner` (owner-provisioned via onboarding) before real data seeding — **now a launch gate**, see "Single-environment decision" above: this project is prod, so the probe rows and the paying customers share a database.
 - [ ] Browser UI E2E for `/onboarding`, `/settings`, `/admin` — DB paths + guards verified via MCP/typecheck/build, but Chrome extension disconnected mid-session; drive the real pages next time. → Milestone 0
 - [x] Seed a `platform_admins` row so `/admin` is viewable — **granted to clixacom@gmail.com** (user-confirmed target; grants cross-tenant super-admin). `insert into platform_admins(user_id) values ('a1328472-…')`.
 - [x] Fine-grained per-action RBAC write gating — **superseded by the Team + custom roles work** (see "Team + custom roles + granular permissions" above): `requirePermission` gates all 17 pages, `has_permission` gates the sensitive DEFINER RPCs (`void_order_item`/`apply_bill_discount`/`refund_payment`/`record_payment`), and the UI hides ops a role can't do. Cashier default can pay but not void; manager can void.
