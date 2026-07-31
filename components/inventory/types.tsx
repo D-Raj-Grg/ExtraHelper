@@ -10,6 +10,8 @@ export type Item = {
   par_level: number | null
   cost_cents: number
   supplier_id: string | null
+  /** Scannable code. Null for most items — the phone falls back to search. */
+  barcode: string | null
 }
 export type SupplierOpt = { id: string; name: string }
 export type ModifierOpt = { id: string; name: string }

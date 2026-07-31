@@ -50,19 +50,24 @@ export async function createTable(
   return { ok: true }
 }
 
+/**
+ * Goes through `set_table_state` so the rule lives in Postgres and the mobile
+ * app shares it. The RPC also refuses to free a table that still has a live
+ * order — that used to be possible here, and it hid the order from the board
+ * while the kitchen was still cooking it.
+ */
 export async function setTableState(
   tableId: string,
   state: TableState,
 ): Promise<TablesState> {
-  const tenant = await requireRole("owner", "manager", "receptionist", "waiter", "cashier")
+  await requireRole("owner", "manager", "receptionist", "waiter", "cashier")
   if (!TABLE_STATES.includes(state)) return { error: "Invalid state." }
 
   const supabase = await createClient()
-  const { error } = await supabase
-    .from("restaurant_tables")
-    .update({ state })
-    .eq("id", tableId)
-    .eq("tenant_id", tenant.tenantId)
+  const { error } = await supabase.rpc("set_table_state", {
+    _table_id: tableId,
+    _state: state,
+  })
   if (error) return { error: error.message }
   revalidatePath("/tables")
   return { ok: true }

@@ -14,17 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
+import { ConfirmPhraseDialog } from "./confirm-phrase-dialog"
 import { RestaurantHeaderCard, ResourceUsageCard } from "./resource-usage-card"
 import type { DangerData } from "./types"
 
@@ -41,6 +31,7 @@ export function ResetDialog({
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [everything, setEverything] = useState(false)
+  const [confirming, setConfirming] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
 
@@ -60,6 +51,7 @@ export function ResetDialog({
   function reset() {
     setSelected(new Set())
     setEverything(false)
+    setConfirming(false)
     setError(null)
   }
 
@@ -77,6 +69,7 @@ export function ResetDialog({
   }
 
   return (
+    <>
     <Dialog
       open={open}
       onOpenChange={(v) => {
@@ -137,7 +130,7 @@ export function ResetDialog({
             Once completed, this cannot be reversed.
           </p>
 
-          {error ? (
+          {error && !confirming ? (
             <p className="text-sm text-destructive" role="alert">
               {error}
             </p>
@@ -151,35 +144,43 @@ export function ResetDialog({
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
               Cancel
             </Button>
-            <AlertDialog>
-              <AlertDialogTrigger
-                render={
-                  <Button type="button" variant="destructive" disabled={!canReset}>
-                    <RotateCcwIcon className="size-4" />
-                    {pending ? "Resetting…" : "Reset it!"}
-                  </Button>
-                }
-              />
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Reset {count} area{count === 1 ? "" : "s"}?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    {everything
-                      ? "Every order, bill, menu item, table, customer and stock record is permanently deleted. This restaurant and your ownership stay. This cannot be reversed."
-                      : "The selected data is permanently deleted and cannot be reversed."}
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Keep it</AlertDialogCancel>
-                  <AlertDialogAction variant="destructive" onClick={submit}>
-                    Reset now
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={!canReset}
+              onClick={() => {
+                setError(null)
+                setConfirming(true)
+              }}
+            >
+              <RotateCcwIcon className="size-4" />
+              Reset it!
+            </Button>
           </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <ConfirmPhraseDialog
+      open={confirming}
+      onOpenChange={(v) => {
+        if (!v) setError(null)
+        setConfirming(v)
+      }}
+      title={`Reset ${count} area${count === 1 ? "" : "s"}?`}
+      description={
+        everything
+          ? "Every order, bill, menu item, table, customer and stock record is permanently deleted. This restaurant and your ownership stay. This cannot be reversed."
+          : "The selected data is permanently deleted and cannot be reversed."
+      }
+      phrase={restaurantName}
+      phraseHint="the restaurant name"
+      confirmLabel="Reset now"
+      pendingLabel="Resetting…"
+      pending={pending}
+      error={error}
+      onConfirm={submit}
+    />
+    </>
   )
 }

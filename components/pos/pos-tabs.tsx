@@ -55,8 +55,13 @@ export function PosTabs({
             {counts[key] > 0 ? (
               <Badge
                 className={cn(
-                  "border-transparent tabular-nums",
-                  active ? "bg-primary-foreground/20 text-primary-foreground" : "bg-background",
+                  // Both cases set their own text colour: the default variant's
+                  // white foreground on a light `bg-background` pill was an
+                  // invisible count.
+                  "min-w-5 border-transparent px-1.5 font-semibold tabular-nums",
+                  active
+                    ? "bg-primary-foreground/25 text-primary-foreground"
+                    : "bg-background text-foreground shadow-xs",
                 )}
               >
                 {counts[key]}

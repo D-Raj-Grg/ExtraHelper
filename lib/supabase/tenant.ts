@@ -12,6 +12,8 @@ export type ActiveTenant = {
   currency: string
   timezone: string
   paymentGateway: string
+  /** Set while the tenant sits in its deletion grace window — drives the app-wide banner. */
+  deletionScheduledAt: string | null
   impersonating?: boolean
 }
 
@@ -26,8 +28,8 @@ type Row = {
   role: string
   tenant_id: string
   tenants:
-    | { name: string; slug: string; tenant_settings: unknown }
-    | { name: string; slug: string; tenant_settings: unknown }[]
+    | { name: string; slug: string; deletion_scheduled_at: string | null; tenant_settings: unknown }
+    | { name: string; slug: string; deletion_scheduled_at: string | null; tenant_settings: unknown }[]
     | null
 }
 
@@ -40,7 +42,9 @@ async function fetchMemberships(): Promise<Row[]> {
 
   const { data } = await supabase
     .from("user_tenants")
-    .select("role, tenant_id, tenants(name, slug, tenant_settings(currency, timezone, payment_gateway))")
+    .select(
+      "role, tenant_id, tenants(name, slug, deletion_scheduled_at, tenant_settings(currency, timezone, payment_gateway))",
+    )
     .eq("user_id", user.id)
     .eq("status", "active") // pending (unapproved) memberships don't grant access
     .order("tenant_id", { ascending: true }) // stable ordering for "first"
@@ -69,7 +73,7 @@ export async function getActiveTenant(): Promise<ActiveTenant | null> {
     if (isAdmin) {
       const { data: t } = await supabase
         .from("tenants")
-        .select("name, slug, tenant_settings(currency, timezone, payment_gateway)")
+        .select("name, slug, deletion_scheduled_at, tenant_settings(currency, timezone, payment_gateway)")
         .eq("id", imp)
         .maybeSingle()
       if (t) {
@@ -84,6 +88,7 @@ export async function getActiveTenant(): Promise<ActiveTenant | null> {
           currency: s?.currency ?? "USD",
           timezone: s?.timezone ?? "UTC",
           paymentGateway: s?.payment_gateway ?? "sandbox",
+          deletionScheduledAt: (t.deletion_scheduled_at as string | null) ?? null,
           impersonating: true,
         }
       }
@@ -110,6 +115,7 @@ export async function getActiveTenant(): Promise<ActiveTenant | null> {
     currency: settings?.currency ?? "USD",
     timezone: settings?.timezone ?? "UTC",
     paymentGateway: settings?.payment_gateway ?? "sandbox",
+    deletionScheduledAt: tenant?.deletion_scheduled_at ?? null,
   }
 }
 

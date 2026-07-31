@@ -303,7 +303,7 @@ export function BillView({
         actions={
           <>
             <Badge
-              className={cn("border-transparent", BILL_STATUS_STYLE[bill.status] ?? "bg-muted")}
+              className={cn("border-transparent", BILL_STATUS_STYLE[bill.status] ?? "bg-muted text-foreground")}
             >
               {billStatusLabel(bill.status)}
             </Badge>
@@ -482,7 +482,7 @@ export function BillView({
                   <Badge
                     className={cn(
                       "border-transparent",
-                      ORDER_STATUS_STYLE[o.status] ?? "bg-muted",
+                      ORDER_STATUS_STYLE[o.status] ?? "bg-muted text-foreground",
                     )}
                   >
                     {orderStatusLabel(o.status)}

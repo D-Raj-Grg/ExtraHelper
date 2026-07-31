@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { CheckIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
@@ -23,6 +24,8 @@ export function ChoiceChip({
   label,
   detail,
   dot,
+  leading,
+  showCheck = false,
   className,
 }: {
   type?: "radio" | "checkbox"
@@ -34,6 +37,10 @@ export function ChoiceChip({
   detail?: React.ReactNode
   /** A bg-* class for the leading state dot. Never the only signal — `detail` carries the word. */
   dot?: string
+  /** Artwork ahead of the text — a glyph or icon. Inherits the chip's text colour. */
+  leading?: React.ReactNode
+  /** Draw a check on the selected chip, so selection isn't carried by fill colour alone. */
+  showCheck?: boolean
   className?: string
 }) {
   return (
@@ -60,6 +67,7 @@ export function ChoiceChip({
         disabled={disabled}
         onChange={onSelect}
       />
+      {leading}
       {dot ? (
         <span
           aria-hidden
@@ -78,6 +86,9 @@ export function ChoiceChip({
           </span>
         ) : null}
       </span>
+      {showCheck && checked ? (
+        <CheckIcon className="ml-auto size-4 shrink-0" aria-hidden strokeWidth={3} />
+      ) : null}
     </label>
   )
 }

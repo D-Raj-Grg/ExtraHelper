@@ -1,10 +1,11 @@
 "use client"
 
-import { ArmchairIcon, UsersIcon, UtensilsIcon } from "lucide-react"
+import { ArmchairIcon, UsersIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { tableStateLabel } from "@/lib/table-constants"
 import { Card } from "@/components/ui/card"
+import { TableGlyph } from "@/components/pos/table-glyph"
 import type { PosFloor, PosOrderCard, PosTable } from "@/components/pos/types"
 
 const NO_FLOOR = "__none__"
@@ -15,12 +16,37 @@ const NO_FLOOR = "__none__"
  * beside it and occupied swaps the armchair for a utensils icon, so the card
  * still reads under grayscale.
  */
-const STATE_STYLE: Record<string, { dot: string; ring: string }> = {
-  free: { dot: "bg-emerald-500", ring: "ring-emerald-500/30" },
-  occupied: { dot: "bg-amber-500", ring: "ring-amber-500/40" },
-  reserved: { dot: "bg-blue-500", ring: "ring-blue-500/30" },
-  bill_requested: { dot: "bg-orange-500", ring: "ring-orange-500/40" },
-  cleaning: { dot: "bg-muted-foreground/40", ring: "ring-border" },
+const STATE_STYLE: Record<string, { dot: string; ring: string; glyph: string; text: string }> = {
+  free: {
+    dot: "bg-emerald-500",
+    ring: "ring-emerald-500/30",
+    glyph: "text-emerald-600 dark:text-emerald-400",
+    text: "text-emerald-700 dark:text-emerald-400",
+  },
+  occupied: {
+    dot: "bg-amber-500",
+    ring: "ring-amber-500/40",
+    glyph: "text-amber-600 dark:text-amber-400",
+    text: "text-amber-700 dark:text-amber-400",
+  },
+  reserved: {
+    dot: "bg-blue-500",
+    ring: "ring-blue-500/30",
+    glyph: "text-blue-600 dark:text-blue-400",
+    text: "text-blue-700 dark:text-blue-400",
+  },
+  bill_requested: {
+    dot: "bg-orange-500",
+    ring: "ring-orange-500/40",
+    glyph: "text-orange-600 dark:text-orange-400",
+    text: "text-orange-700 dark:text-orange-400",
+  },
+  cleaning: {
+    dot: "bg-muted-foreground/40",
+    ring: "ring-border",
+    glyph: "text-muted-foreground",
+    text: "text-muted-foreground",
+  },
 }
 
 function floorLabel(floors: PosFloor[], id: string): string {
@@ -109,27 +135,34 @@ export function TableTab({
                         ? `Open order for table ${t.label} — occupied`
                         : `Start an order for table ${t.label} — ${stateWord.toLowerCase()}`
                     }
-                    className="flex min-h-24 w-full flex-col gap-2 rounded-xl p-4 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                    className="flex min-h-28 w-full items-start gap-3 rounded-xl p-4 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <span className="text-lg font-bold leading-tight">Table {t.label}</span>
-                      {occupied ? (
-                        <UtensilsIcon className="size-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
-                      ) : (
-                        <ArmchairIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-                      )}
-                    </div>
-                    <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                      <span className={cn("size-2 shrink-0 rounded-full", style.dot)} aria-hidden />
-                      {stateWord}
-                    </span>
-                    {t.capacity ? (
-                      <span className="mt-auto flex items-center gap-1 text-xs text-muted-foreground">
-                        <UsersIcon className="size-3.5 shrink-0" aria-hidden />
-                        <span className="tabular-nums">{t.capacity}</span>
-                        <span>seats</span>
+                    <TableGlyph
+                      seats={t.capacity ?? 2}
+                      filled={occupied}
+                      className={cn("size-11 shrink-0", style.glyph)}
+                    />
+                    <span className="flex min-w-0 flex-1 flex-col gap-1.5">
+                      <span className="truncate text-lg font-bold leading-tight">
+                        Table {t.label}
                       </span>
-                    ) : null}
+                      <span
+                        className={cn("flex items-center gap-1.5 text-sm font-medium", style.text)}
+                      >
+                        <span
+                          className={cn("size-2 shrink-0 rounded-full", style.dot)}
+                          aria-hidden
+                        />
+                        {stateWord}
+                      </span>
+                      {t.capacity ? (
+                        <span className="mt-auto flex items-center gap-1 text-xs text-muted-foreground">
+                          <UsersIcon className="size-3.5 shrink-0" aria-hidden />
+                          <span className="tabular-nums">{t.capacity}</span>
+                          <span>seats</span>
+                        </span>
+                      ) : null}
+                    </span>
                   </button>
                 </Card>
               )

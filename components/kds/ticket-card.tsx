@@ -142,7 +142,7 @@ export function TicketCard({
       </ul>
 
       <div className="flex flex-wrap items-center gap-2 border-t pt-2">
-        <Badge className={cn("border-transparent gap-1", KOT_STATUS_STYLE[kot.status] ?? "bg-muted")}>
+        <Badge className={cn("border-transparent gap-1", KOT_STATUS_STYLE[kot.status] ?? "bg-muted text-foreground")}>
           <StatusIcon status={kot.status} className="size-3.5" />
           {kotStatusLabel(kot.status)}
         </Badge>

@@ -4,6 +4,7 @@ import { SiteHeader } from "@/components/site-header"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { Toaster } from "@/components/ui/sonner"
 import { ImpersonationBanner } from "@/components/impersonation-banner"
+import { DeletionBanner } from "@/components/deletion-banner"
 import { TenantProvider } from "@/components/tenant-provider"
 import { PreferencesProvider } from "@/components/preferences-provider"
 import { OfflineSyncProvider } from "@/components/offline-sync-provider"
@@ -77,6 +78,14 @@ export default async function AppLayout({
         <SidebarInset>
           {tenant.impersonating ? <ImpersonationBanner name={tenant.name} /> : null}
           <SiteHeader />
+          {/* Below the header, above the page — a page-level warning, not app chrome. */}
+          {tenant.deletionScheduledAt ? (
+            <DeletionBanner
+              scheduledAt={tenant.deletionScheduledAt}
+              timezone={tenant.timezone}
+              isOwner={tenant.role === "owner"}
+            />
+          ) : null}
           {children}
         </SidebarInset>
         <Toaster />
