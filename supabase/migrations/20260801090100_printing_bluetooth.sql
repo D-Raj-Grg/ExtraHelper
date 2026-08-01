@@ -195,9 +195,14 @@ begin
       where c.tenant_id = _tenant
         and c.status = 'queued'
         and (_branch is null or c.branch_id is null or c.branch_id = _branch)
-        -- A job with no printer resolved is nobody's to take.
         and (
           (_connections is null and _render_modes is null)
+          -- A job whose printer was deleted out from under it (the FK is
+          -- `on delete set null`) matches no capability and would otherwise sit
+          -- queued forever, invisible. Anyone may take it; the drainer fails it
+          -- with "that job has no printer", which is at least a thing someone
+          -- can see and clear.
+          or c.printer_id is null
           or exists (
             select 1 from public.printers p
              where p.id = c.printer_id
