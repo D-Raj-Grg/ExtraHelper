@@ -442,9 +442,20 @@ socket to port 9100 on both platforms, and Android speaks Bluetooth SPP.
       four drainers at once printing exactly one slip, printer switched off → readable error →
       retry. Needs the physical printer.
 
+- [x] **Caught on re-read: the filter orphaned deleted-printer jobs.** `print_jobs.printer_id` is
+      `on delete set null`, so deleting a printer with something queued leaves a job that matches no
+      capability — under the new filter, unclaimable by anything, waiting forever and invisible.
+      Before, a drainer claimed it and failed it with "no printer", which at least someone could see.
+      A null `printer_id` is now claimable by anyone
+      (`20260801090200`, `create or replace`, same arity, grants verified intact).
+
 **Known gap, deliberate.** If *every* drainer filters, a job nothing can drive waits on the queue
 rather than failing loudly. That is why the browser keeps claiming every render mode. The
 troubleshooting table in `docs/printing.md` names the symptom.
+
+The mobile half had seven more defects found the same way — two of which made Bluetooth impossible
+and one of which could kill printing on a device until it was restarted. They are written up in
+`../extrahelper_flutter/TASKS.md` under Milestone M.
 
 ## Milestone 0 — Foundation
 - [x] Create Supabase project; wire env/secrets (service role server-only) — project `ixrcdtwdcpsmlbocvejv` live, `.env.local` wired (publishable key only client-side; RLS is the gate). **Owner decision 2026-07-31: this project IS prod.** No separate prod project, no staging — the app is already deployed at `https://extra-helper.vercel.app/` against it. Staging comes after launch, once the feature backlog settles. What this costs is written down under "Single-environment decision" below so nobody rediscovers it.
