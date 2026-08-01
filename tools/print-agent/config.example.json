@@ -1,0 +1,14 @@
+{
+  "appUrl": "https://your-restaurant.example.com",
+  "supabaseUrl": "https://YOUR-PROJECT.supabase.co",
+  "supabaseKey": "your-publishable-anon-key",
+
+  "email": "printer@your-restaurant.example.com",
+  "password": "the password for that staff account",
+  "tenantId": "00000000-0000-0000-0000-000000000000",
+
+  "agentName": "kitchen-pc",
+  "branchId": null,
+  "pollMs": 5000,
+  "socketTimeoutMs": 10000
+}

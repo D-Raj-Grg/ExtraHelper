@@ -8,7 +8,6 @@ import { ArrowRightIcon, WifiOffIcon } from "lucide-react"
 import { fireOrder, placeStaffOrder } from "@/app/(app)/pos/actions"
 import { Button } from "@/components/ui/button"
 import { useOffline } from "@/components/offline-sync-provider"
-import { usePrint } from "@/components/print/use-print"
 import { DestinationStep } from "@/components/pos/destination-step"
 import { DishStep } from "@/components/pos/dish-step"
 import { EMPTY_CHECK_IN, type CheckIn } from "@/components/pos/check-in-details"
@@ -47,7 +46,6 @@ export function CreateFlow({
   const router = useRouter()
   const { online, enqueueOrder } = useOffline()
   const [pending, startTransition] = useTransition()
-  const { printKots, connected: printerReady } = usePrint()
 
   const [step, setStep] = useState<Step>("destination")
   const [tableId, setTableId] = useState<string>(initialTableId ?? TAKEAWAY)
@@ -110,10 +108,9 @@ export function CreateFlow({
             return
           }
           if (fr.kotIds.length) toast.success(`Placed · ${fr.kotIds.length} ticket(s) to kitchen`)
-          // Only print when a real printer is on the other end. Without an
-          // agent this would fall back to popup tabs mid-service — the
-          // tickets are on the KDS/KOT board and print from there instead.
-          if (printerReady) await printKots(fr.kotIds)
+          // Nothing is printed from here. Creating the tickets queues them in
+          // Postgres, so they come out wherever the printers are — including
+          // when this till is not the machine wired to the kitchen.
         } else {
           toast.success(`${destinationLabel} order placed`)
         }

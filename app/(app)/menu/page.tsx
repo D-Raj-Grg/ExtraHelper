@@ -36,18 +36,18 @@ export default async function MenuPage() {
       .order("name"),
     supabase
       .from("kitchen_stations")
-      .select("id, name, printer_id")
+      .select("id, name, kind, printer_id")
       .eq("tenant_id", tenant.tenantId)
       .order("name"),
     supabase.from("modifiers").select("id, name, price_cents").eq("tenant_id", tenant.tenantId).order("name"),
     supabase.from("combos").select("id, name, price_cents, items, is_active").eq("tenant_id", tenant.tenantId).order("name"),
-    // Kitchen-capable printers only — a receipt printer is not a ticket route.
+    // Any active printer can be a station's route — a station printer is an
+    // explicit choice, not something the document assignment gets to veto.
     supabase
       .from("printers")
       .select("id, name")
       .eq("tenant_id", tenant.tenantId)
       .eq("is_active", true)
-      .in("role", ["kot", "both"])
       .order("name"),
   ])
 

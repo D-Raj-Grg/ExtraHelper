@@ -9,6 +9,7 @@ import { TenantProvider } from "@/components/tenant-provider"
 import { PreferencesProvider } from "@/components/preferences-provider"
 import { OfflineSyncProvider } from "@/components/offline-sync-provider"
 import { PrintProvider } from "@/components/print/print-provider"
+import { AutoPrintWorker } from "@/components/print/auto-print-worker"
 import { RealtimeAuth } from "@/components/realtime-auth"
 import { createClient } from "@/lib/supabase/server"
 import { getActiveTenant, getTenantMemberships } from "@/lib/supabase/tenant"
@@ -37,12 +38,21 @@ export default async function AppLayout({
   const tenant = await getActiveTenant()
   if (!tenant) redirect("/onboarding")
 
-  const [prefs, memberships, permissions, profile] = await Promise.all([
+  const [prefs, memberships, permissions, profile, settings] = await Promise.all([
     getUserPreferences(),
     getTenantMemberships(),
     getMyPermissions(tenant.tenantId),
     getProfile(),
+    supabase
+      .from("tenant_settings")
+      .select("printing_mode")
+      .eq("tenant_id", tenant.tenantId)
+      .maybeSingle(),
   ])
+
+  // In cloud mode the headless agent owns the print queue and browsers stay
+  // out of it, so the worker is not mounted at all.
+  const printingMode = settings.data?.printing_mode === "cloud" ? "cloud" : "local"
 
   const sidebarUser = {
     name:
@@ -60,6 +70,7 @@ export default async function AppLayout({
       <PermissionProvider permissions={permissions}>
       <OfflineSyncProvider>
       <PrintProvider>
+      <AutoPrintWorker tenantId={tenant.tenantId} branchId={null} mode={printingMode} />
       <RealtimeAuth />
       <SidebarProvider
         style={

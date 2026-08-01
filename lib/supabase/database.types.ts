@@ -915,6 +915,7 @@ export type Database = {
           branch_id: string | null
           created_at: string
           id: string
+          kind: Database["public"]["Enums"]["station_kind"]
           name: string
           printer_id: string | null
           tenant_id: string
@@ -923,6 +924,7 @@ export type Database = {
           branch_id?: string | null
           created_at?: string
           id?: string
+          kind?: Database["public"]["Enums"]["station_kind"]
           name: string
           printer_id?: string | null
           tenant_id: string
@@ -931,6 +933,7 @@ export type Database = {
           branch_id?: string | null
           created_at?: string
           id?: string
+          kind?: Database["public"]["Enums"]["station_kind"]
           name?: string
           printer_id?: string | null
           tenant_id?: string
@@ -1987,41 +1990,59 @@ export type Database = {
         Row: {
           attempts: number
           bill_id: string | null
+          branch_id: string | null
+          claimed_at: string | null
+          claimed_by: string | null
+          copies: number
           created_at: string
+          doc: Database["public"]["Enums"]["print_doc"]
           error: string | null
           id: string
+          idempotency_key: string | null
           kot_id: string | null
+          order_id: string | null
           printed_at: string | null
           printer_id: string | null
           status: Database["public"]["Enums"]["print_job_status"]
           tenant_id: string
-          type: string
         }
         Insert: {
           attempts?: number
           bill_id?: string | null
+          branch_id?: string | null
+          claimed_at?: string | null
+          claimed_by?: string | null
+          copies?: number
           created_at?: string
+          doc: Database["public"]["Enums"]["print_doc"]
           error?: string | null
           id?: string
+          idempotency_key?: string | null
           kot_id?: string | null
+          order_id?: string | null
           printed_at?: string | null
           printer_id?: string | null
           status?: Database["public"]["Enums"]["print_job_status"]
           tenant_id: string
-          type: string
         }
         Update: {
           attempts?: number
           bill_id?: string | null
+          branch_id?: string | null
+          claimed_at?: string | null
+          claimed_by?: string | null
+          copies?: number
           created_at?: string
+          doc?: Database["public"]["Enums"]["print_doc"]
           error?: string | null
           id?: string
+          idempotency_key?: string | null
           kot_id?: string | null
+          order_id?: string | null
           printed_at?: string | null
           printer_id?: string | null
           status?: Database["public"]["Enums"]["print_job_status"]
           tenant_id?: string
-          type?: string
         }
         Relationships: [
           {
@@ -2032,10 +2053,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "print_jobs_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "print_jobs_kot_id_fkey"
             columns: ["kot_id"]
             isOneToOne: false
             referencedRelation: "kots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "print_jobs_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
             referencedColumns: ["id"]
           },
           {
@@ -2054,54 +2089,114 @@ export type Database = {
           },
         ]
       }
+      printer_documents: {
+        Row: {
+          copies: number
+          created_at: string
+          doc: Database["public"]["Enums"]["print_doc"]
+          id: string
+          printer_id: string
+          tenant_id: string
+        }
+        Insert: {
+          copies?: number
+          created_at?: string
+          doc: Database["public"]["Enums"]["print_doc"]
+          id?: string
+          printer_id: string
+          tenant_id: string
+        }
+        Update: {
+          copies?: number
+          created_at?: string
+          doc?: Database["public"]["Enums"]["print_doc"]
+          id?: string
+          printer_id?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "printer_documents_printer_id_fkey"
+            columns: ["printer_id"]
+            isOneToOne: false
+            referencedRelation: "printers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "printer_documents_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       printers: {
         Row: {
+          auto_cut: boolean
           branch_id: string | null
+          bt_address: string | null
           connection: Database["public"]["Enums"]["printer_connection"]
           created_at: string
           host: string | null
           id: string
           is_active: boolean
-          is_default: boolean
           name: string
+          open_drawer: boolean
           paper_width: number
           port: number
-          role: Database["public"]["Enums"]["printer_role"]
+          render_mode: Database["public"]["Enums"]["printer_render_mode"]
           system_name: string | null
           tenant_id: string
           updated_at: string
+          usb_endpoint: string | null
+          usb_interface: string | null
+          usb_product_id: string | null
+          usb_vendor_id: string | null
         }
         Insert: {
+          auto_cut?: boolean
           branch_id?: string | null
+          bt_address?: string | null
           connection?: Database["public"]["Enums"]["printer_connection"]
           created_at?: string
           host?: string | null
           id?: string
           is_active?: boolean
-          is_default?: boolean
           name: string
+          open_drawer?: boolean
           paper_width?: number
           port?: number
-          role?: Database["public"]["Enums"]["printer_role"]
+          render_mode?: Database["public"]["Enums"]["printer_render_mode"]
           system_name?: string | null
           tenant_id: string
           updated_at?: string
+          usb_endpoint?: string | null
+          usb_interface?: string | null
+          usb_product_id?: string | null
+          usb_vendor_id?: string | null
         }
         Update: {
+          auto_cut?: boolean
           branch_id?: string | null
+          bt_address?: string | null
           connection?: Database["public"]["Enums"]["printer_connection"]
           created_at?: string
           host?: string | null
           id?: string
           is_active?: boolean
-          is_default?: boolean
           name?: string
+          open_drawer?: boolean
           paper_width?: number
           port?: number
-          role?: Database["public"]["Enums"]["printer_role"]
+          render_mode?: Database["public"]["Enums"]["printer_render_mode"]
           system_name?: string | null
           tenant_id?: string
           updated_at?: string
+          usb_endpoint?: string | null
+          usb_interface?: string | null
+          usb_product_id?: string | null
+          usb_vendor_id?: string | null
         }
         Relationships: [
           {
@@ -2950,6 +3045,7 @@ export type Database = {
           packaging_fee: number
           payment_gateway: string
           points_value_cents: number
+          printing_mode: string
           receipt_template: Json
           service_charge: number
           tax_rules: Json
@@ -2964,6 +3060,7 @@ export type Database = {
           packaging_fee?: number
           payment_gateway?: string
           points_value_cents?: number
+          printing_mode?: string
           receipt_template?: Json
           service_charge?: number
           tax_rules?: Json
@@ -2978,6 +3075,7 @@ export type Database = {
           packaging_fee?: number
           payment_gateway?: string
           points_value_cents?: number
+          printing_mode?: string
           receipt_template?: Json
           service_charge?: number
           tax_rules?: Json
@@ -3238,6 +3336,41 @@ export type Database = {
       }
       cancel_tenant_deletion: { Args: { _tenant: string }; Returns: undefined }
       claim_invites: { Args: never; Returns: undefined }
+      claim_print_jobs: {
+        Args: {
+          _branch: string
+          _claimer: string
+          _connections?: string[] | null
+          _limit: number
+          _render_modes?: string[] | null
+          _tenant: string
+        }
+        Returns: {
+          attempts: number
+          bill_id: string | null
+          branch_id: string | null
+          claimed_at: string | null
+          claimed_by: string | null
+          copies: number
+          created_at: string
+          doc: Database["public"]["Enums"]["print_doc"]
+          error: string | null
+          id: string
+          idempotency_key: string | null
+          kot_id: string | null
+          order_id: string | null
+          printed_at: string | null
+          printer_id: string | null
+          status: Database["public"]["Enums"]["print_job_status"]
+          tenant_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "print_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       close_cash_session: {
         Args: { _counted_cents: number; _session_id: string }
         Returns: {
@@ -3245,6 +3378,14 @@ export type Database = {
           expected_cents: number
           variance_cents: number
         }[]
+      }
+      complete_print_job: {
+        Args: {
+          _error: string
+          _job_id: string
+          _status: Database["public"]["Enums"]["print_job_status"]
+        }
+        Returns: undefined
       }
       create_bill_for_order: { Args: { _order_id: string }; Returns: string }
       create_draft_po_from_reorder: {
@@ -3274,6 +3415,20 @@ export type Database = {
       default_role_permissions: {
         Args: { _base: Database["public"]["Enums"]["app_role"] }
         Returns: string[]
+      }
+      delete_printer: { Args: { _printer_id: string }; Returns: undefined }
+      enqueue_print_job: {
+        Args: {
+          _bill_id: string
+          _copies: number
+          _doc: Database["public"]["Enums"]["print_doc"]
+          _idem: string
+          _kot_id: string
+          _order_id: string
+          _printer_id: string
+          _tenant: string
+        }
+        Returns: string
       }
       fire_order: { Args: { _order_id: string }; Returns: number }
       get_my_permissions: { Args: { _tenant: string }; Returns: string[] }
@@ -3317,6 +3472,7 @@ export type Database = {
         }
         Returns: number
       }
+      mark_kot_printed: { Args: { _kot_id: string }; Returns: undefined }
       mark_order_served: { Args: { _order_id: string }; Returns: undefined }
       open_cash_session: {
         Args: {
@@ -3378,6 +3534,7 @@ export type Database = {
       purge_scheduled_tenants: { Args: never; Returns: number }
       qr_menu: { Args: { _token: string }; Returns: Json }
       qr_request_bill: { Args: { _token: string }; Returns: boolean }
+      recall_kot: { Args: { _kot_id: string }; Returns: undefined }
       receive_po: { Args: { _po_id: string }; Returns: number }
       receive_po_partial: {
         Args: { _lines: Json; _po_id: string }
@@ -3537,12 +3694,35 @@ export type Database = {
         Args: { _domains: string[]; _tenant: string }
         Returns: undefined
       }
+      retry_print_job: { Args: { _job_id: string }; Returns: undefined }
       run_dunning: {
         Args: never
         Returns: {
           marked_past_due: number
           suspended: number
         }[]
+      }
+      save_printer: {
+        Args: {
+          _auto_cut: boolean
+          _branch_id: string
+          _bt_address: string
+          _connection: Database["public"]["Enums"]["printer_connection"]
+          _docs: Json
+          _host: string
+          _id: string
+          _is_active: boolean
+          _name: string
+          _open_drawer: boolean
+          _paper_width: number
+          _port: number
+          _render_mode: Database["public"]["Enums"]["printer_render_mode"]
+          _system_name: string
+          _tenant: string
+          _usb_product_id: string
+          _usb_vendor_id: string
+        }
+        Returns: string
       }
       seed_system_roles: { Args: { _tenant: string }; Returns: undefined }
       set_bill_complimentary: {
@@ -3569,8 +3749,34 @@ export type Database = {
         }
         Returns: undefined
       }
+      set_kot_status: {
+        Args: {
+          _kot_id: string
+          _status: Database["public"]["Enums"]["kot_status"]
+        }
+        Returns: undefined
+      }
       set_member_role: {
         Args: { _role_id: string; _tenant: string; _user_id: string }
+        Returns: undefined
+      }
+      set_printer_usb_path: {
+        Args: { _endpoint: string; _interface: string; _printer_id: string }
+        Returns: undefined
+      }
+      set_printing_mode: {
+        Args: { _mode: string; _tenant: string }
+        Returns: undefined
+      }
+      set_station_kind: {
+        Args: {
+          _kind: Database["public"]["Enums"]["station_kind"]
+          _station_id: string
+        }
+        Returns: undefined
+      }
+      set_station_printer: {
+        Args: { _printer_id: string; _station_id: string }
         Returns: undefined
       }
       set_stock_count_actual: {
@@ -3606,6 +3812,7 @@ export type Database = {
         Args: { _key: string; _tenant: string }
         Returns: boolean
       }
+      tenant_limit: { Args: { _key: string; _tenant: string }; Returns: number }
       transfer_order: {
         Args: { _order_id: string; _to_table: string }
         Returns: undefined
@@ -3654,15 +3861,22 @@ export type Database = {
       payment_method: "cash" | "card" | "online" | "wallet" | "points"
       payment_status: "pending" | "completed" | "failed" | "refunded"
       po_status: "draft" | "sent" | "partial" | "received" | "cancelled"
-      print_job_status: "queued" | "printed" | "failed"
-      printer_connection: "network" | "system"
-      printer_role: "kot" | "receipt" | "both"
+      print_doc: "kot" | "bot" | "full_kot" | "order_slip" | "bill" | "test"
+      print_job_status:
+        | "queued"
+        | "printed"
+        | "failed"
+        | "claimed"
+        | "cancelled"
+      printer_connection: "network" | "system" | "usb" | "bluetooth"
+      printer_render_mode: "text" | "image"
       reservation_status:
         | "pending"
         | "confirmed"
         | "seated"
         | "cancelled"
         | "no_show"
+      station_kind: "kitchen" | "bar"
       stock_movement_type:
         | "purchase"
         | "sale"
@@ -3835,9 +4049,10 @@ export const Constants = {
       payment_method: ["cash", "card", "online", "wallet", "points"],
       payment_status: ["pending", "completed", "failed", "refunded"],
       po_status: ["draft", "sent", "partial", "received", "cancelled"],
-      print_job_status: ["queued", "printed", "failed"],
-      printer_connection: ["network", "system"],
-      printer_role: ["kot", "receipt", "both"],
+      print_doc: ["kot", "bot", "full_kot", "order_slip", "bill", "test"],
+      print_job_status: ["queued", "printed", "failed", "claimed", "cancelled"],
+      printer_connection: ["network", "system", "usb", "bluetooth"],
+      printer_render_mode: ["text", "image"],
       reservation_status: [
         "pending",
         "confirmed",
@@ -3845,6 +4060,7 @@ export const Constants = {
         "cancelled",
         "no_show",
       ],
+      station_kind: ["kitchen", "bar"],
       stock_movement_type: [
         "purchase",
         "sale",

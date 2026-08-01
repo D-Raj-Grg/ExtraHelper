@@ -15,7 +15,7 @@ import {
   XCircleIcon,
 } from "lucide-react"
 
-import { cancelOrder, listOrderKotIds, pinOrder } from "@/app/(app)/pos/actions"
+import { cancelOrder, pinOrder } from "@/app/(app)/pos/actions"
 import { generateBill } from "@/app/(app)/bill/actions"
 import { money } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -66,7 +66,7 @@ export function OrderCard({
   onOpen: () => void
 }) {
   const [pending, startTransition] = useTransition()
-  const { printKots } = usePrint()
+  const { printOrderSlip } = usePrint()
   const [clearOpen, setClearOpen] = useState(false)
   const [reason, setReason] = useState("")
 
@@ -84,13 +84,12 @@ export function OrderCard({
   const pinned = !!order.pinned_at
   const label = order.restaurant_tables?.label ? `Table ${order.restaurant_tables.label}` : "Takeaway"
 
+  // An order slip is the guest's itemised copy, with prices. It used to
+  // re-print the kitchen tickets, which is a different piece of paper for a
+  // different person.
   function printSlip() {
     startTransition(async () => {
-      const res = await listOrderKotIds(order.id)
-      if ("error" in res) return void toast.error(res.error)
-      if (!res.kotIds.length) return void toast.info("Nothing fired to the kitchen yet.")
-      // Re-print: the kitchen has seen these lines already, so mark the paper.
-      await printKots(res.kotIds, { reprint: true })
+      await printOrderSlip(order.id)
     })
   }
 

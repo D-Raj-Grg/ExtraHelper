@@ -12,6 +12,48 @@ Nothing yet.
 
 ---
 
+## [1.0.14] — 2026-08-01
+
+### Added
+- **Printer setup, rebuilt.** Settings → Printers now shows how many printers your plan allows, whether direct printing is connected, and which way jobs are being sent. You choose exactly what each printer prints on its own — KOT, BOT, Full KOT, order slips, bills — with a copy count for each. USB printers can be scanned for and added by vendor and product ID; 76mm impact paper is supported alongside 58mm and 80mm; each printer has its own cut and cash-drawer setting.
+- **Printing without a browser open.** Tickets and receipts are queued the moment they are created, so an order that arrives from the QR menu or the online store at two in the morning still reaches the kitchen. Cloud mode runs a small agent on a machine in the restaurant; Local mode keeps driving the printers from whichever screen is open.
+- **Nepali on the ticket.** A printer can be set to Image, which draws the whole ticket instead of sending characters — so dish names in Devanagari, or any other script, print properly instead of as question marks.
+- **A print queue you can see.** Anything waiting, printing or failed stays on the Printers screen with a Try again button, rather than vanishing with a toast.
+- **Test all printers**, and a guided **Direct printing** setup: numbered steps, a downloadable `override.crt` with the folder for your operating system highlighted and a copy button, and a live connection status. Install QZ Tray with the window open and the step ticks itself green — no reloading the page to find out whether it worked.
+- Kitchen stations are now marked Kitchen or Bar, and a bar station prints a BOT.
+- The order slip names the waiter who took the order.
+
+### Fixed
+- Two open POS tabs no longer print the same ticket twice.
+- "Print order slip" prints an actual order slip — an itemised copy with prices — rather than re-printing the kitchen tickets.
+- A failed print no longer tried to open a browser tab by itself, which browsers blocked as a popup, leaving nothing printed and nothing on screen.
+- A dish voided after its ticket was queued is no longer cooked — the ticket is built when it prints, not when it was asked for.
+- A ticket that failed and was sent again no longer says REPRINT. It said so on paper the kitchen had never seen, which reads as "this food is already on".
+- Re-printing a bar ticket by hand prints a BOT, not a KOT.
+- Re-printing by hand now respects the copy count and the branch the printer belongs to, the same way automatic printing does.
+- The test page's width ruler is drawn for the printer's own paper width. On a 58mm printer it was drawn at 80mm — the one thing on the page whose job is to prove the width.
+- The setup dialog said "install it, then reload this page". It now retries the connection itself while it's open, and offers a Check now button.
+- Adding a System printer offered an empty text box and a Scan button that did nothing, with no hint why. Scanning needs QZ Tray — a browser cannot list the computer's printers on its own — and the form now says so next to the control, offers Scan as the primary path when the agent is there, and keeps typing the name as a clearly-labelled fallback.
+- Choosing a USB or System printer while Cloud mode is on now warns that the agent drives network printers only, instead of letting you save one that can never print.
+
+### Security
+- Adding, re-pointing or deleting a printer now requires the settings permission in the database. The rule previously lived only in the app, so any signed-in member of the restaurant could change printers through the API.
+- Printers can be tied to a branch, so a two-branch restaurant no longer prints one branch's tickets at the other.
+
+<details><summary>Technical</summary>
+
+Migrations `20260731160000_printing_v2_enums.sql`, `20260731160100_printing_v2.sql`, `20260731170000_printing_v2_guards.sql`. Docs: `docs/printing.md`.
+
+- **Model.** `printers.role` / `is_default` / `uq_printer_default` dropped for `printer_documents(printer_id, doc, copies)` — assigning a document *is* the auto-print switch, and several printers may carry the same one. New `print_doc` enum (`kot · bot · full_kot · order_slip · bill · test`), `kitchen_stations.kind`, `printer_render_mode`, `usb` connection. Station routing still wins for kot/bot; the assignment is the fallback.
+- **Queue.** `print_jobs` became work rather than a log: enqueue triggers on `kots` insert and bill→paid, so auto-print covers POS, QR, online, Flutter and offline replay without any client knowing printing exists. Rows carry a reference and **no payload** — the claimer asks the server to render, so an amended ticket prints amended. `claim_print_jobs` uses `select … for update skip locked` plus a 60s stale-claim requeue; `unique(tenant_id, idempotency_key)` on `<doc>:<ref>:<printer>` (reprints pass null). Added to the realtime publication with `replica identity full`.
+- **Security.** Select-only RLS on `printers` / `printer_documents` / `print_jobs`; all writes through `settings.edit`-gated SECURITY DEFINER RPCs with full signatures on every revoke/grant. `printers.branch_id` existed since 1.0.11 but was never written or filtered. `tenant_limit(_tenant,_key)` shipped without a membership check and was fixed the same day — DEFINER meant any user could read another tenant's plan ceiling; found by sweeping `prosrc`, not by reading the repo. The queue functions gated on bare `current_tenant_ids()` while the rest of the module gates on `has_permission` (which carries an `is_platform_admin()` escape, as does every policy in the schema), so an admin impersonating a restaurant could configure its printers but got 42501 on Test print; escapes aligned in `20260731170000`. Isolation re-verified after the change as a real non-admin member under a simulated JWT: cross-tenant `save_printer` / `enqueue_print_job` / `claim_print_jobs` all 42501, cross-tenant `tenant_limit` null.
+- **Rendering.** `lib/print/docs.ts` is a document model consumed by both the ESC/POS renderer and the client canvas rasteriser, so they cannot drift; `lib/print/job-render.ts` takes a Supabase client so the server action and `/api/print/render` share one path. Image mode rasterises in the browser and encodes `GS v 0` bit-image bands by hand: QZ's `{type:'pixel', format:'html'}` needs an OS printer driver and cannot reach a network socket, and `qz.usb.sendData` takes bytes only, so QZ's own image converter was unusable on both of the paths that matter. `columnsFor(76) = 40`, not 42 — the carriage cannot reach the last two columns; and the raster widths are all multiples of 8, since a bit-image row is sent as whole bytes and 420 made the printer draw a wider row than the canvas the layout was measured against.
+- **Cloud mode** (`tools/print-agent/`) answers the PRD §9 open question. It signs in as an ordinary staff user — no service role, no shared secret — and RLS scopes it. Boundary: network printers in text mode; USB, system and image mode need a browser, and it fails those jobs with a sentence saying so.
+- Verified: ~600 byte-level assertions across 58/76/80mm × 6 documents (line width at the magnification in force, cut last, TOTAL flush to the edge, drawer/cut only when configured, Devanagari → `?` with no control bytes) and a DB suite in rolled-back transactions (enqueue counts, copies, full-KOT-once-per-order, bill fires once on settle, unauthenticated `save_printer` refused with 42501, delete unroutes stations). Applied to prod with 0 printers and 0 jobs existing, so the model change carried no data risk.
+</details>
+
+---
+
 ## [1.0.13] — 2026-07-31
 
 ### Changed

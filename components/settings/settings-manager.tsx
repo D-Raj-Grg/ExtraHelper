@@ -27,6 +27,8 @@ export function SettingsManager({
   canManageBranches,
   printers,
   printJobs,
+  printerLimit,
+  printingMode,
   canManagePrinters,
   danger,
 }: {
@@ -44,6 +46,9 @@ export function SettingsManager({
   canManageBranches: boolean
   printers: PrinterRow[]
   printJobs: PrintJobRow[]
+  /** Null = unlimited on this plan. */
+  printerLimit: number | null
+  printingMode: "local" | "cloud"
   /** Printer setup is owner/manager work — same gate as branches. */
   canManagePrinters: boolean
   /** Owner-only; null for non-owners (tab hidden). */
@@ -98,7 +103,14 @@ export function SettingsManager({
         </TabsContent>
         {canManagePrinters ? (
           <TabsContent value="printers">
-            <PrintersTab printers={printers} jobs={printJobs} timezone={timezone} />
+            <PrintersTab
+              printers={printers}
+              jobs={printJobs}
+              branches={branches}
+              printerLimit={printerLimit}
+              printingMode={printingMode}
+              timezone={timezone}
+            />
           </TabsContent>
         ) : null}
         {canManageBranches ? (

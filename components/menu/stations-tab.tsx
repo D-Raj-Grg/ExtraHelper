@@ -4,7 +4,7 @@ import { useActionState, useState, useTransition } from "react"
 import { PlusIcon } from "lucide-react"
 import { createStation, deleteStation, updateStation } from "@/app/(app)/menu/actions"
 import type { MenuState } from "@/app/(app)/menu/actions"
-import { setStationPrinter } from "@/app/(app)/settings/printers-actions"
+import { setStationKind, setStationPrinter } from "@/app/(app)/settings/printers-actions"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Field, FieldLabel } from "@/components/ui/field"
@@ -66,6 +66,7 @@ export function StationsTab({
               <TableHeader>
                 <TableRow>
                   <TableHead>Station</TableHead>
+                  <TableHead>Type</TableHead>
                   <TableHead>Printer</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -118,6 +119,14 @@ function StationRow({
     })
   }
 
+  function setKind(kind: "kitchen" | "bar") {
+    startTransition(async () => {
+      const res = await setStationKind(station.id, kind)
+      if (res && "error" in res) setErr(res.error)
+      else setErr(null)
+    })
+  }
+
   return (
     <TableRow>
       <TableCell className="font-medium">
@@ -137,6 +146,26 @@ function StationRow({
         ) : (
           station.name
         )}
+      </TableCell>
+
+      <TableCell>
+        <Field>
+          <FieldLabel htmlFor={`station-kind-${station.id}`} className="sr-only">
+            Ticket type for {station.name}
+          </FieldLabel>
+          <Select
+            value={station.kind}
+            onValueChange={(v) => setKind(String(v ?? "kitchen") as "kitchen" | "bar")}
+          >
+            <SelectTrigger id={`station-kind-${station.id}`} className="w-36">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="kitchen">Kitchen (KOT)</SelectItem>
+              <SelectItem value="bar">Bar (BOT)</SelectItem>
+            </SelectContent>
+          </Select>
+        </Field>
       </TableCell>
 
       <TableCell>

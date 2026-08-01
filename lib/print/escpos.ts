@@ -13,9 +13,18 @@
 const ESC = 0x1b
 const GS = 0x1d
 
-/** Printable columns for a paper width, at the default Font A (12 dots/char). */
+/**
+ * Printable columns for a paper width, at the default Font A (12 dots/char).
+ *
+ * 76mm is the impact-printer width (TM-U220 and its clones) and gives 40, not
+ * the 42 the arithmetic suggests — the carriage cannot reach the last two
+ * columns. Under-running is free; over-running silently wraps the amount off
+ * the money column onto its own line.
+ */
 export function columnsFor(paperWidthMm: number): number {
-  return paperWidthMm === 58 ? 32 : 48
+  if (paperWidthMm === 58) return 32
+  if (paperWidthMm === 76) return 40
+  return 48
 }
 
 export type Align = "left" | "center" | "right"

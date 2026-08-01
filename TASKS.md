@@ -255,6 +255,197 @@ that produced the duplicate `dashboard_summary` overload. On prod, with 23 paid 
 Until that passes, keep applying new migrations through the MCP exactly as today — **do not mix the
 two paths mid-repair.**
 
+## Printing v2 — a queue in Postgres, not a browser tab (2026-08-01)
+
+Migrations `20260731160000_printing_v2_enums.sql`, `20260731160100_printing_v2.sql`,
+`20260731170000_printing_v2_guards.sql`. Docs rewritten: `docs/printing.md`.
+
+Prompted by a competitor comparison (RestroX), but the parity gap turned out to be the smaller half.
+The v1 module (2026-07-22) got the transport right and the model wrong, and four things were broken
+in ways only a real service exposes:
+
+1. **Printing only happened in an open browser tab.** QZ Tray is driven from the page, so a QR or
+   online order arriving at 02:00 with nobody at the POS printed nothing at all. `print_jobs` was a
+   log written *after* the fact, not work waiting to be done.
+2. **Two POS tabs meant two tickets.** Nothing claimed a job.
+3. **`printers` / `print_jobs` used `apply_tenant_rls`,** which is `for all`, with the owner/manager
+   check in a TypeScript server action. Any member — a waiter, an inventory clerk — could add,
+   re-point or delete a printer straight through PostgREST. Same hole class as `20260727120000` and
+   `20260731140000` closed elsewhere, missed here for the same reason.
+4. **The browser fallback was dead code.** `dispatch.ts` called `window.open()` *after* an `await`;
+   browsers block that as an unrequested popup, so a failed print produced a toast and no paper.
+
+### Model
+
+- [x] `printers.role` / `is_default` / `uq_printer_default` **dropped** for `printer_documents
+      (printer_id, doc, copies)`. Assigning a document *is* the auto-print switch; several printers
+      may carry the same one (counter + back office both print the bill); a printer with none is
+      manual-only. Old rows back-filled before the drop.
+- [x] `print_doc` enum: `kot · bot · full_kot · order_slip · bill · test`. `kitchen_stations.kind =
+      kitchen|bar` is what makes a ticket a BOT. Station routing still wins for kot/bot; the document
+      assignment is the fallback for unrouted stations.
+- [x] `print_jobs` became a queue: `doc`, `order_id`, `branch_id`, `copies`, `claimed_at`,
+      `claimed_by`, `idempotency_key`, plus `claimed`/`cancelled` states.
+
+### Queue
+
+- [x] Enqueue triggers — `enqueue_kot_print` (after insert on `kots`) and `enqueue_bill_print`
+      (bill → paid). Auto-print now works on every path at once: POS, QR, online storefront, Flutter,
+      offline replay. No client knows printing exists.
+- [x] Rows carry a reference and **no payload**; the claimer asks the server to render. One rendering
+      source of truth, and a ticket amended between queueing and printing comes out amended.
+- [x] `claim_print_jobs` uses `select … for update skip locked` + a 60s stale-claim requeue. That is
+      the entire anti-duplicate mechanism.
+- [x] `unique(tenant_id, idempotency_key)` on `<doc>:<ref>:<printer>`; reprints pass `null`.
+- [x] `print_jobs` added to the realtime publication + `replica identity full`.
+
+### Transports
+
+- [x] **Local** — `components/print/auto-print-worker.tsx`, mounted once in the app shell. Drains via
+      realtime + a 20s safety poll. Network, USB and system printers.
+- [x] **Cloud** — `tools/print-agent/agent.mjs`. Signs in as an ordinary staff user (no service role,
+      no shared secret), claims, renders through `/api/print/render` with a bearer token, writes to a
+      `net.Socket`. Answers PRD §9. **Boundary: network printers, text mode.** USB/system need QZ in a
+      browser; it fails those jobs with a sentence saying so rather than printing garbage.
+- [x] USB addressing: `qz.usb.listInterfaces` → `listEndpoints` (skip endpoints with bit 7 set —
+      those are IN) → `claimDevice` → `sendData` → `releaseDevice` in a `finally`; path cached via
+      `set_printer_usb_path`.
+
+### Rendering
+
+- [x] `lib/print/docs.ts` is a document model; `escpos-render.ts` and the client canvas rasteriser
+      both consume it, so the two renderers cannot drift. `job-render.ts` takes a Supabase client, so
+      the server action and the API route share one path.
+- [x] **Image mode** (`printers.render_mode`) for Devanagari and every other non-Latin script. Two
+      API facts forced the design: QZ's `{type:'pixel', format:'html'}` goes through an **OS printer
+      driver** and cannot reach a network printer on a socket (which is how most kitchen printers are
+      wired), and `qz.usb.sendData` takes bytes only — QZ's `format:'image'` converter is not on that
+      path. So the browser draws to a canvas and we encode `GS v 0` bit-image bands (128 rows) by hand.
+- [x] 76mm impact paper. `columnsFor(76) = 40`, not the 42 the arithmetic gives — the carriage cannot
+      reach the last two columns.
+- [x] Per-printer `auto_cut` and `open_drawer`, per-document `copies`.
+
+### Security
+
+- [x] Select-only RLS on `printers`, `printer_documents`, `print_jobs`. Every write via
+      `settings.edit`-gated SECURITY DEFINER RPCs: `save_printer`, `delete_printer`,
+      `set_station_printer`, `set_station_kind`, `set_printing_mode`, `enqueue_print_job`,
+      `claim_print_jobs`, `complete_print_job`, `retry_print_job`. Full signatures named on every
+      `revoke`/`grant`.
+- [x] `printers.branch_id` is finally written and filtered — it existed since v1 but was never used,
+      so a two-branch tenant printed Branch B's tickets in Branch A.
+- [x] New `tenant_limit(_tenant, _key)` + `plans.limits.printers` (2 / 10 / 100). **Shipped without a
+      membership check and fixed the same day** — SECURITY DEFINER meant any signed-in user could ask
+      what plan any other restaurant was on by passing its id. Caught by a guard sweep over `prosrc`,
+      not by reading the repo.
+
+### UI
+
+- [x] `printers-tab.tsx` rebuilt: three stat cards (count/limit · direct-printing status · Local/Cloud
+      mode), search, Test all printers + a results dialog, auto-print columns per document (icon **and**
+      a screen-reader word — a tick alone is unreadable in greyscale), and a **print queue** section
+      where anything waiting or failed stays with a Try again button instead of vanishing with a toast.
+- [x] `printer-sheet.tsx` rebuilt: Network / USB / System chips, USB and system scan, vendor + product
+      ID, render mode, branch, cut, drawer, and the document-assignment cards with copies steppers.
+- [x] Setup dialog with **Download override.crt** (`/api/qz/cert?download=1`) and the per-OS folder.
+- [x] Station type select on Menu → Stations.
+- [x] POS "Print order slip" now prints an actual order slip — itemised, with prices, for the guest.
+      It re-printed the kitchen tickets before, which is a different piece of paper for a different
+      person.
+- [x] Fire no longer prints from the client at all; `create-flow` / `amend-flow` just place and fire.
+
+### Review pass (same day, before commit)
+
+Six defects found by re-reading the risky paths rather than trusting the first write. Worth recording
+because five of them would only ever have shown up on paper, in service.
+
+- [x] **A retry stamped `*** REPRINT ***` on paper the kitchen had never seen.** The banner was keyed
+      on `attempts > 0`, but a job that failed because the printer was out of paper has attempts and
+      has printed nothing — telling a cook the food is already on. Now keyed on whether *any* job for
+      the same document ever reached `printed`.
+- [x] **Manual reprints ignored branch scoping.** The enqueue trigger filtered printers by branch;
+      the TypeScript path did not, so a manual bill reprint queued on every branch's bill printer.
+- [x] **A manual reprint of a bar ticket printed a KOT header.** `printKot` always passed `doc: 'kot'`;
+      the station's `kind` now decides, as it does on the trigger path.
+- [x] **Manual reprints ignored per-document copies** — a printer set to two copies of every bill
+      produced one. `_copies` was passed as null.
+- [x] **The image-mode test page drew an 80mm ruler on every printer.** `columnsFor(80)` was
+      hardcoded, so on a 58mm roll the one element whose entire job is to prove the width was itself
+      the wrong width.
+- [x] **`printableDots(76)` was 420, not a multiple of 8.** A raster row is sent as whole bytes, so
+      the printer drew a 424-dot row against a 420-dot canvas. Now 416.
+
+- [x] **`tenant_limit` shipped as SECURITY DEFINER with no membership check** — any signed-in user
+      could read another restaurant's plan ceiling by passing its id. Caught by sweeping `prosrc` for
+      guards, not by reading the migration. Fixed same day.
+- [x] **Platform-admin inconsistency** (`20260731170000_printing_v2_guards.sql`). `save_printer` and
+      the station setters gate on `has_permission`, which carries an `is_platform_admin()` escape, as
+      does every policy in the schema. The queue functions gated on bare `current_tenant_ids()`, so an
+      admin impersonating a restaurant could configure its printers but got 42501 on Test print —
+      exactly what they are impersonating in order to diagnose.
+- [x] Isolation re-verified after the escape, as a real non-admin member with a simulated JWT:
+      cross-tenant `save_printer` / `enqueue_print_job` / `claim_print_jobs` all refused with 42501,
+      cross-tenant `tenant_limit` returns null, and `printers` shows only their own row. Happy path
+      also verified end to end under the same JWT: create → edit (network → USB) → delete, name
+      trimmed, `test` refused as an assignable document, copies preserved.
+
+**Deliberately left alone.** A bill refunded and then re-settled does not print a second receipt —
+the idempotency key already exists. Silent dedup beats surprise paper. The browser worker claims for
+every role, so an inventory clerk's screen will help drain the queue and see "Printed" toasts; it
+exposes nothing RLS did not already allow, and any open till keeping the printers fed is the point.
+
+### Verification
+
+- [x] ~600 byte-level assertions across 58/76/80mm × 6 documents: line width **at the magnification in
+      force**, cut last, `ESC @` first, TOTAL flush to the paper edge, drawer and cut only when
+      configured, Devanagari → `?` with no control bytes. A naive scanner counts `ESC a 0`'s argument
+      as the letter "a" — the first version of the harness "failed" 97 assertions for that reason.
+- [x] DB suite in rolled-back transactions: trigger enqueue counts, copies, full-KOT-once-per-order,
+      bill fires once on settle and not twice, `save_printer` refuses an unauthenticated caller
+      (42501), delete unroutes stations and cascades documents, RLS is SELECT-only on all three tables.
+- [x] `tsc`, `lint`, `npm run build` clean. Migrations applied to prod with 0 printers and 0 jobs
+      existing, so the model change carried no data risk.
+- [ ] End-to-end on real hardware: network printer, USB printer, image mode with a Devanagari dish
+      name, two tabs open, and the agent running with every browser closed. Needs a physical printer.
+
+## Printing from the phone — a third drainer (2026-08-01)
+
+Migrations `20260801090000_printing_bluetooth_enum.sql`, `20260801090100_printing_bluetooth.sql`.
+Mobile half lives in `../extrahelper_flutter/lib/data/print/` — its own entry in that TASKS.md.
+
+**Why.** The shop's printer (an 80mm POSiFLOW KP307: USB + LAN + WiFi + BT) does not do browser
+print, and never will: JavaScript has no raw socket, and `window.print()` goes through a driver and a
+page dialog. Something native has to drive it. QZ Tray and the headless agent already did — and so,
+it turns out, can the Flutter app, which needs nothing installed on any computer. `dart:io` opens a
+socket to port 9100 on both platforms, and Android speaks Bluetooth SPP.
+
+- [x] `printers.bt_address` + `'bluetooth'` on `printer_connection`, with `printers_target_present`
+      extended. Split across two migrations: Postgres refuses to *use* a new enum value in the
+      transaction that adds it.
+- [x] `save_printer` grew `_bt_address`; **drop + create**, not `create or replace`, with
+      `revoke`/`grant` re-issued naming the full 17-argument signature.
+- [x] `claim_print_jobs` grew `_connections text[]` and `_render_modes text[]` (null = anything), so
+      a claimer only takes work it can finish. Same drop + create + regrant. Verified afterwards:
+      one signature each, `public` and `anon` hold no EXECUTE.
+- [x] Who claims what: the browser passes `network|usb|system` and **every** render mode, so an open
+      till stays the catch-all; the Node agent passes `network` + `text`, which it could already
+      only drive; the phone passes what its transports report plus `text`. A Bluetooth ticket is
+      therefore never claimed by a browser that would have to fail it.
+- [x] Bluetooth chip + address field in `printer-sheet.tsx`, with a note that neither printing mode
+      governs it — it is the phone or nothing. `print-provider.tsx` throws a sentence rather than
+      quietly asking QZ for a system printer of that name.
+- [x] `PRINTER_COLS`, `PrinterRef`, `printerTarget()`, settings page projection and
+      `database.types.ts` all carry `bt_address`.
+- [x] `tsc`, `lint` (no new problems — the 7 that remain predate this and are in files nobody
+      touched here), `npm run build` clean. Migrations applied to prod; additive, so no data risk.
+- [ ] End-to-end on the KP307: WiFi from an Android phone and an iPhone, Bluetooth from Android,
+      four drainers at once printing exactly one slip, printer switched off → readable error →
+      retry. Needs the physical printer.
+
+**Known gap, deliberate.** If *every* drainer filters, a job nothing can drive waits on the queue
+rather than failing loudly. That is why the browser keeps claiming every render mode. The
+troubleshooting table in `docs/printing.md` names the symptom.
+
 ## Milestone 0 — Foundation
 - [x] Create Supabase project; wire env/secrets (service role server-only) — project `ixrcdtwdcpsmlbocvejv` live, `.env.local` wired (publishable key only client-side; RLS is the gate). **Owner decision 2026-07-31: this project IS prod.** No separate prod project, no staging — the app is already deployed at `https://extra-helper.vercel.app/` against it. Staging comes after launch, once the feature backlog settles. What this costs is written down under "Single-environment decision" below so nobody rediscovers it.
 - [~] Install/verify toolchain: Node LTS, Supabase CLI, Docker, Flutter SDK, Xcode, Android Studio — **mobile toolchain done (2026-07-26)**: Flutter 3.38.7 / Dart 3.10.7, Xcode 26.2 + **CocoaPods 1.17.0** (Docker dropped by owner decision 2026-07-31 — see the CLI line below), Android SDK 36.1.0 + **cmdline-tools 21.0** with licenses accepted (`ANDROID_HOME` in `~/.zshrc`); `flutter doctor` reports **no issues**. TODO: Supabase CLI + Docker (migrations still applied via Supabase MCP instead).
@@ -286,7 +477,7 @@ two paths mid-repair.**
 - [x] KOT amendments (added/void items, reason + approval for voids) — void via `void_order_item()` (manager approval + reason + audit), recompute on bill. Added-items: re-add + re-fire (fire_order idempotent, tickets only un-ticketed items). TODO: explicit KOT amendment tickets / void propagation to KDS. ✅ Finished in partial-features sprint (2026-07-13).
 - [x] KDS full-screen web view per station: ticket aging colors, item/ticket bump, all-day counts, recall — `/kds` board with aging borders (green/amber/red), per-ticket bump (new→preparing→ready→served), fullscreen, realtime auto-refresh. **Per-station filter**: pill row (All / each station / Expo) → `?station=`, scoped server query + client refetch + realtime, persisted in `localStorage` so a screen reboots into its station. **All-day counts** strip (qty per item across visible tickets). **Recall**: recently-served (≤20m) shown as recall chips → `recallKot` sets served→preparing so an early-bumped ticket returns. Bump E2E verified.
 - [x] 86 item from KDS → disables item on all ordering surfaces (realtime) — 86 toggle on `/menu`; POS blocks 86'd items. TODO: 86 from KDS + realtime propagation. ✅ Finished in partial-features sprint (2026-07-13).
-- [x] Thermal KOT print — **browser-print transport** (thermal printer prints via its OS driver; no external agent/cloud dependency). `app/kot/[kotId]/page.tsx` renders an 80mm ticket (station, table/type, items, modifiers, seat, notes, item count) + `@page 80mm`; `components/kot-print.tsx` auto-fires `window.print()` on load and stamps `kots.printed_at` via `markKotPrinted`. **Print button** on every KDS ticket (reprint). **Print-on-fire**: `fireOrder` re-queries the new KOT ids → POS opens a print view per station ticket. ESC/POS local-agent + cloud-print adapter slot preserved in `lib/integrations/printing.ts` for later. **Superseded by the printing module (2026-07-22)**: silent ESC/POS printing via a local agent (QZ Tray), a `printers` registry with station→printer routing, paper width 58/80mm, a print-job log with reprint, and Settings → Printers. Browser print is now the automatic fallback, not the only path. See `docs/printing.md`.
+- [x] Thermal KOT print — **browser-print transport** (thermal printer prints via its OS driver; no external agent/cloud dependency). `app/kot/[kotId]/page.tsx` renders an 80mm ticket (station, table/type, items, modifiers, seat, notes, item count) + `@page 80mm`; `components/kot-print.tsx` auto-fires `window.print()` on load and stamps `kots.printed_at` via `markKotPrinted`. **Print button** on every KDS ticket (reprint). **Print-on-fire**: `fireOrder` re-queries the new KOT ids → POS opens a print view per station ticket. ESC/POS local-agent + cloud-print adapter slot preserved in `lib/integrations/printing.ts` for later. **Superseded by the printing module (2026-07-22)**: silent ESC/POS printing via a local agent (QZ Tray), a `printers` registry with station→printer routing, paper width 58/80mm, a print-job log with reprint, and Settings → Printers. Browser print is now the automatic fallback, not the only path. **Superseded again by printing v2 (2026-08-01)**: a Postgres job queue with `for update skip locked` claims (no duplicate tickets across tabs, no browser needed at all in Cloud mode), `printer_documents` auto-print assignment replacing the `role` enum, KOT/BOT/Full KOT/Order slip/Bill documents, USB vendor/product addressing, 76mm, per-printer cut/drawer/copies, image mode for Devanagari, branch scoping, plan limits, and `settings.edit`-gated RPCs replacing the tenant-only RLS. See `docs/printing.md`.
 - [x] Realtime sync: table states + KOT + order status across waiter/KDS/cashier — **live via Supabase Realtime** (`postgres_changes`, tenant-filtered) on `/tables`, `/pos`, `/kds`, no manual refresh. **Root fix**: the browser Realtime socket must carry the user JWT (`realtime.setAuth`) or RLS drops all events — added `components/realtime-auth.tsx` (setAuth on mount + token-refresh) + singleton browser client (one shared socket). Surfaces hold client state (tables merge changed row in place; KDS/POS debounced scoped refetch) instead of full-page `router.refresh`. Retired `realtime-refresh.tsx`. Verified 2-tab live. (branch → future.)
 - [~] **Verify:** order → KOT fires → KDS + print → bump → served — **browser E2E passed**: POS start→add Burger+Cola (US$15)→fire→2 KDS tickets (Grill/Bar)→bump Grill to Preparing; `/tables` + `/menu` render. Fixed 3 bugs found here: PostgREST embed ambiguity (orders↔restaurant_tables 2 FKs → `!orders_table_id_fkey` hint), `"use server"` const-array exports breaking client import (KOT_FLOW/TABLE_STATES → moved to plain modules), `fire_order` anon-executable. TODO: thermal print, served→billed.
 
@@ -403,7 +594,7 @@ two paths mid-repair.**
 
 ## Blocked — Open Questions (PRD §9)
 - [!] Launch payment gateway(s): Stripe global vs regional e-wallet?
-- [!] Printing approach: local agent vs cloud print service?
+- [x] Printing approach: local agent vs cloud print service? — **Answered 2026-08-01: both, per tenant.** Jobs queue in Postgres (enqueue triggers on `kots` / `bills`); *Local* mode drains the queue from any open browser via QZ Tray (network + USB + system printers, and image mode for non-Latin scripts), *Cloud* mode drains it from a headless agent (`tools/print-agent`, network printers, no browser needed). Settings → Printers switches modes. See `docs/printing.md`.
 - [!] Subscription tiers + feature-gating map?
 - [!] Delivery model: own drivers vs 3rd-party couriers?
 - [!] Future country tax compliance (Nepal IRD / India GST)?

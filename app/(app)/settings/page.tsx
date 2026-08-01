@@ -14,12 +14,17 @@ export default async function SettingsPage() {
   const isOwner = tenant.role === "owner"
 
   const supabase = await createClient()
-  const [{ data: settings }, { data: branches }, { data: printers }, { data: printJobs }] =
-    await Promise.all([
+  const [
+    { data: settings },
+    { data: branches },
+    { data: printers },
+    { data: printJobs },
+    { data: printerLimit },
+  ] = await Promise.all([
     supabase
       .from("tenant_settings")
       .select(
-        "currency, timezone, service_charge, packaging_fee, tax_rules, receipt_template, block_negative_stock, payment_gateway",
+        "currency, timezone, service_charge, packaging_fee, tax_rules, receipt_template, block_negative_stock, payment_gateway, printing_mode",
       )
       .eq("tenant_id", tenant.tenantId)
       .maybeSingle(),
@@ -32,20 +37,20 @@ export default async function SettingsPage() {
     supabase
       .from("printers")
       .select(
-        "id, name, connection, host, port, system_name, paper_width, role, is_default, is_active",
+        "id, name, branch_id, connection, host, port, system_name, usb_vendor_id, usb_product_id, bt_address, paper_width, render_mode, auto_cut, open_drawer, is_active, printer_documents(doc, copies)",
       )
       .eq("tenant_id", tenant.tenantId)
-      .order("is_default", { ascending: false })
       .order("name"),
-    // Enough history to spot a printer that keeps failing, not an audit trail.
+    // Deep enough to show a queue that is stuck as well as one that is idle.
     supabase
       .from("print_jobs")
       .select(
-        "id, type, status, attempts, error, created_at, kot_id, bill_id, printer_id, printers(name)",
+        "id, doc, status, attempts, error, created_at, claimed_by, kot_id, bill_id, order_id, printer_id, printers(name)",
       )
       .eq("tenant_id", tenant.tenantId)
       .order("created_at", { ascending: false })
-      .limit(20),
+      .limit(30),
+    supabase.rpc("tenant_limit", { _tenant: tenant.tenantId, _key: "printers" }),
   ])
 
   // Owner-only Dangerous Area: usage counts, plan denominators, transfer
@@ -157,6 +162,8 @@ export default async function SettingsPage() {
         canManageBranches={tenant.role === "owner" || tenant.role === "manager"}
         printers={(printers ?? []) as unknown as PrinterRow[]}
         printJobs={(printJobs ?? []) as unknown as PrintJobRow[]}
+        printerLimit={typeof printerLimit === "number" ? printerLimit : null}
+        printingMode={settings?.printing_mode === "cloud" ? "cloud" : "local"}
         canManagePrinters={tenant.role === "owner" || tenant.role === "manager"}
         danger={danger}
       />

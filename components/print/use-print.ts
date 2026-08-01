@@ -2,80 +2,100 @@
 
 import { useCallback } from "react"
 import { toast } from "sonner"
-import {
-  getBillPrintJob,
-  getKotPrintJob,
-  getTestPrintJob,
-} from "@/app/(app)/print/actions"
-import { dispatchJob } from "@/lib/print/dispatch"
+import { enqueuePrint, type EnqueueInput } from "@/app/(app)/print/actions"
 import { usePrintAgent } from "./print-provider"
 
 /**
- * The one way the app prints. Every caller — fire, re-fire, KDS, checkout,
- * settings test — goes through here so routing, the job log and the browser
- * fallback stay identical everywhere.
+ * The one way the app asks for paper.
+ *
+ * Nothing prints from here. Every caller — fire, re-fire, KDS, checkout,
+ * settings test — queues the document, and whichever machine has the agent
+ * takes it off the queue (see auto-print-worker.tsx, or the headless agent in
+ * cloud mode). That is what makes a ticket print exactly once no matter how
+ * many POS tabs are open, and what lets an order placed from a QR menu print
+ * with no browser involved at all.
  */
+export type PrintOutcome = "queued" | "no-printer" | "failed"
+
 export function usePrint() {
-  const { connected, sendRaw, status } = usePrintAgent()
+  const { connected, status } = usePrintAgent()
 
-  const printKot = useCallback(
-    async (kotId: string, opts?: { reprint?: boolean; quiet?: boolean }) => {
-      const job = await getKotPrintJob(kotId, { reprint: opts?.reprint })
-      if ("error" in job) {
-        toast.error(job.error)
-        return "failed" as const
-      }
-      return dispatchJob(job, { connected, sendRaw, quiet: opts?.quiet })
-    },
-    [connected, sendRaw],
-  )
+  const print = useCallback(async (input: EnqueueInput): Promise<PrintOutcome> => {
+    const res = await enqueuePrint(input)
 
-  /**
-   * A whole order's tickets: one summary toast, not one per station — and it
-   * reports what actually happened, including the ones that didn't print.
-   */
+    if ("error" in res) {
+      toast.error(res.error)
+      return "failed"
+    }
+
+    if ("noPrinter" in res) {
+      const url = res.fallbackUrl
+      toast.warning("No printer is set up for this yet.", {
+        description: url
+          ? "Open the print view, or add a printer in Settings → Printers."
+          : "Add one in Settings → Printers.",
+        // An explicit click, so the popup blocker never eats it — which is
+        // exactly what happened when this opened itself after an await.
+        action: url
+          ? { label: "Open print view", onClick: () => window.open(url, "_blank", "noopener") }
+          : undefined,
+      })
+      return "no-printer"
+    }
+
+    if (!res.jobIds.length) {
+      toast.error("That document could not be queued.")
+      return "failed"
+    }
+    return "queued"
+  }, [])
+
+  /** A whole order's tickets. One call per station; the worker reports. */
   const printKots = useCallback(
     async (kotIds: string[], opts?: { reprint?: boolean }) => {
       if (!kotIds.length) return
-      const results = await Promise.all(
-        kotIds.map((id) => printKot(id, { reprint: opts?.reprint, quiet: true })),
+      await Promise.all(
+        kotIds.map((kotId) => print({ doc: "kot", kotId, reprint: opts?.reprint })),
       )
-      const count = (kind: string) => results.filter((r) => r === kind).length
-      const printed = count("agent")
-      const browser = count("browser")
-      const failed = count("failed")
-      const word = (n: number) => `${n} ticket${n === 1 ? "" : "s"}`
-      if (printed) toast.success(`${opts?.reprint ? "Re-printed" : "Printed"} ${word(printed)}`)
-      if (browser)
-        toast.warning(`${word(browser)} opened in the browser — no printer connected`)
-      if (failed) toast.error(`${word(failed)} could not be printed`)
     },
-    [printKot],
+    [print],
+  )
+
+  const printKot = useCallback(
+    (kotId: string, opts?: { reprint?: boolean }) =>
+      print({ doc: "kot", kotId, reprint: opts?.reprint }),
+    [print],
   )
 
   const printBill = useCallback(
-    async (billId: string) => {
-      const job = await getBillPrintJob(billId)
-      if ("error" in job) {
-        toast.error(job.error)
-        return "failed" as const
-      }
-      return dispatchJob(job, { connected, sendRaw })
-    },
-    [connected, sendRaw],
+    (billId: string) => print({ doc: "bill", billId, reprint: true }),
+    [print],
+  )
+
+  const printOrderSlip = useCallback(
+    (orderId: string) => print({ doc: "order_slip", orderId, reprint: true }),
+    [print],
+  )
+
+  const printFullKot = useCallback(
+    (orderId: string) => print({ doc: "full_kot", orderId, reprint: true }),
+    [print],
   )
 
   const printTest = useCallback(
-    async (printerId: string) => {
-      const job = await getTestPrintJob(printerId)
-      if ("error" in job) {
-        toast.error(job.error)
-        return "failed" as const
-      }
-      return dispatchJob(job, { connected, sendRaw })
-    },
-    [connected, sendRaw],
+    (printerId: string) => print({ doc: "test", printerId, reprint: true }),
+    [print],
   )
 
-  return { agentStatus: status, connected, printKot, printKots, printBill, printTest }
+  return {
+    agentStatus: status,
+    connected,
+    print,
+    printKot,
+    printKots,
+    printBill,
+    printOrderSlip,
+    printFullKot,
+    printTest,
+  }
 }
