@@ -8,14 +8,13 @@ import { bumpKot } from "@/app/(app)/kds/actions"
 import { voidLine } from "@/app/(app)/pos/actions"
 import { createClient } from "@/lib/supabase/client"
 import { KOT_CARD_SELECT, KOT_TAB_STATUSES } from "@/lib/pos-constants"
-import { KOT_FLOW } from "@/lib/kds-constants"
+import { KOT_ACTIVE_STATUSES, KOT_FLOW } from "@/lib/kds-constants"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { usePrint } from "@/components/print/use-print"
 import { KotCard, type KotTicket, type KotTicketLine } from "@/components/pos/kot-card"
 import type { PosKot, PosStaff } from "@/components/pos/types"
 
-const ACTIVE = ["new", "preparing", "ready"]
 // Once an order is billed/closed/cancelled a line void can't recompute a paid
 // bill — cancel is withdrawn rather than corrupting the total.
 const UNCANCELLABLE = ["billed", "closed", "cancelled"]
@@ -120,7 +119,7 @@ export function KotTab({
     }
   }, [tenantId, refetch])
 
-  const visible = showCompleted ? kots : kots.filter((k) => ACTIVE.includes(k.status))
+  const visible = showCompleted ? kots : kots.filter((k) => KOT_ACTIVE_STATUSES.includes(k.status))
 
   const tickets: KotTicket[] = useMemo(() => {
     const meta = (k: PosKot) => ({

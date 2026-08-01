@@ -11,6 +11,7 @@ import { createClient } from "@/lib/supabase/client"
 import {
   kotStatusLabel,
   KDS_SELECT,
+  KOT_ACTIVE_STATUSES,
   KOT_FLOW,
   KOT_STATUS_META,
   type KotStatus,
@@ -29,7 +30,6 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 
-const ACTIVE = ["new", "preparing", "ready"]
 // Bumped tickets stay recallable for a short window.
 const RECALL_WINDOW_MS = 20 * 60 * 1000
 const STORAGE_KEY = "kds:station"
@@ -107,7 +107,7 @@ export function KdsBoard({
   const refetch = useCallback(async () => {
     const supabase = createClient()
     const [act, srv] = await Promise.all([
-      scoped(supabase.from("kots")).in("status", ACTIVE).order("created_at", { ascending: true }),
+      scoped(supabase.from("kots")).in("status", KOT_ACTIVE_STATUSES).order("created_at", { ascending: true }),
       scoped(supabase.from("kots"))
         .eq("status", "served")
         .gte("created_at", new Date(Date.now() - RECALL_WINDOW_MS).toISOString())

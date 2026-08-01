@@ -6,6 +6,16 @@
 export const KOT_FLOW = ["new", "preparing", "ready", "served"] as const
 export type KotStatus = (typeof KOT_FLOW)[number] | "recalled"
 
+/**
+ * Tickets still on the board.
+ *
+ * `recalled` belongs here: `recall_kot` writes it (the action used to write
+ * `preparing`, which made the value unreachable), and a recalled ticket is
+ * precisely one the kitchen has been asked to look at again. Leave it out of a
+ * filter and pulling a ticket back makes it disappear.
+ */
+export const KOT_ACTIVE_STATUSES = ["new", "preparing", "ready", "recalled"]
+
 /** Ticket status in plain English — the kitchen never sees a raw enum. */
 const KOT_STATUS_LABEL: Record<string, string> = {
   new: "New",
@@ -38,7 +48,7 @@ export const KOT_STATUS_STYLE: Record<string, string> = {
 export type KotStatusMeta = {
   label: string
   /** lucide icon name — see KOT_STATUS_ICON in components/kds/status-icon.tsx */
-  icon: "clock" | "flame" | "bell" | "check"
+  icon: "clock" | "flame" | "bell" | "check" | "undo"
   style: string
   /** What this status means to a cook, for the status dialog. */
   hint: string
@@ -48,7 +58,7 @@ export type KotStatusMeta = {
   tone: string
 }
 
-export const KOT_STATUS_META: Record<(typeof KOT_FLOW)[number], KotStatusMeta> = {
+export const KOT_STATUS_META: Record<KotStatus, KotStatusMeta> = {
   new: {
     label: "New",
     icon: "clock",
@@ -81,18 +91,30 @@ export const KOT_STATUS_META: Record<(typeof KOT_FLOW)[number], KotStatusMeta> =
     action: "Served",
     tone: "text-muted-foreground",
   },
+  // A real status since recall_kot started writing it. Without a row here the
+  // icon fell back to an X, which reads as "cancelled" — the opposite of a
+  // ticket the kitchen has been asked to look at again.
+  recalled: {
+    label: "Recalled",
+    icon: "undo",
+    style: KOT_STATUS_STYLE.recalled,
+    hint: "Pulled back onto the board",
+    action: "Recall",
+    tone: "text-orange-700 dark:text-orange-400",
+  },
 }
 
-/**
- * Status metadata for any status string, including 'recalled' (which is a real
- * kot_status but not a step in the bump flow, so it has no META row).
- */
+/** Status metadata for any status string, `recalled` included. */
 export function kotStatusMeta(status: string): KotStatusMeta | undefined {
   return KOT_STATUS_META[status as keyof typeof KOT_STATUS_META]
 }
 
 /** Next status in the bump flow, or null if terminal. */
 export function nextKotStatus(status: string): KotStatus | null {
+  // Recalled is not a step in the flow — it is "back on the pass", so it
+  // advances to ready. Without this the advance button vanishes and a recalled
+  // ticket is stranded on the board.
+  if (status === "recalled") return "ready"
   const i = KOT_FLOW.indexOf(status as (typeof KOT_FLOW)[number])
   if (i < 0 || i >= KOT_FLOW.length - 1) return null
   return KOT_FLOW[i + 1]

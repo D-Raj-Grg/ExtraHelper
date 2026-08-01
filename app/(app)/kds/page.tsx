@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server"
 import { requirePermission } from "@/lib/supabase/guards"
 import { KdsBoard } from "@/components/kds-board"
 import { EightySixPanel } from "@/components/eighty-six-panel"
-import { KDS_SELECT } from "@/lib/kds-constants"
+import { KDS_SELECT, KOT_ACTIVE_STATUSES } from "@/lib/kds-constants"
 
 // KDS should reflect the kitchen live; don't cache.
 export const dynamic = "force-dynamic"
@@ -35,7 +35,7 @@ export default async function KdsPage({
     .from("kots")
     .select(KDS_SELECT)
     .eq("tenant_id", tenant.tenantId)
-    .in("status", ["new", "preparing", "ready"])
+    .in("status", KOT_ACTIVE_STATUSES)
     .order("created_at", { ascending: true })
   if (station === "expo") active = active.is("station_id", null)
   else if (station) active = active.eq("station_id", station)

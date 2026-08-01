@@ -6,6 +6,7 @@ import { PlusIcon, WifiOffIcon } from "lucide-react"
 
 import { createClient } from "@/lib/supabase/client"
 import { ACTIVE_ORDER_STATUSES, ORDER_CARD_SELECT } from "@/lib/pos-constants"
+import { KOT_ACTIVE_STATUSES } from "@/lib/kds-constants"
 import { loadMenuCache, saveMenuCache } from "@/lib/offline/menu-cache"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -18,7 +19,6 @@ import { OrderModal, type PosModalState } from "@/components/pos/order-modal"
 import { usePosRealtime } from "@/components/pos/use-pos-realtime"
 import type { PosData, PosOrderCard, PosOrderDetail } from "@/components/pos/types"
 
-const KOT_ACTIVE = ["new", "preparing", "ready"]
 
 /**
  * The POS surface: a board of active orders, and the composer over it.
@@ -164,7 +164,7 @@ export function PosScreen({
   const counts: Record<PosTab, number> = {
     orders: orders.length,
     table: tables.length,
-    kot: posData.kots.filter((k) => KOT_ACTIVE.includes(k.status)).length,
+    kot: posData.kots.filter((k) => KOT_ACTIVE_STATUSES.includes(k.status)).length,
   }
 
   return (

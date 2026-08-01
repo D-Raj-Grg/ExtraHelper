@@ -9,6 +9,7 @@
  *
  * If these two diverge, the first Realtime ping visibly strips the order cards.
  */
+import { KOT_ACTIVE_STATUSES } from "@/lib/kds-constants"
 
 /**
  * The !orders_table_id_fkey hint is load-bearing: orders has two FKs to
@@ -33,7 +34,7 @@ export const KOT_CARD_SELECT =
   "kot_items(id, qty, order_items(id, name_snapshot, is_void, notes, order_item_modifiers(name_snapshot, qty)))"
 
 /** KOT statuses the POS tab pulls — active plus served (served hidden until the toggle). */
-export const KOT_TAB_STATUSES = ["new", "preparing", "ready", "served"]
+export const KOT_TAB_STATUSES = [...KOT_ACTIVE_STATUSES, "served"]
 
 export const ORDER_DETAIL_SELECT =
   "id, status, order_type, table_id, guests, waiter_id, customer_id, bill_id, " +

@@ -2,37 +2,29 @@
 
 import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
-import { requireRole } from "@/lib/supabase/guards"
+import { requirePermission, requireRole } from "@/lib/supabase/guards"
 import type { KotStatus } from "@/lib/kds-constants"
 
 export type KdsState = { error: string } | { ok: true } | undefined
 
-/** Advance (bump) a KOT ticket + its items to a new status. */
+/**
+ * Advance (bump) a KOT ticket + its live items to a new status.
+ *
+ * Thin wrapper over `set_kot_status`. It used to update `kots` and `kot_items`
+ * directly, which meant the only guard was the `requireRole` above it — and RLS
+ * on both tables is tenant-scoped only, so any member could bump any ticket
+ * through the API. The rule lives in Postgres now, where the Flutter kitchen
+ * board reaches it too.
+ */
 export async function bumpKot(kotId: string, status: KotStatus): Promise<KdsState> {
-  const tenant = await requireRole("owner", "manager", "kitchen")
+  await requirePermission("kds.bump")
   const supabase = await createClient()
 
-  const { error } = await supabase
-    .from("kots")
-    .update({ status })
-    .eq("id", kotId)
-    .eq("tenant_id", tenant.tenantId)
+  const { error } = await supabase.rpc("set_kot_status", {
+    _kot_id: kotId,
+    _status: status,
+  })
   if (error) return { error: error.message }
-  // Keep item statuses in step with the ticket.
-  await supabase
-    .from("kot_items")
-    .update({ status })
-    .eq("kot_id", kotId)
-    .eq("tenant_id", tenant.tenantId)
-
-  // Propagate ticket progress up to the parent order status.
-  const { data: kot } = await supabase
-    .from("kots")
-    .select("order_id")
-    .eq("id", kotId)
-    .eq("tenant_id", tenant.tenantId)
-    .maybeSingle()
-  if (kot?.order_id) await supabase.rpc("sync_order_status_from_kots", { _order_id: kot.order_id })
 
   revalidatePath("/kds")
   // The POS KOT tab reads the same tickets — keep its server-seeded list fresh.
@@ -49,7 +41,7 @@ export async function setKotItemStatus(
   kotItemId: string,
   status: KotStatus,
 ): Promise<KdsState> {
-  await requireRole("owner", "manager", "kitchen")
+  await requirePermission("kds.bump")
   const supabase = await createClient()
   const { error } = await supabase.rpc("set_kot_item_status", {
     _kot_item_id: kotItemId,
@@ -74,42 +66,29 @@ export async function markServed(orderId: string): Promise<KdsState> {
 
 /** Stamp a KOT as printed (fed by the browser print view). Idempotent-ish. */
 export async function markKotPrinted(kotId: string): Promise<KdsState> {
-  const tenant = await requireRole("owner", "manager", "kitchen", "waiter", "cashier")
+  await requirePermission("kds.view")
   const supabase = await createClient()
-  const { error } = await supabase
-    .from("kots")
-    .update({ printed_at: new Date().toISOString() })
-    .eq("id", kotId)
-    .eq("tenant_id", tenant.tenantId)
+  const { error } = await supabase.rpc("mark_kot_printed", { _kot_id: kotId })
   if (error) return { error: error.message }
   return { ok: true }
 }
 
-/** Recall a bumped ticket back onto the board (served/ready → preparing). */
+/**
+ * Recall a bumped ticket back onto the board.
+ *
+ * Now writes the `recalled` status rather than `preparing`. The old direct
+ * update made `recalled` unreachable, so `mark_order_served`'s
+ * `status <> 'recalled'` exclusion never fired and a ticket pulled back could
+ * be swept to served underneath the cook. The RPC also audits it.
+ */
 export async function recallKot(kotId: string): Promise<KdsState> {
-  const tenant = await requireRole("owner", "manager", "kitchen")
+  await requirePermission("kds.bump")
   const supabase = await createClient()
 
-  const { error } = await supabase
-    .from("kots")
-    .update({ status: "preparing" })
-    .eq("id", kotId)
-    .eq("tenant_id", tenant.tenantId)
+  const { error } = await supabase.rpc("recall_kot", { _kot_id: kotId })
   if (error) return { error: error.message }
-  await supabase
-    .from("kot_items")
-    .update({ status: "preparing" })
-    .eq("kot_id", kotId)
-    .eq("tenant_id", tenant.tenantId)
-
-  const { data: kot } = await supabase
-    .from("kots")
-    .select("order_id")
-    .eq("id", kotId)
-    .eq("tenant_id", tenant.tenantId)
-    .maybeSingle()
-  if (kot?.order_id) await supabase.rpc("sync_order_status_from_kots", { _order_id: kot.order_id })
 
   revalidatePath("/kds")
+  revalidatePath("/pos")
   return { ok: true }
 }

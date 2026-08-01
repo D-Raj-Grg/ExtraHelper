@@ -1,6 +1,13 @@
 "use client"
 
-import { BellIcon, CheckIcon, ClockIcon, FlameIcon, XIcon } from "lucide-react"
+import {
+  BellIcon,
+  CheckIcon,
+  ClockIcon,
+  FlameIcon,
+  RotateCcwIcon,
+  XIcon,
+} from "lucide-react"
 import { kotStatusMeta } from "@/lib/kds-constants"
 import { cn } from "@/lib/utils"
 
@@ -9,6 +16,7 @@ const ICONS = {
   flame: FlameIcon,
   bell: BellIcon,
   check: CheckIcon,
+  undo: RotateCcwIcon,
 } as const
 
 /**
