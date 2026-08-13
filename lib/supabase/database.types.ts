@@ -3278,6 +3278,18 @@ export type Database = {
         }
         Returns: number
       }
+      amend_order_add_custom_item: {
+        Args: {
+          _course?: number
+          _name: string
+          _notes?: string
+          _order_id: string
+          _qty?: number
+          _seat?: number
+          _unit_price_cents: number
+        }
+        Returns: string
+      }
       amend_order_add_item: {
         Args: {
           _course?: number
@@ -3340,9 +3352,9 @@ export type Database = {
         Args: {
           _branch: string
           _claimer: string
-          _connections?: string[] | null
+          _connections?: string[]
           _limit: number
-          _render_modes?: string[] | null
+          _render_modes?: string[]
           _tenant: string
         }
         Returns: {
@@ -3474,6 +3486,10 @@ export type Database = {
       }
       mark_kot_printed: { Args: { _kot_id: string }; Returns: undefined }
       mark_order_served: { Args: { _order_id: string }; Returns: undefined }
+      merge_receipt_template: {
+        Args: { _patch: Json; _tenant: string }
+        Returns: Json
+      }
       open_cash_session: {
         Args: {
           _branch_id: string

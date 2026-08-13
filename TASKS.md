@@ -144,7 +144,8 @@ launch, once the feature backlog settles — the owner's call, made knowingly.
   reconstructed. This is the strongest argument for Pro, stronger than the password item below.
 
 **Launch gates — all must clear before the first real restaurant, none are code:**
-- [ ] **Repair the migration ledger** (see below). Do this first — it gates every other schema change.
+- [x] **Repair the migration ledger** (see below) — done 2026-08-13. `db push` is no longer a loaded
+      gun; every repo migration is recorded as applied.
 - [ ] Clear the three test tenants. Measured 2026-07-31, all three are on prod:
       `d-raj` "The Sekuwa Station" (36 orders / 23 bills), `d-raj-a859` **same name, a duplicate from
       testing `provision_tenant(_force_new)`** (6 / 4), both owned by `clixacom@gmail.com`; and
@@ -241,19 +242,61 @@ their objects**. The `create table` / `create policy` / `create type` ones would
 `create or replace function` ones would silently re-apply, including at an old arity — the exact trap
 that produced the duplicate `dashboard_summary` overload. On prod, with 23 paid bills in it.
 
-- [ ] `brew install supabase/tap/supabase`, then `supabase link --project-ref ixrcdtwdcpsmlbocvejv`.
-- [ ] `supabase migration list --linked` — confirm the 56/57 split from the CLI's own mouth.
-- [ ] `supabase migration repair --status applied <version>` for each of the 56 repo-only versions.
-      **This executes no SQL** — it only inserts the version into the ledger, teaching it what the
-      database already knows. **`db push` must never be the command here.**
-- [ ] `--status reverted` for the 57 MCP-stamped remote-only versions, so the ledger stops carrying
-      two entries per migration.
-- [ ] Re-run `migration list --linked` (expect a clean match), then `supabase gen types --linked` and
-      diff against `lib/supabase/database.types.ts`. A diff there means the drift is worse than a
-      ledger problem.
+### Repaired 2026-08-13
 
-Until that passes, keep applying new migrations through the MCP exactly as today — **do not mix the
-two paths mid-repair.**
+Done through the MCP connection rather than the CLI: `migration repair` only inserts or deletes rows
+in `supabase_migrations.schema_migrations`, and `supabase link` wants the database password. Same
+effect, no credential handling, and **no SQL ran against the schema**. The table was copied to
+`supabase_migrations.schema_migrations_backup_20260813` first.
+
+- [x] Every ledger row classified before touching anything: **36** matched on version *and* name,
+      **63** were the same migration under two stamps, **3** were repo files whose name appears
+      nowhere in the ledger, **4** were MCP rows with no repo file, and `dashboard_summary` was
+      recorded twice (the duplicate-overload incident; only one overload survives in the catalog).
+- [x] The 3 unmatched repo files (`item_discounts_coupons`, `amend_order_add_item`,
+      `report_sales_guard`) were confirmed applied by querying the catalog for the objects they
+      create — `apply_item_discount`, `apply_coupon`, `bill_discount_total`, `amend_order_add_item`,
+      the coupons table, `report_sales` — before being marked applied. Marking a file applied whose
+      SQL never ran is the one way this repair could bless real drift.
+- [x] 65 inserts, 63 deletes. **Repo files missing from the ledger: 65 → 0.** `db push` now attempts
+      nothing, which was the whole danger.
+- [x] Types regenerated and diffed. Only four differences, none of them schema drift: the committed
+      file predated `amend_order_add_custom_item` and `merge_receipt_template`, and carried two hand
+      edits (`claim_print_jobs` args typed `string[] | null` where the generator emits `string[]`).
+      Regenerated clean; `tsc`, `lint` and `build` pass without the hand edits, so they were not
+      load-bearing.
+
+**The 4 MCP rows with no repo file were deliberately left in place** rather than marked reverted as
+this plan originally said. Marking them reverted would delete the only record they ran while no file
+exists to re-create them:
+
+| version | name |
+|---|---|
+| `20260712042454` | `place_staff_order_waiter` |
+| `20260720153524` | `dangerous_area_reservations_fix` |
+| `20260730155626` | `set_stock_count_actual_generated_variance` |
+| `20260801044543` | `printing_v2_tenant_limit_guard` |
+
+Each one's *effect* is already carried by a repo file under another name, checked individually:
+`_waiter` is in `20260720090000_place_staff_order_modifier_link_audit`; `20260720120000_dangerous_area`
+already deletes reservations before tables; `20260730214500_inventory_ops` already treats `variance`
+as generated (the column itself comes from `20260710095939_inventory_customers`); and the
+`tenant_limit` guard is in `20260801090100_printing_bluetooth`'s `save_printer`. So the repo can
+recreate the database — these four rows are historical stamps, not missing schema. Writing
+reconstruction files for them would replay definitions the repo already sets elsewhere, which is how
+the duplicate `dashboard_summary` overload happened in the first place.
+
+- [ ] Optional tidy: once the CLI is linked, `supabase migration list --linked` will show those four
+      as remote-only. Either leave them (harmless — `db push` skips them) or squash them into the
+      repo files that already carry their effect. Do not mark them reverted without first writing a
+      file.
+- [ ] `brew install supabase/tap/supabase` + `supabase link --project-ref ixrcdtwdcpsmlbocvejv` is
+      still worth doing so `db push` and `gen types` are available from the CLI. The ledger is
+      already correct, so linking is now safe.
+
+New migrations may go through either path from here — the ledger describes reality again. Keep using
+the MCP for consistency, and always add the matching file to `supabase/migrations/` in the same
+change, which is the habit whose absence created all of this.
 
 ## Printing v2 — a queue in Postgres, not a browser tab (2026-08-01)
 
