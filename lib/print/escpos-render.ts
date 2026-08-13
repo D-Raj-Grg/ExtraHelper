@@ -3,7 +3,7 @@
  * actually built for. Knows nothing about bills or tickets — see docs.ts.
  */
 
-import { EscPos } from "./escpos"
+import { EscPos, wrapText } from "./escpos"
 import { bitmapToEscPos, printableDots } from "./bitmap"
 import type { DocBlock, PrintDocModel } from "./docs"
 
@@ -83,6 +83,9 @@ function block(p: EscPos, b: DocBlock, dots: number): void {
     case "item":
       return item(p, b)
 
+    case "particulars":
+      return particulars(p, b)
+
     case "row": {
       p.align("left")
       if (b.bold) p.bold(true)
@@ -92,6 +95,53 @@ function block(p: EscPos, b: DocBlock, dots: number): void {
       if (b.bold) p.bold(false)
       return
     }
+  }
+}
+
+/** Below this many columns for the dish name, four columns stop being readable. */
+const MIN_NAME_COLS = 12
+
+/**
+ * The Particular / Rate / Qty / Amount table.
+ *
+ * Column widths come from the widest cell in the whole table, so the money
+ * lines up; the name column takes whatever is left. An 80mm roll has 48
+ * columns and fits all four comfortably. A 58mm roll has 32, and forcing four
+ * columns there leaves ~8 for the dish name — every name wraps to three lines
+ * and the table is less legible than no table at all. So it degrades: name on
+ * its own line, `qty x rate` indented under it with the amount to the right.
+ */
+function particulars(p: EscPos, b: Extract<DocBlock, { kind: "particulars" }>): void {
+  if (b.rows.length === 0) return
+  p.align("left")
+
+  const rateW = Math.max(4, ...b.rows.map((r) => r.rate.length))
+  const qtyW = Math.max(3, ...b.rows.map((r) => String(r.qty).length))
+  const amountW = Math.max(6, ...b.rows.map((r) => r.amount.length))
+  // Three single spaces between the four columns.
+  const nameW = p.cols - rateW - qtyW - amountW - 3
+
+  if (nameW < MIN_NAME_COLS) {
+    for (const r of b.rows) {
+      p.wrapped(r.name)
+      p.twoCol(`   ${r.qty} x ${r.rate}`, r.amount)
+    }
+    return
+  }
+
+  const row = (name: string, rate: string, qty: string, amount: string) =>
+    `${name.padEnd(nameW).slice(0, nameW)} ${rate.padStart(rateW)} ${qty.padStart(qtyW)} ${amount.padStart(amountW)}`
+
+  p.bold(true)
+  p.line(row("Particular", "Rate", "Qty", "Amount"))
+  p.bold(false)
+
+  for (const r of b.rows) {
+    // A name too long for its column wraps into the column rather than being
+    // chopped — the guest has to be able to read what they are paying for.
+    const [first, ...rest] = wrapText(r.name, nameW)
+    p.line(row(first ?? "", r.rate, String(r.qty), r.amount))
+    for (const line of rest) p.line(line.padEnd(nameW).slice(0, nameW))
   }
 }
 

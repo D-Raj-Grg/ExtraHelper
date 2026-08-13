@@ -11,7 +11,7 @@
  * Plain module — no server imports, safe from either side.
  */
 
-import { formatDateTime, money } from "@/lib/format"
+import { amountInWords, formatDateTime, money } from "@/lib/format"
 import type { PrintBitmap } from "./bitmap"
 
 export type DocAlign = "left" | "center" | "right"
@@ -46,6 +46,20 @@ export type DocBlock =
       emphasis?: boolean
     }
   | { kind: "row"; label: string; value: string; bold?: boolean; large?: boolean }
+  /**
+   * The invoice's Particular / Rate / Qty / Amount table.
+   *
+   * Every row arrives together rather than one block each, because the columns
+   * can only be aligned once the widest rate and amount in the whole table are
+   * known — laid out row by row, "NPR 2,800.00" and "NPR 30.00" would not line
+   * up. The renderers decide whether the four columns fit at all: on a 58mm
+   * roll they do not, and each row degrades to a name line with `qty x rate`
+   * under it.
+   */
+  | {
+      kind: "particulars"
+      rows: { name: string; rate: string; qty: number; amount: string }[]
+    }
   /** A column ruler; only the test page uses it. */
   | { kind: "ruler" }
   /**
@@ -268,7 +282,7 @@ export type BillDoc = {
   billShortId: string
   destination: string
   createdAt: string
-  items: { description: string; qty: number; totalCents: number }[]
+  items: { description: string; qty: number; unitPriceCents: number; totalCents: number }[]
   subtotalCents: number
   serviceChargeCents: number
   taxCents: number
@@ -280,34 +294,111 @@ export type BillDoc = {
   logo?: DocImage
   qr?: DocImage
   qrCaption?: string
+  /** Settled bills are a tax invoice; an unsettled one must not claim to be. */
+  settled?: boolean
+  /** Absent for a walk-in, and then the line is omitted rather than filled in. */
+  customerName?: string
+  servedBy?: string | null
+  /** Per-bill extras the cashier added, e.g. "Cake plating". */
+  charges?: { label: string; amountCents: number }[]
+  tipCents?: number
+  roundingCents?: number
+  note?: string | null
 }
 
-/** Mirrors components/receipt-view.tsx line for line. */
+/**
+ * Same dish at the same rate collapses to one particular.
+ *
+ * `bill_items` keeps one row per order line, so three teas ordered in three
+ * rounds are three rows. A guest reading the slip counts three teas and one
+ * price each, and thinks they have been charged wrong. The checkout preview
+ * groups them; paper has to group them identically or the two documents
+ * disagree about a number the guest is holding.
+ */
+function groupParticulars(items: BillDoc["items"]) {
+  const by = new Map<string, { name: string; rate: number; qty: number; amount: number }>()
+  for (const it of items) {
+    const key = `${it.description}|${it.unitPriceCents}`
+    const row = by.get(key)
+    if (row) {
+      row.qty += it.qty
+      row.amount += it.totalCents
+    } else {
+      by.set(key, {
+        name: it.description,
+        rate: it.unitPriceCents,
+        qty: it.qty,
+        amount: it.totalCents,
+      })
+    }
+  }
+  return [...by.values()]
+}
+
+
+/**
+ * Mirrors `components/checkout/invoice-preview.tsx` block for block.
+ *
+ * That preview is what the cashier reads while settling, and it is the document
+ * the restaurant recognises as its invoice — headed rate/qty/amount columns,
+ * the total spelled out in words, who served the table. Paper used to say
+ * strictly less: `3 x Shikhar Ice … NPR 75.00` with no unit price to check the
+ * arithmetic against, and no named customer. Two documents for one transaction
+ * is a support call waiting to happen, so this builds the same thing.
+ */
 export function buildBill(r: BillDoc): PrintDocModel {
   const blocks: DocBlock[] = []
+  const settled = r.settled !== false
+
   if (r.logo) blocks.push({ kind: "image", variants: r.logo, alt: r.tenantName })
+  // "Invoice", not "Tax invoice": that phrase is a specific document — issued by
+  // a VAT-registered seller, carrying their PAN — and this tenant is neither
+  // registered nor printing a PAN. A heading is a claim, and paper is what an
+  // inspector reads. "Estimate" for an unsettled bill, which is not yet a
+  // record of anything and must not be walked out with as though it were.
+  blocks.push({ kind: "title", text: settled ? "INVOICE" : "ESTIMATE" })
   // The name stays even with a logo above it: a mark alone rarely survives a
   // 1-bit thermal head well enough to name the restaurant on a tax document.
-  blocks.push({ kind: "title", text: r.tenantName.toUpperCase() })
+  blocks.push({ kind: "subtitle", text: r.tenantName })
   if (r.header) blocks.push({ kind: "line", text: r.header, align: "center" })
+
   blocks.push(
-    { kind: "line", text: r.destination, align: "center" },
-    { kind: "line", text: formatDateTime(r.createdAt, r.timezone), align: "center" },
-    { kind: "line", text: `Bill #${r.billShortId}`, align: "center" },
     { kind: "divider" },
+    { kind: "row", label: "Invoice no", value: r.billShortId },
+    { kind: "row", label: "Date", value: formatDateTime(r.createdAt, r.timezone) },
+    { kind: "line", text: r.destination, align: "left" },
   )
-
-  for (const it of r.items) {
-    blocks.push({
-      kind: "item",
-      qty: it.qty,
-      name: it.description,
-      amount: money(it.totalCents, r.currency),
-    })
-  }
-
+  // A walk-in has no name to print, and "Customer: Walk-in" is a line that
+  // tells the guest nothing on the majority of receipts.
+  if (r.customerName)
+    blocks.push({ kind: "line", text: `Customer: ${r.customerName}`, align: "left" })
   blocks.push({ kind: "divider" })
-  blocks.push({ kind: "row", label: "Subtotal", value: money(r.subtotalCents, r.currency) })
+
+  blocks.push({
+    kind: "particulars",
+    rows: groupParticulars(r.items).map((g) => ({
+      name: g.name,
+      rate: money(g.rate, r.currency),
+      qty: g.qty,
+      amount: money(g.amount, r.currency),
+    })),
+  })
+
+  // Sub total only earns its line when something sits between it and the total.
+  // Printing the same figure twice, two lines apart, makes a guest hunt for the
+  // difference between them. With nothing to show, the section collapses
+  // entirely — including its rule, or the ticket prints two dividers touching.
+  const hasAdjustments =
+    r.serviceChargeCents > 0 ||
+    r.taxCents > 0 ||
+    r.discountCents > 0 ||
+    (r.tipCents ?? 0) > 0 ||
+    (r.roundingCents ?? 0) !== 0 ||
+    (r.charges?.length ?? 0) > 0
+  if (hasAdjustments) {
+    blocks.push({ kind: "divider" })
+    blocks.push({ kind: "row", label: "Sub total", value: money(r.subtotalCents, r.currency) })
+  }
   if (r.serviceChargeCents > 0)
     blocks.push({
       kind: "row",
@@ -316,6 +407,8 @@ export function buildBill(r: BillDoc): PrintDocModel {
     })
   if (r.taxCents > 0)
     blocks.push({ kind: "row", label: "Tax", value: money(r.taxCents, r.currency) })
+  for (const c of r.charges ?? [])
+    blocks.push({ kind: "row", label: c.label, value: money(c.amountCents, r.currency) })
   // Signed, not just coloured — a discount must read as a subtraction on paper.
   if (r.discountCents > 0)
     blocks.push({
@@ -323,9 +416,23 @@ export function buildBill(r: BillDoc): PrintDocModel {
       label: "Discount",
       value: `-${money(r.discountCents, r.currency)}`,
     })
+  if (r.tipCents && r.tipCents > 0)
+    blocks.push({ kind: "row", label: "Tip", value: money(r.tipCents, r.currency) })
+  if (r.roundingCents)
+    blocks.push({ kind: "row", label: "Round off", value: money(r.roundingCents, r.currency) })
+
   blocks.push(
     { kind: "divider", char: "=" },
-    { kind: "row", label: "TOTAL", value: money(r.totalCents, r.currency), bold: true, large: true },
+    {
+      kind: "row",
+      label: "TOTAL",
+      value: money(r.totalCents, r.currency),
+      bold: true,
+      large: true,
+    },
+    // The figure a guest disputes is the one they misread. Words are the
+    // check on the digits, which is why every invoice in the region carries them.
+    { kind: "line", text: amountInWords(r.totalCents, r.currency), align: "center" },
   )
 
   if (r.payments.length) {
@@ -333,11 +440,25 @@ export function buildBill(r: BillDoc): PrintDocModel {
     for (const pay of r.payments) {
       blocks.push({
         kind: "row",
-        label: `Paid (${pay.method})`,
+        label: `Paid · ${pay.method}`,
         value: money(pay.amountCents, r.currency),
       })
     }
+    const due = r.totalCents - r.payments.reduce((s, p) => s + p.amountCents, 0)
+    if (due > 0)
+      blocks.push({ kind: "row", label: "Balance due", value: money(due, r.currency), bold: true })
   }
+
+  if (r.note) blocks.push({ kind: "divider" }, { kind: "line", text: r.note, align: "left" })
+
+  // Who to ask about this table, on the slip the guest keeps. Service duration
+  // deliberately absent: the guest has no use for it, and on a bill it reads as
+  // a comment on how long they sat.
+  if (r.servedBy)
+    blocks.push(
+      { kind: "divider" },
+      { kind: "line", text: `Served by: ${r.servedBy}`, align: "left" },
+    )
 
   // Below the money, above the footer: the guest reads the total, then scans.
   if (r.qr) {
@@ -348,7 +469,7 @@ export function buildBill(r: BillDoc): PrintDocModel {
 
   blocks.push(
     { kind: "divider" },
-    { kind: "line", text: r.footer || "Thank you!", align: "center" },
+    { kind: "line", text: r.footer || "Thank you — please visit again.", align: "center" },
   )
   if (r.terms) blocks.push({ kind: "line", text: r.terms, align: "center" })
 

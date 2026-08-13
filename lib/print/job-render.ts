@@ -432,19 +432,19 @@ async function buildBillDoc(
   billId: string,
   tenant: TenantCtx,
 ): Promise<{ doc: PrintDocModel } | { error: string }> {
-  const [{ data: bill }, { data: items }, { data: payments }, { data: settings }] =
+  const [{ data: bill }, { data: items }, { data: payments }, { data: settings }, { data: orders }, { data: charges }] =
     await Promise.all([
       supabase
         .from("bills")
         .select(
-          "id, created_at, subtotal_cents, tax_cents, service_charge_cents, discount_cents, total_cents, restaurant_tables(label)",
+          "id, status, created_at, subtotal_cents, tax_cents, service_charge_cents, discount_cents, tip_cents, rounding_cents, note, total_cents, restaurant_tables(label)",
         )
         .eq("id", billId)
         .eq("tenant_id", tenant.tenantId)
         .maybeSingle(),
       supabase
         .from("bill_items")
-        .select("description, qty, total_cents")
+        .select("description, qty, unit_price_cents, total_cents")
         .eq("bill_id", billId)
         .eq("tenant_id", tenant.tenantId),
       supabase
@@ -458,22 +458,59 @@ async function buildBillDoc(
         .select("receipt_template")
         .eq("tenant_id", tenant.tenantId)
         .maybeSingle(),
+      // A bill can cover several merged orders. Ordered by time so the waiter
+      // and customer come from the one that opened the table, not an arbitrary
+      // row — merged orders can carry different waiters.
+      supabase
+        .from("orders")
+        .select("created_at, waiter_id, customers(name)")
+        .eq("bill_id", billId)
+        .eq("tenant_id", tenant.tenantId)
+        .order("created_at"),
+      supabase
+        .from("bill_charges")
+        .select("label, amount_cents")
+        .eq("bill_id", billId)
+        .eq("tenant_id", tenant.tenantId),
     ])
   if (!bill) return { error: "That bill no longer exists." }
 
   const b = bill as unknown as {
     id: string
+    status: string
     created_at: string
     subtotal_cents: number
     tax_cents: number
     service_charge_cents: number
     discount_cents: number
+    tip_cents: number
+    rounding_cents: number
+    note: string | null
     total_cents: number
     restaurant_tables: { label: string } | null
   }
   const template = (settings?.receipt_template ?? {}) as ReceiptTemplate
   const branding = brandingFrom(template)
   const paid = (payments ?? []) as { method: string; amount_cents: number }[]
+
+  const orderRows = (orders ?? []) as unknown as {
+    created_at: string
+    waiter_id: string | null
+    customers: { name: string | null } | null
+  }[]
+  const first = orderRows[0]
+
+  // One extra round trip, and only when there is a waiter to name.
+  let servedBy: string | null = null
+  if (first?.waiter_id) {
+    const { data: p } = await supabase
+      .from("profiles")
+      .select("full_name, username")
+      .eq("id", first.waiter_id)
+      .maybeSingle()
+    servedBy = (p?.full_name as string | null) ?? (p?.username as string | null) ?? null
+  }
+
 
   return {
     doc: buildBill({
@@ -484,11 +521,14 @@ async function buildBillDoc(
       footer: template.footer,
       terms: template.terms,
       billShortId: b.id.slice(0, 8).toUpperCase(),
-      destination: b.restaurant_tables?.label ? `Table ${b.restaurant_tables.label}` : "Takeaway",
+      destination: b.restaurant_tables?.label
+        ? `Dine in: Table ${b.restaurant_tables.label}`
+        : "Takeaway",
       createdAt: b.created_at,
       items: (items ?? []).map((it) => ({
         description: it.description as string,
         qty: it.qty as number,
+        unitPriceCents: it.unit_price_cents as number,
         totalCents: it.total_cents as number,
       })),
       subtotalCents: b.subtotal_cents,
@@ -502,6 +542,18 @@ async function buildBillDoc(
       logo: branding.logo,
       qr: branding.qr,
       qrCaption: branding.qrCaption,
+      // `bills.status` is open | partial | paid | void — only `paid` earns the
+      // words "tax invoice" on paper.
+      settled: b.status === "paid",
+      customerName: first?.customers?.name ?? undefined,
+      servedBy,
+      charges: (charges ?? []).map((c) => ({
+        label: c.label as string,
+        amountCents: c.amount_cents as number,
+      })),
+      tipCents: b.tip_cents,
+      roundingCents: b.rounding_cents,
+      note: b.note,
     }),
   }
 }

@@ -169,6 +169,13 @@ const TRANSLITERATE: Record<string, string> = {
   " ": " ",
   "₹": "Rs.",
   "₨": "Rs.",
+  // Separators the app's own labels use — "Paid · cash", "− 50.00", "3 × tea".
+  // Without these the receipt prints "Paid ? cash", which reads as a fault in
+  // the printer rather than a glyph this code page never had.
+  "·": "-",
+  "•": "-",
+  "−": "-",
+  "×": "x",
 }
 
 /**

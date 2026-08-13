@@ -233,6 +233,60 @@ function layout(
       case "item":
         item(b, base, text, twoCol)
         break
+      case "particulars": {
+        if (b.rows.length === 0) break
+        const st: Style = { size: base, align: "left" }
+        measure.font = font(st)
+        // Widest cell in the whole table, so the money columns line up. Measured
+        // rather than counted: this font is proportional, unlike text mode's.
+        const w = (s: string) => measure.measureText(s).width
+        const rateW = Math.max(w("Rate"), ...b.rows.map((r) => w(r.rate)))
+        const qtyW = Math.max(w("Qty"), ...b.rows.map((r) => w(String(r.qty))))
+        const amountW = Math.max(w("Amount"), ...b.rows.map((r) => w(r.amount)))
+        const gap = Math.round(base * 0.5)
+        const nameW = width - rateW - qtyW - amountW - gap * 3
+
+        // Same degradation rule as text mode, in the same units: a 58mm roll
+        // cannot hold four columns and a readable dish name.
+        if (nameW < base * 6) {
+          for (const r of b.rows) {
+            text(r.name, st)
+            twoCol(`   ${r.qty} x ${r.rate}`, r.amount, st)
+          }
+          break
+        }
+
+        const lineH = Math.round(base * 1.3)
+        const cells = (name: string, rate: string, qty: string, amount: string, bold: boolean) => {
+          if (draw) {
+            draw.font = font({ ...st, bold })
+            draw.fillText(name, 0, y)
+            draw.fillText(rate, nameW + gap + (rateW - w(rate)), y)
+            draw.fillText(qty, nameW + gap + rateW + gap + (qtyW - w(qty)), y)
+            draw.fillText(amount, width - w(amount), y)
+          }
+          y += lineH
+        }
+
+        measure.font = font({ ...st, bold: true })
+        cells("Particular", "Rate", "Qty", "Amount", true)
+        measure.font = font(st)
+
+        for (const r of b.rows) {
+          const lines = wrap(r.name, nameW, measure)
+          cells(lines[0] ?? "", r.rate, String(r.qty), r.amount, false)
+          // Continuation lines carry the name only; the figures belong to the
+          // first line and repeating them would read as extra charges.
+          for (const extra of lines.slice(1)) {
+            if (draw) {
+              draw.font = font(st)
+              draw.fillText(extra, 0, y)
+            }
+            y += lineH
+          }
+        }
+        break
+      }
       case "image": {
         // Same baked pixels the text renderer sends, so both modes put the
         // identical logo and QR on paper.

@@ -91,7 +91,9 @@ export function CheckoutInvoicePreview({
           />
         ) : null}
         <p className="text-center text-base font-bold uppercase tracking-wide">
-          {settled ? "Tax invoice" : "Estimate invoice"}
+          {/* Not "Tax invoice" — see the heading note in lib/print/docs.ts. The
+              screen and the paper have to say the same word. */}
+          {settled ? "Invoice" : "Estimate"}
         </p>
         <p className="text-center text-xs text-muted-foreground">{meta.tenantName}</p>
 
