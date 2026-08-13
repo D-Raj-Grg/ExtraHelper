@@ -23,6 +23,17 @@ export async function GET(request: Request): Promise<Response> {
   // them: dropped into the QZ folder as `override.crt`, it stops the agent
   // asking for permission on every single ticket.
   if (new URL(request.url).searchParams.get("download") === "1") {
+    // Unconfigured, the browser would save a 0-byte override.crt, QZ would
+    // ignore it, and the prompts would carry on with nobody knowing why. Say so
+    // instead — a download that silently produces an empty file is worse than
+    // no download.
+    if (!cert.trim()) {
+      return new Response(
+        "Direct printing has no signing certificate yet. Set QZ_PUBLIC_CERT and QZ_PRIVATE_KEY on the server, then download this again.",
+        { status: 503, headers: { "content-type": "text/plain", "cache-control": "no-store" } },
+      )
+    }
+
     return new Response(cert, {
       headers: {
         "content-type": "application/x-x509-ca-cert",

@@ -29,13 +29,23 @@ Settings → Printers → **Set it up** walks through this and watches the conne
 1. Install [QZ Tray](https://qz.io/download/) on the till computer and start it.
 2. **Download override.crt** from that dialog and drop it in the QZ Tray folder:
    - Windows `C:\Program Files\qz-tray`
-   - macOS `/Applications/qz-tray`
+   - macOS `/Applications/QZ Tray.app/Contents/Resources` — *inside* the app bundle (Finder: right-click QZ Tray → Show Package Contents). Next to it in `/Applications` looks right and does nothing.
    - Linux `/opt/qz-tray`
 
    Restart QZ. Without it, QZ asks for permission on every single ticket.
 3. The **Direct printing** card says Connected.
 
 Signing is what makes printing silent. Set `QZ_PUBLIC_CERT` and `QZ_PRIVATE_KEY` (and `QZ_PRIVATE_KEY_PASSPHRASE` if the key has one) in the environment. Unset, the app returns an empty signature and QZ falls back to prompting — printing still works, it just isn't silent.
+
+Generate the pair with:
+
+```
+openssl req -x509 -newkey rsa:2048 -sha256 -days 7300 -nodes \
+  -keyout private-key.pem -out digital-certificate.txt \
+  -subj "/O=Your Restaurant/CN=ExtraHelper Print Agent"
+```
+
+`digital-certificate.txt` is `QZ_PUBLIC_CERT` (and the bytes served as override.crt); `private-key.pem` is `QZ_PRIVATE_KEY`. The key must never reach a client — it authorises the agent to act on the operator's machine.
 
 ## Setting up Cloud mode
 
@@ -45,6 +55,27 @@ Signing is what makes printing silent. Set `QZ_PUBLIC_CERT` and `QZ_PRIVATE_KEY`
 4. Switch Printing mode to **Cloud**.
 
 The agent uses no service role key and no shared secret; it signs in as that user and RLS scopes what it can see, exactly as for a person at a till.
+
+`appUrl` must be a **running** app — the agent posts to `/api/print/render` for the bytes rather than rendering them itself, so a till ticket and an agent ticket cannot drift. The machine it runs on must also reach the printer, which means it lives in the restaurant: a cloud host can queue a job but cannot open a socket to a printer behind the shop's router.
+
+On macOS, keep it alive with a LaunchAgent (`~/Library/LaunchAgents/`) using `RunAtLoad` + `KeepAlive` and a `ThrottleInterval`, so a bad config fails slowly enough to read in the log instead of spinning.
+
+## macOS: Local Network permission (the one that costs a day)
+
+macOS 15+ gates connections to LAN addresses per application. A denied process gets **`EHOSTUNREACH` in about a millisecond** — no SYN, no timeout — which surfaces as `java.net.NoRouteToHostException` from QZ Tray or `connect EHOSTUNREACH` from the agent, and reads exactly like a dead printer even though `ping` and `nc` from a terminal both succeed. The terminal has its own grant; the app does not.
+
+Grant it in **System Settings → Privacy & Security → Local Network**, then *restart the process* — the grant is read at launch.
+
+Two things make the entry hard to find:
+
+- **QZ Tray is listed as `java`, not QZ Tray.** Installing `override.crt` into `Contents/Resources/` breaks the app bundle's code signature (`codesign -v` → *a sealed resource is missing or invalid*), so macOS cannot resolve `io.qz.qz-tray` and attributes the connection to the bundled JRE, `net.java.openjdk.java`. The log shows `UUID: Failed to find UUIDs for io.qz.qz-tray` alongside `LocalNetwork: found bundle id net.java.openjdk.java by PID`.
+- **The cloud agent is listed as `node`**, under an ad-hoc identity like `node-5555…`, because that is the binary launchd executes.
+
+To see which identity macOS actually used:
+
+```
+log show --last 5m --style compact --predicate 'eventMessage CONTAINS "LocalNetwork"'
+```
 
 ## Setting up the phone
 
@@ -100,7 +131,9 @@ If nothing is queued, the UI offers the browser print view (`/kot/<id>`, `/recei
 | Symptom | Cause |
 |---|---|
 | "Disconnected" on the Direct printing card | QZ Tray isn't running. Start it — the setup dialog reconnects on its own. |
-| QZ asks permission every print | `override.crt` isn't installed, or `QZ_PRIVATE_KEY` isn't set. |
+| QZ asks permission every print | `override.crt` isn't installed, or `QZ_PRIVATE_KEY` isn't set. On macOS check it is *inside* `QZ Tray.app/Contents/Resources` — and that it isn't 0 bytes, which is what an unconfigured `QZ_PUBLIC_CERT` used to hand out. |
+| `NoRouteToHost` / `EHOSTUNREACH` on a network printer, but `ping` and `nc` work from a terminal | macOS Local Network permission. See the section above — grant it to **java** (QZ Tray) or **node** (cloud agent), then restart that process. |
+| A USB printer fails with "cannot talk to USB devices directly" | QZ Tray ships no libusb native for that platform — Apple Silicon in particular, where `qz.usb.*` throws `UnsatisfiedLinkError: org.usb4java.LibUsb.init`. Add the printer in system settings and switch its Connection to **System printer**; the same raw ESC/POS goes out through the OS queue. |
 | Nothing prints, no error | Nothing is assigned that document. Check the Printers table. |
 | Printed twice | Two agents claiming, or a manual reprint. `claimed_by` on the job says which. |
 | Scan finds nothing | QZ Tray isn't running. A browser cannot list OS printers on its own — there is no such API. |

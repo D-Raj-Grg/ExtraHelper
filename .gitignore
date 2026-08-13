@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# QZ Tray print-agent signing key pair (never commit)
+.qz/
+
+# Print agent credentials (never commit)
+tools/print-agent/config.json

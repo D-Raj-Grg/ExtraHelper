@@ -408,6 +408,69 @@ exposes nothing RLS did not already allow, and any open till keeping the printer
 - [ ] End-to-end on real hardware: network printer, USB printer, image mode with a Devanagari dish
       name, two tabs open, and the agent running with every browser closed. Needs a physical printer.
 
+### QZ Tray has no raw USB on Apple Silicon (2026-08-13)
+
+First run against the shop's KP307 over USB. Every job failed with QZ's *"Sorry, this feature is
+unavailable at this time"*. `~/Library/Application Support/qz/debug.log` names it:
+`java.lang.UnsatisfiedLinkError: 'int org.usb4java.LibUsb.init(org.usb4java.Context)'` on
+`usb.listInterfaces`. QZ Tray 2.2.6's macOS bundle ships `libhidapi`/`libjssc` but **no
+libusb4java native** — the whole `qz.usb.*` API is dead on an arm64 Mac. Not our bug, and not
+fixable from our side.
+
+The route that works is the OS queue: the printer already installs as a CUPS destination
+(`usb://Caysn/KPC307-UEWB`), and a raw ESC/POS job through it prints — verified with
+`lp -d POS80-2 -o raw`. So on macOS, **USB printers must be configured as `system`**, not `usb`.
+
+- [x] The shop's `KT` printer switched from `usb` → `system` (`POS80-2`).
+- [x] `qz.usb.*` failures now say to switch to a system printer instead of repeating QZ's sentence.
+- [ ] Consider hiding the USB connection option (or marking it unsupported) when the agent is on
+      macOS — the setup sheet currently offers a route that cannot work there.
+
+### macOS Local Network permission blocks every LAN printer (2026-08-13)
+
+The cause of both `java.net.NoRouteToHostException` (QZ Tray) and `connect EHOSTUNREACH`
+(cloud agent) against `192.168.254.14:9100`, while `ping` and `nc` from a terminal succeeded.
+macOS 15+ gates LAN connections per app; a denied process is refused **in ~1ms**, before a packet
+leaves — which is what distinguishes it from a real network fault. Grant in Privacy & Security →
+Local Network, then restart the process.
+
+The entries are not named what you expect. QZ Tray appears as **java**: installing `override.crt`
+into `Contents/Resources/` breaks the bundle's code signature, so macOS cannot resolve
+`io.qz.qz-tray` and attributes the socket to the embedded JRE (`net.java.openjdk.java`) — visible in
+`log show --predicate 'eventMessage CONTAINS "LocalNetwork"'`. The cloud agent appears as **node**.
+
+- [x] Both granted; network printing verified from a browser and from launchd.
+
+### Cloud mode was dead on the deployed app (2026-08-13)
+
+`proxy.ts` redirected every unauthenticated request to `/login`, route handlers included. The agent
+carries a bearer token and no cookie, so `POST /api/print/render` returned `307 → /login` and it
+could never reach the handler that understands its token. Fixed in `lib/supabase/proxy.ts` (commit
+`4ce43c4` on main): `/api/*` is excluded from the redirect and each route answers for itself — all
+four were audited and already guard their own callers.
+
+- [x] Cloud mode live end to end: `print_jobs` row → agent claims → socket → paper, no browser open.
+      Agent user `print-agent@extrahelper.local` (role `kitchen`), config in gitignored
+      `tools/print-agent/config.json`, kept alive by
+      `~/Library/LaunchAgents/com.extrahelper.print-agent.plist`.
+- [ ] The agent runs on the shop Mac, because only a machine on the shop LAN can reach the printer.
+      A sleeping Mac is still a silent kitchen — decide what always-on box hosts it.
+- [ ] Cloud mode is text-only and the KP307 is CP437, so a Devanagari dish name prints as `?`.
+      Image mode needs a browser canvas. If Nepali menu text is wanted on tickets, either keep that
+      printer on Local mode or teach the agent to rasterise.
+
+### The certificate download handed out an empty file (2026-08-13)
+
+`QZ_PUBLIC_CERT`/`QZ_PRIVATE_KEY` were never set, so requests went out unsigned
+(`"signature":""` in the QZ log) and QZ prompted on every ticket. Two things hid it: the
+`?download=1` route served a **0-byte `override.crt`** rather than admitting it was unconfigured,
+and the setup dialog gave the macOS folder as `/Applications/qz-tray` when QZ reads
+`/Applications/QZ Tray.app/Contents/Resources` — so the empty file landed somewhere QZ never looks.
+Both fixed; key pair generated into the gitignored `.qz/` and wired into `.env.local`.
+
+- [ ] Set `QZ_PUBLIC_CERT` / `QZ_PRIVATE_KEY` in the deployed environment too — they are local-only
+      so far, so the hosted app still prompts.
+
 ## Printing from the phone — a third drainer (2026-08-01)
 
 Migrations `20260801090000_printing_bluetooth_enum.sql`, `20260801090100_printing_bluetooth.sql`.

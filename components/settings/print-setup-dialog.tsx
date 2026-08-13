@@ -23,10 +23,20 @@ import { cn } from "@/lib/utils"
 
 const QZ_DOWNLOAD = "https://qz.io/download/"
 
-/** Where QZ Tray looks for the certificate that stops it asking every time. */
+/**
+ * Where QZ Tray looks for the certificate that stops it asking every time.
+ *
+ * macOS is the trap: QZ installs as an app bundle, and the folder it reads is
+ * *inside* it — dropping the file next to `QZ Tray.app` in `/Applications`
+ * looks right and does nothing, so the prompts never stop.
+ */
 const CERT_PATHS = [
   { os: "Windows", match: /win/i, path: "C:\\Program Files\\qz-tray" },
-  { os: "macOS", match: /mac/i, path: "/Applications/qz-tray" },
+  {
+    os: "macOS",
+    match: /mac/i,
+    path: "/Applications/QZ Tray.app/Contents/Resources",
+  },
   { os: "Linux", match: /linux|x11/i, path: "/opt/qz-tray" },
 ] as const
 
@@ -129,7 +139,9 @@ export function PrintSetupDialog({
                       </dt>
                       <dd
                         className={cn(
-                          "truncate rounded px-2 py-1 font-mono text-xs",
+                          // Never truncate: the macOS path is long and the part
+                          // that gets cut is the part people get wrong.
+                          "rounded px-2 py-1 font-mono text-xs break-all",
                           mine ? "bg-muted text-foreground" : "text-muted-foreground",
                         )}
                       >

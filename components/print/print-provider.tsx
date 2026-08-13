@@ -234,7 +234,13 @@ export function PrintProvider({ children }: { children: React.ReactNode }) {
   const listUsbDevices = useCallback(async () => {
     const qz = qzRef.current
     if (!qz || !qz.websocket.isActive()) throw new Error("Print agent not connected")
-    return qz.usb.listDevices(false)
+    try {
+      return await qz.usb.listDevices(false)
+    } catch (e) {
+      // A scan that fails here fails for the whole USB route, not this device —
+      // say which, or the operator retries the scan forever.
+      throw usbError(e)
+    }
   }, [])
 
   return (
@@ -260,6 +266,27 @@ export function PrintProvider({ children }: { children: React.ReactNode }) {
 }
 
 /**
+ * QZ's raw USB API is a JNI binding over libusb, and the native half is simply
+ * absent from some builds — notably QZ Tray on Apple Silicon, where every
+ * `usb.*` call dies with `UnsatisfiedLinkError: org.usb4java.LibUsb.init` and
+ * QZ answers the browser with this one sentence. It reads like an outage on our
+ * side, so it gets translated into the thing that actually fixes it: the same
+ * printer, addressed through the OS queue instead of raw USB.
+ */
+const USB_NATIVE_MISSING = /unavailable at this time|missing or broken/i
+
+function usbError(e: unknown, printerName?: string): Error {
+  const message = e instanceof Error ? e.message : String(e)
+  if (!USB_NATIVE_MISSING.test(message)) {
+    return e instanceof Error ? e : new Error(message)
+  }
+  const subject = printerName ?? "the printer"
+  return new Error(
+    `QZ Tray on this computer cannot talk to USB devices directly — its USB component is missing, which is normal on Apple Silicon Macs. Add ${subject} as a printer in system settings, then set this printer's Connection to "System printer".`,
+  )
+}
+
+/**
  * USB is claim → write → release, not a config. The interface and the OUT
  * endpoint are discovered once and handed back so they can be cached: the scan
  * costs two extra round trips to the device, and a busy pass fires a lot of
@@ -275,37 +302,41 @@ async function sendUsb(
   const productId = printer.usbProductId ?? ""
   if (!vendorId || !productId) throw new Error("This printer has no USB address.")
 
-  let iface = printer.usbInterface
-  let endpoint = printer.usbEndpoint
-  let discovered = false
-
-  if (!iface || !endpoint) {
-    const interfaces = await qz.usb.listInterfaces({ vendorId, productId })
-    iface = interfaces[0]
-    if (!iface) throw new Error("That USB device has no printable interface.")
-    const endpoints = await qz.usb.listEndpoints({ vendorId, productId, interface: iface })
-    // Bit 7 set means an IN endpoint — that one reads, it does not print.
-    endpoint = endpoints.find((e) => (Number.parseInt(e, 16) & 0x80) === 0) ?? endpoints[0]
-    if (!endpoint) throw new Error("That USB device has no endpoint to write to.")
-    discovered = true
-  }
-
-  await qz.usb.claimDevice({ vendorId, productId, interface: iface })
   try {
-    for (let i = 0; i < runs; i++) {
-      await qz.usb.sendData({
-        vendorId,
-        productId,
-        endpoint,
-        data: { data: base64, type: "BASE64" },
-      })
-    }
-  } finally {
-    // Left claimed, the device is unusable by anything else until QZ restarts.
-    await qz.usb.releaseDevice({ vendorId, productId }).catch(() => {})
-  }
+    let iface = printer.usbInterface
+    let endpoint = printer.usbEndpoint
+    let discovered = false
 
-  return discovered ? { iface, endpoint } : null
+    if (!iface || !endpoint) {
+      const interfaces = await qz.usb.listInterfaces({ vendorId, productId })
+      iface = interfaces[0]
+      if (!iface) throw new Error("That USB device has no printable interface.")
+      const endpoints = await qz.usb.listEndpoints({ vendorId, productId, interface: iface })
+      // Bit 7 set means an IN endpoint — that one reads, it does not print.
+      endpoint = endpoints.find((e) => (Number.parseInt(e, 16) & 0x80) === 0) ?? endpoints[0]
+      if (!endpoint) throw new Error("That USB device has no endpoint to write to.")
+      discovered = true
+    }
+
+    await qz.usb.claimDevice({ vendorId, productId, interface: iface })
+    try {
+      for (let i = 0; i < runs; i++) {
+        await qz.usb.sendData({
+          vendorId,
+          productId,
+          endpoint,
+          data: { data: base64, type: "BASE64" },
+        })
+      }
+    } finally {
+      // Left claimed, the device is unusable by anything else until QZ restarts.
+      await qz.usb.releaseDevice({ vendorId, productId }).catch(() => {})
+    }
+
+    return discovered ? { iface, endpoint } : null
+  } catch (e) {
+    throw usbError(e, printer.name)
+  }
 }
 
 /**
