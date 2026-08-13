@@ -69,7 +69,11 @@ export function DishStep({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-      <div className="flex min-h-0 flex-1 flex-col">
+      {/* min-w-0 is load-bearing on the row: a flex item defaults to
+          min-width:auto, so it refuses to shrink below its content and instead
+          shoves the cart rail past the dialog's overflow-hidden edge — the rail
+          simply disappears rather than the grid getting narrower. */}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <div className="flex shrink-0 flex-wrap items-center gap-2 border-b p-3">
           {onChangeDestination ? (
             <Button variant="outline" size="sm" onClick={onChangeDestination}>

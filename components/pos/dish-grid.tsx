@@ -72,7 +72,14 @@ export function DishGrid({
 
   return (
     <>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+      {/* Sized by the space it is in, not by the window. Breakpoints measure the
+          viewport, but this grid sits in a pane that is the viewport minus a
+          384px cart rail — so `xl:grid-cols-5` handed five columns' worth of
+          dishes to a pane with room for three, and at a larger text size the
+          row stopped fitting and pushed the rail off the dialog's edge.
+          auto-fill counts the columns itself: ~9rem is a comfortable tap target
+          for a photo tile, and the count falls out of whatever width there is. */}
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] gap-3">
         {shown.map((item) => (
           <MenuTile
             key={item.id}
