@@ -4,6 +4,7 @@ import { requirePermission } from "@/lib/supabase/guards"
 import { CheckoutView } from "@/components/checkout/checkout-view"
 import { PageShell } from "@/components/page-header"
 import type { CheckoutItem } from "@/components/checkout/types"
+import type { ReceiptTemplate } from "@/lib/print/branding"
 
 export const dynamic = "force-dynamic"
 
@@ -176,11 +177,7 @@ export default async function BillPage({
     return p?.full_name ?? p?.username ?? null
   }
   const orderRow = order as { created_at: string; waiter_id: string | null } | null
-  const template = (settings?.receipt_template ?? {}) as {
-    header?: string
-    footer?: string
-    terms?: string
-  }
+  const template = (settings?.receipt_template ?? {}) as ReceiptTemplate
 
   return (
     <PageShell width="full">
@@ -212,6 +209,9 @@ export default async function BillPage({
           header: template.header,
           footer: template.footer,
           terms: template.terms,
+          logoUrl: template.logo_url,
+          qrUrl: template.qr_url,
+          qrCaption: template.qr_caption,
         }}
       />
     </PageShell>

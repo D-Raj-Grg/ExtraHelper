@@ -4,6 +4,7 @@
  */
 
 import { EscPos } from "./escpos"
+import { bitmapToEscPos, printableDots } from "./bitmap"
 import type { DocBlock, PrintDocModel } from "./docs"
 
 export type RenderOptions = {
@@ -18,7 +19,8 @@ export function renderEscPos(doc: PrintDocModel, opts: RenderOptions): EscPos {
   const p = new EscPos(opts.paperWidthMm)
   p.init()
 
-  for (const b of doc.blocks) block(p, b)
+  const dots = printableDots(opts.paperWidthMm)
+  for (const b of doc.blocks) block(p, b, dots)
 
   if (doc.wantsDrawer && opts.openDrawer) p.drawerKick()
   // Always last: anything after a cut lands on the next customer's ticket.
@@ -27,7 +29,7 @@ export function renderEscPos(doc: PrintDocModel, opts: RenderOptions): EscPos {
   return p
 }
 
-function block(p: EscPos, b: DocBlock): void {
+function block(p: EscPos, b: DocBlock, dots: number): void {
   switch (b.kind) {
     case "title":
       p.align("center").bold(true).size(2, 2)
@@ -69,6 +71,14 @@ function block(p: EscPos, b: DocBlock): void {
       p.align("left")
       p.line("1234567890".repeat(Math.ceil(p.cols / 10)).slice(0, p.cols))
       return
+
+    case "image": {
+      // No variant for this roll means the asset was baked before the width
+      // existed — print the rest of the ticket rather than fail the job.
+      const bmp = b.variants[String(dots)]
+      if (bmp) p.raster(bitmapToEscPos(bmp)).line()
+      return
+    }
 
     case "item":
       return item(p, b)

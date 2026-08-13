@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server"
 import { requireRole } from "@/lib/supabase/guards"
 import { writeAudit } from "@/lib/supabase/audit"
 import { RESET_DOMAIN_KEYS, RESET_EVERYTHING } from "@/lib/danger-constants"
+import type { ReceiptTemplate } from "@/lib/print/branding"
 
 export type SettingsState = { error: string } | { ok: true } | undefined
 
@@ -51,21 +52,6 @@ export async function updateSettings(
 
   const blockNegativeStock = formData.get("blockNegativeStock") === "on"
 
-  const supabaseEarly = await createClient()
-  // Preserve any keys we don't edit here (e.g. logo_url set by uploadTenantLogo)
-  // instead of clobbering the whole receipt_template JSON.
-  const { data: existing } = await supabaseEarly
-    .from("tenant_settings")
-    .select("receipt_template")
-    .eq("tenant_id", tenant.tenantId)
-    .maybeSingle()
-  const receiptTemplate = {
-    ...((existing?.receipt_template as Record<string, unknown>) ?? {}),
-    header: String(formData.get("receiptHeader") ?? "").trim(),
-    footer: String(formData.get("receiptFooter") ?? "").trim(),
-    terms: String(formData.get("receiptTerms") ?? "").trim(),
-  }
-
   // Pluggable payment gateway (rule #6). Only registered keys are accepted.
   const GATEWAYS = ["sandbox", "manual"]
   const paymentGateway = String(formData.get("paymentGateway") ?? "sandbox").trim()
@@ -80,12 +66,25 @@ export async function updateSettings(
       service_charge: serviceCharge,
       packaging_fee: packagingFee,
       tax_rules: taxRules,
-      receipt_template: receiptTemplate,
       block_negative_stock: blockNegativeStock,
       payment_gateway: paymentGateway,
     })
     .eq("tenant_id", tenant.tenantId)
   if (error) return { error: error.message }
+
+  // receipt_template is patched, not replaced: the logo and QR uploads write
+  // their own keys into the same blob from their own cards, and a save bar that
+  // wrote the whole object would drop whichever upload landed first.
+  const { error: tmplErr } = await supabase.rpc("merge_receipt_template", {
+    _tenant: tenant.tenantId,
+    _patch: {
+      header: String(formData.get("receiptHeader") ?? "").trim(),
+      footer: String(formData.get("receiptFooter") ?? "").trim(),
+      terms: String(formData.get("receiptTerms") ?? "").trim(),
+      qr_caption: String(formData.get("qrCaption") ?? "").trim(),
+    },
+  })
+  if (tmplErr) return { error: tmplErr.message }
 
   // Restaurant name lives on `tenants`, not tenant_settings. Only owners may
   // change it (tenants_owner_update RLS); a manager's attempt is a no-op.
@@ -103,18 +102,35 @@ export async function updateSettings(
   return { ok: true }
 }
 
-/** Upload a tenant logo/brand image → receipt_template.logo_url (Storage). */
-export async function uploadTenantLogo(
+/**
+ * Upload the logo or the payment QR.
+ *
+ * Two things land per upload: the original image, to Storage, for every screen
+ * that shows a picture; and the 1-bit bitmaps the client baked from it, into
+ * `receipt_template.print_assets`, for the thermal printers. Baking happens in
+ * the browser because it is the only place with a canvas — the Android app and
+ * the headless print agent fetch finished bytes and write them to a socket, so
+ * an asset that has to be drawn at print time never reaches paper from either.
+ */
+export async function uploadBrandImage(
   _prev: SettingsState,
   formData: FormData,
 ): Promise<SettingsState> {
   const tenant = await requireRole("owner", "manager")
-  const file = formData.get("logo")
+
+  const kind = String(formData.get("kind") ?? "")
+  if (kind !== "logo" && kind !== "qr") return { error: "Unknown image kind." }
+  const noun = kind === "logo" ? "Logo" : "QR code"
+
+  const file = formData.get("file")
   if (!(file instanceof File) || file.size === 0) return { error: "Choose an image file." }
-  if (file.size > 3 * 1024 * 1024) return { error: "Logo must be under 3 MB." }
+  if (file.size > 3 * 1024 * 1024) return { error: `${noun} must be under 3 MB.` }
+
+  const variants = parseBakedImage(formData.get("variants"))
+  if ("error" in variants) return variants
 
   const ext = (file.name.split(".").pop() || "png").toLowerCase().replace(/[^a-z0-9]/g, "")
-  const path = `${tenant.tenantId}/logo.${ext}`
+  const path = `${tenant.tenantId}/${kind === "logo" ? "logo" : "receipt-qr"}.${ext}`
   const supabase = await createClient()
   const { error: upErr } = await supabase.storage
     .from("menu-images")
@@ -123,20 +139,108 @@ export async function uploadTenantLogo(
   const { data: pub } = supabase.storage.from("menu-images").getPublicUrl(path)
   const url = `${pub.publicUrl}?v=${Date.now()}`
 
-  // Merge into the existing receipt_template JSON without clobbering other keys.
   const { data: current } = await supabase
     .from("tenant_settings")
     .select("receipt_template")
     .eq("tenant_id", tenant.tenantId)
     .maybeSingle()
-  const tmpl = { ...((current?.receipt_template as Record<string, unknown>) ?? {}), logo_url: url }
-  const { error } = await supabase
-    .from("tenant_settings")
-    .update({ receipt_template: tmpl })
-    .eq("tenant_id", tenant.tenantId)
+  const assets = ((current?.receipt_template as ReceiptTemplate | null)?.print_assets ??
+    {}) as NonNullable<ReceiptTemplate["print_assets"]>
+
+  const { error } = await supabase.rpc("merge_receipt_template", {
+    _tenant: tenant.tenantId,
+    _patch: {
+      [kind === "logo" ? "logo_url" : "qr_url"]: url,
+      // Replaced wholesale, never merged: a half-old set of widths would print
+      // last month's logo on the 58mm roll and this month's on the 80mm one.
+      print_assets: { ...assets, [kind]: variants.variants },
+    },
+  })
   if (error) return { error: error.message }
   revalidatePath("/settings")
   return { ok: true }
+}
+
+/** Take the logo or QR off the receipt — both the picture and the baked bytes. */
+export async function removeBrandImage(
+  _prev: SettingsState,
+  formData: FormData,
+): Promise<SettingsState> {
+  const tenant = await requireRole("owner", "manager")
+  const kind = String(formData.get("kind") ?? "")
+  if (kind !== "logo" && kind !== "qr") return { error: "Unknown image kind." }
+
+  const supabase = await createClient()
+  const { data: current } = await supabase
+    .from("tenant_settings")
+    .select("receipt_template")
+    .eq("tenant_id", tenant.tenantId)
+    .maybeSingle()
+  const template = (current?.receipt_template ?? {}) as ReceiptTemplate
+  const assets = { ...(template.print_assets ?? {}) } as Record<string, unknown>
+  delete assets[kind]
+
+  // Drop the picture too. The bucket is public, so leaving the object behind
+  // means the "removed" logo is still served to anyone holding its URL.
+  const oldUrl = kind === "logo" ? template.logo_url : template.qr_url
+  const path = oldUrl?.split("?")[0].split("/menu-images/")[1]
+  if (path?.startsWith(`${tenant.tenantId}/`)) {
+    await supabase.storage.from("menu-images").remove([path])
+  }
+
+  const { error } = await supabase.rpc("merge_receipt_template", {
+    _tenant: tenant.tenantId,
+    // json null deletes the key outright — see the migration.
+    _patch: { [kind === "logo" ? "logo_url" : "qr_url"]: null, print_assets: assets },
+  })
+  if (error) return { error: error.message }
+  revalidatePath("/settings")
+  return { ok: true }
+}
+
+/**
+ * The baked bitmaps arrive from the browser, so nothing about them is trusted.
+ * The bytes themselves are only ever wrapped in a `GS v 0` header this server
+ * builds from `w`/`h`, so the risk is not injected commands but a mismatched
+ * length: a row count that disagrees with the payload makes the printer read
+ * the next ticket's bytes as image data and spit out a metre of noise.
+ */
+function parseBakedImage(
+  raw: FormDataEntryValue | null,
+): { variants: Record<string, { w: number; h: number; data: string }> } | { error: string } {
+  const WIDTHS = new Set(["384", "416", "576"])
+  const BUDGET = 200 * 1024
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(String(raw ?? ""))
+  } catch {
+    return { error: "That image could not be prepared for printing. Try another file." }
+  }
+  if (!parsed || typeof parsed !== "object") return { error: "Prepared image data is missing." }
+
+  const out: Record<string, { w: number; h: number; data: string }> = {}
+  let total = 0
+  for (const [width, value] of Object.entries(parsed as Record<string, unknown>)) {
+    if (!WIDTHS.has(width)) return { error: "Prepared image data is for an unknown paper width." }
+    const v = value as { w?: unknown; h?: unknown; data?: unknown }
+    const w = Number(v.w)
+    const h = Number(v.h)
+    const data = typeof v.data === "string" ? v.data : ""
+    if (w !== Number(width) || !Number.isInteger(h) || h < 1 || h > 2000)
+      return { error: "Prepared image data has the wrong dimensions." }
+    // base64 → bytes, and the packed rows must be exactly ceil(w/8) * h.
+    const bytes = Math.floor((data.length * 3) / 4) - (data.endsWith("==") ? 2 : data.endsWith("=") ? 1 : 0)
+    if (bytes !== Math.ceil(w / 8) * h)
+      return { error: "Prepared image data is incomplete. Try uploading again." }
+    total += data.length
+    out[width] = { w, h, data }
+  }
+
+  if (!Object.keys(out).length) return { error: "Prepared image data is missing." }
+  if (total > BUDGET)
+    return { error: "That image is too detailed to print. Try a smaller or simpler one." }
+  return { variants: out }
 }
 
 // --- Branch management (multi-branch) --------------------------------------

@@ -12,8 +12,17 @@
  */
 
 import { formatDateTime, money } from "@/lib/format"
+import type { PrintBitmap } from "./bitmap"
 
 export type DocAlign = "left" | "center" | "right"
+
+/**
+ * One baked bitmap per printable width. A `GS v 0` image is sent at its own
+ * size — the printer will not scale it — so the 58mm roll needs its own copy,
+ * and each is already padded to the full width so the centring is in the
+ * pixels rather than in a justification command cheap clones may ignore.
+ */
+export type DocImage = Record<string, PrintBitmap>
 
 export type DocBlock =
   /** The one thing readable across a hot pass: station, or the restaurant. */
@@ -39,6 +48,11 @@ export type DocBlock =
   | { kind: "row"; label: string; value: string; bold?: boolean; large?: boolean }
   /** A column ruler; only the test page uses it. */
   | { kind: "ruler" }
+  /**
+   * A baked bitmap — the tenant's logo, or the payment QR they uploaded.
+   * `alt` is what the HTML surfaces read out; paper shows the pixels.
+   */
+  | { kind: "image"; variants: DocImage; alt: string }
 
 export type PrintDocModel = {
   /** Shown in toasts and the job list, never printed. */
@@ -262,11 +276,19 @@ export type BillDoc = {
   totalCents: number
   payments: { method: string; amountCents: number }[]
   openDrawer?: boolean
+  /** Baked branding — absent when the tenant has uploaded none. */
+  logo?: DocImage
+  qr?: DocImage
+  qrCaption?: string
 }
 
 /** Mirrors components/receipt-view.tsx line for line. */
 export function buildBill(r: BillDoc): PrintDocModel {
-  const blocks: DocBlock[] = [{ kind: "title", text: r.tenantName.toUpperCase() }]
+  const blocks: DocBlock[] = []
+  if (r.logo) blocks.push({ kind: "image", variants: r.logo, alt: r.tenantName })
+  // The name stays even with a logo above it: a mark alone rarely survives a
+  // 1-bit thermal head well enough to name the restaurant on a tax document.
+  blocks.push({ kind: "title", text: r.tenantName.toUpperCase() })
   if (r.header) blocks.push({ kind: "line", text: r.header, align: "center" })
   blocks.push(
     { kind: "line", text: r.destination, align: "center" },
@@ -317,6 +339,13 @@ export function buildBill(r: BillDoc): PrintDocModel {
     }
   }
 
+  // Below the money, above the footer: the guest reads the total, then scans.
+  if (r.qr) {
+    blocks.push({ kind: "divider" })
+    if (r.qrCaption) blocks.push({ kind: "line", text: r.qrCaption, align: "center", bold: true })
+    blocks.push({ kind: "image", variants: r.qr, alt: r.qrCaption || "Payment QR code" })
+  }
+
   blocks.push(
     { kind: "divider" },
     { kind: "line", text: r.footer || "Thank you!", align: "center" },
@@ -331,21 +360,34 @@ export function buildBill(r: BillDoc): PrintDocModel {
 // ---------------------------------------------------------------------------
 
 /** Proves the printer, the width and the cut without burning an order. */
-export function buildTest(printerName: string, paperWidthMm: number): PrintDocModel {
-  return {
-    label: printerName,
-    blocks: [
-      { kind: "title", text: "TEST PRINT" },
-      { kind: "subtitle", text: printerName },
+export function buildTest(
+  printerName: string,
+  paperWidthMm: number,
+  branding?: { logo?: DocImage; qr?: DocImage },
+): PrintDocModel {
+  const blocks: DocBlock[] = []
+  if (branding?.logo) blocks.push({ kind: "image", variants: branding.logo, alt: "Logo" })
+  blocks.push(
+    { kind: "title", text: "TEST PRINT" },
+    { kind: "subtitle", text: printerName },
+    { kind: "divider" },
+    { kind: "line", text: `Paper: ${paperWidthMm}mm` },
+    { kind: "ruler" },
+    { kind: "row", label: "Right column", value: "0.00" },
+    { kind: "divider" },
+    // Non-Latin on purpose: in text mode these are '?', in image mode they
+    // are legible, and that difference is the whole reason render_mode exists.
+    { kind: "line", text: "नमस्ते · Namaste", align: "center" },
+    { kind: "line", text: "If this fits on one line, you are set.", align: "center" },
+  )
+  // Printing the real QR here is the only way to check it scans off paper
+  // without settling a bill to find out.
+  if (branding?.qr) {
+    blocks.push(
       { kind: "divider" },
-      { kind: "line", text: `Paper: ${paperWidthMm}mm` },
-      { kind: "ruler" },
-      { kind: "row", label: "Right column", value: "0.00" },
-      { kind: "divider" },
-      // Non-Latin on purpose: in text mode these are '?', in image mode they
-      // are legible, and that difference is the whole reason render_mode exists.
-      { kind: "line", text: "नमस्ते · Namaste", align: "center" },
-      { kind: "line", text: "If this fits on one line, you are set.", align: "center" },
-    ],
+      { kind: "line", text: "Scan to check the QR prints", align: "center" },
+      { kind: "image", variants: branding.qr, alt: "Payment QR code" },
+    )
   }
+  return { label: printerName, blocks }
 }

@@ -104,6 +104,19 @@ export class EscPos {
     return this.line(l + " ".repeat(Math.max(1, gap)) + right)
   }
 
+  /**
+   * Pre-built raster bytes, straight onto the wire. Deliberately not routed
+   * through `text()`: the CP437 encoder below turns every byte outside
+   * 0x20–0x7E into '?', which would shred a bit image into gibberish the
+   * printer then tries to read as commands.
+   */
+  raster(bytes: number[]): this {
+    // Appended, not spread: a full-width QR is ~30,000 bytes and `push(...b)`
+    // puts every one of them on the argument stack.
+    for (const b of bytes) this.bytes.push(b)
+    return this
+  }
+
   /** ESC p — pop the cash drawer wired to the printer. */
   drawerKick(): this {
     return this.push(ESC, 0x70, 0x00, 0x19, 0xfa)

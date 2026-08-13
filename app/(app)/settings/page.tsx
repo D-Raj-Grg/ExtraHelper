@@ -8,6 +8,7 @@ import type {
   PrintJobRow,
   TransferMember,
 } from "@/components/settings/types"
+import type { ReceiptTemplate } from "@/lib/print/branding"
 
 export default async function SettingsPage() {
   const tenant = await requirePermission("settings.view")
@@ -130,12 +131,7 @@ export default async function SettingsPage() {
         inclusive: Boolean(r?.inclusive),
       }))
     : []
-  const receipt = (settings?.receipt_template ?? {}) as {
-    header?: string
-    footer?: string
-    terms?: string
-    logo_url?: string
-  }
+  const receipt = (settings?.receipt_template ?? {}) as ReceiptTemplate
 
   return (
     <PageShell width="standard">
@@ -158,6 +154,8 @@ export default async function SettingsPage() {
         blockNegativeStock={Boolean(settings?.block_negative_stock)}
         paymentGateway={settings?.payment_gateway ?? "sandbox"}
         logoUrl={receipt.logo_url ?? null}
+        qrUrl={receipt.qr_url ?? null}
+        qrCaption={receipt.qr_caption ?? ""}
         branches={branches ?? []}
         canManageBranches={tenant.role === "owner" || tenant.role === "manager"}
         printers={(printers ?? []) as unknown as PrinterRow[]}

@@ -2,6 +2,7 @@ import { notFound } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { requireRole } from "@/lib/supabase/guards"
 import { ReceiptView } from "@/components/receipt-view"
+import type { ReceiptTemplate } from "@/lib/print/branding"
 
 export const dynamic = "force-dynamic"
 
@@ -58,11 +59,7 @@ export default async function ReceiptPage({
 
   if (!bill) notFound()
 
-  const template = (settings?.receipt_template ?? {}) as {
-    footer?: string
-    terms?: string
-    logo_url?: string
-  }
+  const template = (settings?.receipt_template ?? {}) as ReceiptTemplate
 
   // No printer configured is the common case on a fresh tenant; 80mm is the
   // same fallback lib/print/render.ts uses.
@@ -84,6 +81,9 @@ export default async function ReceiptPage({
         payments={payments ?? []}
         footer={template.footer}
         terms={template.terms}
+        logoUrl={template.logo_url}
+        qrUrl={template.qr_url}
+        qrCaption={template.qr_caption}
       />
     </div>
   )

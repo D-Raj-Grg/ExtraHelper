@@ -20,6 +20,7 @@ import {
   type PrintDocModel,
 } from "./docs"
 import { renderForPrinter } from "./render"
+import { brandingFrom, type ReceiptTemplate } from "./branding"
 import type { PreparedPrintJob, PrintDoc, PrinterRef } from "./types"
 
 /**
@@ -470,11 +471,8 @@ async function buildBillDoc(
     total_cents: number
     restaurant_tables: { label: string } | null
   }
-  const template = (settings?.receipt_template ?? {}) as {
-    header?: string
-    footer?: string
-    terms?: string
-  }
+  const template = (settings?.receipt_template ?? {}) as ReceiptTemplate
+  const branding = brandingFrom(template)
   const paid = (payments ?? []) as { method: string; amount_cents: number }[]
 
   return {
@@ -501,6 +499,9 @@ async function buildBillDoc(
       payments: paid.map((p) => ({ method: p.method, amountCents: p.amount_cents })),
       // Only cash needs the drawer to open.
       openDrawer: paid.some((p) => p.method === "cash"),
+      logo: branding.logo,
+      qr: branding.qr,
+      qrCaption: branding.qrCaption,
     }),
   }
 }
@@ -513,14 +514,22 @@ async function buildTestDoc(
   tenant: TenantCtx,
 ): Promise<{ doc: PrintDocModel } | { error: string }> {
   if (!printerId) return { error: "That printer no longer exists." }
-  const { data } = await supabase
-    .from("printers")
-    .select("name, paper_width")
-    .eq("id", printerId)
-    .eq("tenant_id", tenant.tenantId)
-    .maybeSingle()
+  const [{ data }, { data: settings }] = await Promise.all([
+    supabase
+      .from("printers")
+      .select("name, paper_width")
+      .eq("id", printerId)
+      .eq("tenant_id", tenant.tenantId)
+      .maybeSingle(),
+    supabase
+      .from("tenant_settings")
+      .select("receipt_template")
+      .eq("tenant_id", tenant.tenantId)
+      .maybeSingle(),
+  ])
   if (!data) return { error: "That printer no longer exists." }
+  const branding = brandingFrom((settings?.receipt_template ?? {}) as ReceiptTemplate)
   return {
-    doc: buildTest(data.name as string, data.paper_width as number),
+    doc: buildTest(data.name as string, data.paper_width as number, branding),
   }
 }

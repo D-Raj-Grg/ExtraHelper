@@ -23,6 +23,8 @@ export function SettingsManager({
   blockNegativeStock,
   paymentGateway,
   logoUrl,
+  qrUrl,
+  qrCaption,
   branches,
   canManageBranches,
   printers,
@@ -42,6 +44,8 @@ export function SettingsManager({
   blockNegativeStock: boolean
   paymentGateway: string
   logoUrl: string | null
+  qrUrl: string | null
+  qrCaption: string
   branches: Branch[]
   canManageBranches: boolean
   printers: PrinterRow[]
@@ -99,7 +103,12 @@ export function SettingsManager({
           />
         </TabsContent>
         <TabsContent value="receipt" keepMounted>
-          <ReceiptTab receipt={receipt} logoUrl={logoUrl} />
+          <ReceiptTab
+            receipt={receipt}
+            logoUrl={logoUrl}
+            qrUrl={qrUrl}
+            qrCaption={qrCaption}
+          />
         </TabsContent>
         {canManagePrinters ? (
           <TabsContent value="printers">

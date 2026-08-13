@@ -13,21 +13,9 @@
 
 import type { DocBlock, PrintDocModel } from "@/lib/print/docs"
 import { columnsFor } from "@/lib/print/escpos"
+import { decodeBitmapRows, printableDots, type PrintBitmap } from "@/lib/print/bitmap"
 
-/**
- * Printable dots, not paper width. An 80mm roll prints 72mm of it; the rest is
- * margin the head cannot reach. At 203dpi that is 576 dots — the number every
- * ESC/POS datasheet quotes.
- *
- * Every value is a multiple of 8: a raster row is sent as whole bytes, so a
- * width that isn't makes the row the printer draws wider than the canvas the
- * layout was measured against.
- */
-const DOTS: Record<number, number> = { 58: 384, 76: 416, 80: 576 }
-
-export function printableDots(paperWidthMm: number): number {
-  return DOTS[paperWidthMm] ?? 576
-}
+export { printableDots }
 
 const FONT_STACK =
   '"Noto Sans Devanagari", "Noto Sans", "Mangal", "Segoe UI", system-ui, sans-serif'
@@ -192,6 +180,16 @@ function layout(
     y += lineH
   }
 
+  /**
+   * A baked bitmap, drawn at its own size. It advances `y` in both passes —
+   * measure-only would under-report the height, and the ticket would print
+   * with its tail cut off.
+   */
+  const bitmap = (bmp: PrintBitmap): void => {
+    if (draw) drawBitmap(draw, bmp, Math.round(y))
+    y += bmp.h + Math.round(base * 0.4)
+  }
+
   const rule = (thick: boolean): void => {
     if (draw) {
       draw.fillRect(0, y + 2, width, thick ? 3 : 1)
@@ -235,6 +233,13 @@ function layout(
       case "item":
         item(b, base, text, twoCol)
         break
+      case "image": {
+        // Same baked pixels the text renderer sends, so both modes put the
+        // identical logo and QR on paper.
+        const bmp = b.variants[String(width)]
+        if (bmp) bitmap(bmp)
+        break
+      }
     }
   }
 
@@ -259,6 +264,26 @@ function item(
   }
   // Allergy and "no onion" live here. Bold so it survives a fast scan.
   if (b.notes) text(`** ${b.notes}`, { size: base, bold: true, align: "left" }, base)
+}
+
+/** Unpack MSB-first 1-bit rows onto the canvas. 1 = burn = black. */
+function drawBitmap(ctx: CanvasRenderingContext2D, bmp: PrintBitmap, top: number): void {
+  const rows = decodeBitmapRows(bmp)
+  const widthBytes = Math.ceil(bmp.w / 8)
+  const img = ctx.createImageData(bmp.w, bmp.h)
+
+  for (let y = 0; y < bmp.h; y++) {
+    for (let x = 0; x < bmp.w; x++) {
+      const on = (rows[y * widthBytes + (x >> 3)] ?? 0) & (0x80 >> (x & 7))
+      const i = (y * bmp.w + x) * 4
+      const v = on ? 0 : 255
+      img.data[i] = v
+      img.data[i + 1] = v
+      img.data[i + 2] = v
+      img.data[i + 3] = 255
+    }
+  }
+  ctx.putImageData(img, 0, top)
 }
 
 /** Greedy wrap by pixel width; a word wider than the line is hard-split. */

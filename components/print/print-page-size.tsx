@@ -43,10 +43,20 @@ export function PrintPageSize({
     }
 
     apply()
+    // The slip grows after mount when it carries a logo or a payment QR: an
+    // <img> has no height until it loads, so the first measurement is short by
+    // exactly the branding and the slip spills onto a second page. Watching the
+    // element catches that, and every other late reflow (font swap,
+    // revalidation) with it.
+    const observer = new ResizeObserver(apply)
+    const el = document.getElementById(targetId)
+    if (el) observer.observe(el)
+
     // The slip can change after mount (revalidation, "Print again"), and the
     // dialog is the last moment the height is knowable.
     window.addEventListener("beforeprint", apply)
     return () => {
+      observer.disconnect()
       window.removeEventListener("beforeprint", apply)
       style.remove()
     }

@@ -52,6 +52,9 @@ export function ReceiptView({
   payments,
   footer,
   terms,
+  logoUrl,
+  qrUrl,
+  qrCaption,
   paperWidthMm = 80,
 }: {
   tenantName: string
@@ -62,6 +65,9 @@ export function ReceiptView({
   payments: Payment[]
   footer?: string
   terms?: string
+  logoUrl?: string
+  qrUrl?: string
+  qrCaption?: string
   paperWidthMm?: number
 }) {
   const [pending, startTransition] = useTransition()
@@ -93,6 +99,14 @@ export function ReceiptView({
         className="rounded-lg bg-white p-[2mm] font-mono text-xs text-black shadow-sm print:rounded-none print:shadow-none"
       >
         <div className="mb-2 text-center">
+          {logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={logoUrl}
+              alt=""
+              className="mx-auto mb-1 max-h-16 w-auto max-w-full object-contain"
+            />
+          ) : null}
           <p className="text-sm font-bold uppercase">{tenantName}</p>
           <p className="text-[10px] text-neutral-500">
             {bill.restaurant_tables?.label ? `Table ${bill.restaurant_tables.label}` : "Takeaway"}
@@ -129,6 +143,17 @@ export function ReceiptView({
                 <span>{money(p.amount_cents, currency)}</span>
               </div>
             ))}
+          </div>
+        ) : null}
+        {qrUrl ? (
+          <div className="mt-2 border-t border-dashed border-neutral-300 pt-2 text-center">
+            {qrCaption ? <p className="mb-1 text-[10px] font-bold">{qrCaption}</p> : null}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={qrUrl}
+              alt={qrCaption || "Payment QR code"}
+              className="mx-auto aspect-square w-[62%] object-contain"
+            />
           </div>
         ) : null}
         <div className="mt-3 border-t border-dashed border-neutral-300 pt-2 text-center text-[10px] text-neutral-600">

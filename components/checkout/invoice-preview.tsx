@@ -82,6 +82,14 @@ export function CheckoutInvoicePreview({
   return (
     <div className="flex flex-col gap-3">
       <div className="rounded-xl border bg-card p-4 text-sm">
+        {meta.logoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={meta.logoUrl}
+            alt=""
+            className="mx-auto mb-2 max-h-14 w-auto max-w-full object-contain"
+          />
+        ) : null}
         <p className="text-center text-base font-bold uppercase tracking-wide">
           {settled ? "Tax invoice" : "Estimate invoice"}
         </p>
@@ -179,6 +187,17 @@ export function CheckoutInvoicePreview({
           <p className="mt-3 text-center text-xs font-semibold">
             This is not a tax invoice — the final bill comes from the counter.
           </p>
+        ) : null}
+        {meta.qrUrl ? (
+          <div className="mt-3 text-center">
+            {meta.qrCaption ? <p className="mb-1 text-xs font-semibold">{meta.qrCaption}</p> : null}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={meta.qrUrl}
+              alt={meta.qrCaption || "Payment QR code"}
+              className="mx-auto aspect-square w-40 max-w-full object-contain"
+            />
+          </div>
         ) : null}
         <p className="mt-2 text-center text-xs text-muted-foreground">
           {meta.footer ?? "Thank you — please visit again."}

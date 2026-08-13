@@ -62,6 +62,9 @@ export type InvoiceMeta = {
   header?: string
   footer?: string
   terms?: string
+  logoUrl?: string
+  qrUrl?: string
+  qrCaption?: string
 }
 
 /** How the cashier intends to settle. */
