@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server"
 import { requirePermission } from "@/lib/supabase/guards"
 import { formatDateTime } from "@/lib/format"
 import { PrintOnLoad } from "@/components/kot-print"
+import { PrintPageSize } from "@/components/print/print-page-size"
 
 // Always render fresh; never cache a kitchen ticket.
 export const dynamic = "force-dynamic"
@@ -58,13 +59,17 @@ export default async function KotPrintPage({
 
   return (
     <div
-      className="mx-auto max-w-full bg-white p-3 font-mono text-black"
+      id="kot-paper"
+      className="mx-auto max-w-full bg-white p-[2mm] font-mono text-black"
       style={{ width: `${paperWidth}mm` }}
     >
+      {/* This page carried an `@page size: <width>mm auto` rule for weeks and it
+          never took effect — see components/print/print-page-size.tsx. Every
+          browser ticket printed on A4, rules stopping short of the edge. */}
+      <PrintPageSize targetId="kot-paper" widthMm={paperWidth} />
       <style>{`
         @media print {
           .no-print { display: none !important; }
-          @page { margin: 4mm; size: ${paperWidth}mm auto; }
           body { background: #fff; }
         }
       `}</style>

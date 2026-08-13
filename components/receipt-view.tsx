@@ -7,6 +7,7 @@ import { formatDateTime, money } from "@/lib/format"
 import { Button } from "@/components/ui/button"
 import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { PrintPageSize } from "@/components/print/print-page-size"
 
 type Bill = {
   id: string
@@ -51,6 +52,7 @@ export function ReceiptView({
   payments,
   footer,
   terms,
+  paperWidthMm = 80,
 }: {
   tenantName: string
   currency: string
@@ -60,6 +62,7 @@ export function ReceiptView({
   payments: Payment[]
   footer?: string
   terms?: string
+  paperWidthMm?: number
 }) {
   const [pending, startTransition] = useTransition()
   const [email, setEmail] = useState("")
@@ -72,9 +75,23 @@ export function ReceiptView({
   }
 
   return (
-    <div className="w-full max-w-xs">
-      {/* Printable receipt (thermal-width). */}
-      <div className="rounded-lg bg-white p-4 font-mono text-xs text-black shadow-sm print:rounded-none print:shadow-none">
+    <div className="w-full max-w-full" style={{ width: `${paperWidthMm}mm` }}>
+      {/* The slip is sized in millimetres, not in a Tailwind max-width: a px
+          width is meaningless to a printer, so the browser laid a 320px block
+          out on A4 and centred it, leaving a white gutter each side.
+          PrintPageSize makes the sheet itself the width of the roll. */}
+      <PrintPageSize targetId="receipt-paper" widthMm={paperWidthMm} />
+
+      {/* Printable receipt (thermal-width). 2mm rather than zero: an 80mm roll
+          only has ~72mm of printable head travel (see components/print/raster.ts),
+          so the dashed rules land where the ESC/POS 48-column divider lands —
+          flush, but inside what a head can actually strike. The same padding on
+          screen and in print, so the height PrintPageSize measures here is the
+          height that prints; a print-only padding made the page 2mm too tall. */}
+      <div
+        id="receipt-paper"
+        className="rounded-lg bg-white p-[2mm] font-mono text-xs text-black shadow-sm print:rounded-none print:shadow-none"
+      >
         <div className="mb-2 text-center">
           <p className="text-sm font-bold uppercase">{tenantName}</p>
           <p className="text-[10px] text-neutral-500">
