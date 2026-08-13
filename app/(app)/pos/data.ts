@@ -1,12 +1,13 @@
 import { createClient } from "@/lib/supabase/server"
 import {
   ACTIVE_ORDER_STATUSES,
-  KOT_CARD_SELECT,
-  KOT_TAB_STATUSES,
+  completedOrdersQuery,
+  kotTabQuery,
   ORDER_CARD_SELECT,
   ORDER_DETAIL_SELECT,
 } from "@/lib/pos-constants"
 import type {
+  PosCompletedOrder,
   PosCustomer,
   PosData,
   PosKot,
@@ -32,11 +33,25 @@ type MenuRow = {
  * Everything /pos and /pos/[orderId] render. Both show the same screen — the
  * only difference is whether the modal starts open — so the fetch lives here
  * rather than being written twice.
+ *
+ * `timeZone` is the tenant's: the Completed tab and the KOT tail are scoped to
+ * the restaurant's own day, not the server's.
  */
-export async function loadPosData(tenantId: string): Promise<PosData> {
+export async function loadPosData(tenantId: string, timeZone: string): Promise<PosData> {
   const supabase = await createClient()
 
-  const [tables, floors, categories, menu, orders, customers, staff, kots] = await Promise.all([
+  const [
+    tables,
+    floors,
+    categories,
+    menu,
+    orders,
+    customers,
+    staff,
+    kots,
+    completed,
+    canCheckout,
+  ] = await Promise.all([
     supabase
       .from("restaurant_tables")
       .select("id, label, state, capacity, floor_id")
@@ -80,15 +95,16 @@ export async function loadPosData(tenantId: string): Promise<PosData> {
       .order("name")
       .limit(200),
     supabase.rpc("list_order_staff", { _tenant: tenantId }),
-    // Kitchen tickets for the KOT tab. Served included so the "Completed KOTs"
-    // toggle has something to reveal without a second round trip; the tab hides
-    // them by default.
-    supabase
-      .from("kots")
-      .select(KOT_CARD_SELECT)
-      .eq("tenant_id", tenantId)
-      .in("status", KOT_TAB_STATUSES)
-      .order("created_at", { ascending: false }),
+    // Kitchen tickets for the KOT tab. Finished ones come down too so the
+    // Completed view has something to show without a second round trip — the
+    // builder is what keeps that tail from being every ticket ever fired.
+    kotTabQuery(supabase, tenantId, timeZone),
+    // Today's finished orders, for the Completed tab.
+    completedOrdersQuery(supabase, tenantId, timeZone),
+    // Whether this member may open a bill / reprint its receipt. A parallel
+    // round trip rather than reading `role`, because custom roles exist and
+    // `role === "cashier"` is not the same question.
+    supabase.rpc("has_permission", { _tenant: tenantId, _key: "checkout.view" }),
   ])
 
   // Flatten the modifier embed here so the client and the IndexedDB cache see
@@ -117,6 +133,8 @@ export async function loadPosData(tenantId: string): Promise<PosData> {
     staff: (staff.data ?? []) as PosStaff[],
     orders: (orders.data ?? []) as unknown as PosOrderCard[],
     kots: (kots.data ?? []) as unknown as PosKot[],
+    completed: (completed.data ?? []) as unknown as PosCompletedOrder[],
+    canCheckout: canCheckout.data === true,
   }
 }
 

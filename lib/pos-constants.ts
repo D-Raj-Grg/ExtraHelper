@@ -9,7 +9,10 @@
  *
  * If these two diverge, the first Realtime ping visibly strips the order cards.
  */
+import type { SupabaseClient } from "@supabase/supabase-js"
+
 import { KOT_ACTIVE_STATUSES } from "@/lib/kds-constants"
+import { tzDayStart } from "@/lib/format"
 
 /**
  * The !orders_table_id_fkey hint is load-bearing: orders has two FKs to
@@ -52,3 +55,99 @@ export const ACTIVE_ORDER_STATUSES = [
   "ready",
   "served",
 ]
+
+/**
+ * The other end of the lifecycle: nothing more will be cooked, priced or fired.
+ * These leave the board and land on the Completed tab — which is the only place
+ * in the app an order can be looked at again once it's paid for.
+ */
+export const ORDER_DONE_STATUSES = ["billed", "closed", "cancelled"]
+
+/**
+ * The Completed tab's shape — the card select plus the bill's own status and
+ * total. The cashier's question is "did that one get paid?", and a second round
+ * trip per row to answer it is not a POS.
+ *
+ * The FK hint is spelled out for the same reason the tables one is: an implicit
+ * embed breaks the day a second FK to bills appears.
+ */
+export const COMPLETED_ORDER_SELECT =
+  "id, order_type, status, created_at, guests, table_id, bill_id, " +
+  "restaurant_tables!orders_table_id_fkey(label), " +
+  "order_items(id, name_snapshot, qty, unit_price_cents, is_void), " +
+  "bills!orders_bill_id_fkey(id, status, total_cents)"
+
+/**
+ * A busy till closes a few hundred orders a day. Caps the worst case without a
+ * pager; a tenant that hits it wants /reports, not a bigger POS query.
+ */
+export const COMPLETED_ORDER_LIMIT = 300
+
+/** Same idea for kitchen tickets — see kotTabQuery. */
+export const KOT_TAB_LIMIT = 400
+
+/**
+ * A ticket is done when the kitchen bumped it OR its order has been billed,
+ * closed or cancelled. The order half matters: a `ready` ticket on a paid bill
+ * is history, and without this it sat on the active board forever.
+ */
+export function isKotCompleted(kot: {
+  status: string
+  orders: { status: string } | null
+}): boolean {
+  return kot.status === "served" || ORDER_DONE_STATUSES.includes(kot.orders?.status ?? "")
+}
+
+/**
+ * Today's finished orders, in the tenant's own day.
+ *
+ * A builder rather than a select string because the server page and the
+ * client's Realtime refetch must issue the *identical* query — the failure this
+ * whole module exists to prevent (see the header). Sharing the string still let
+ * the two filters drift; sharing the query can't.
+ *
+ * Bounded on created_at: it's the indexed column
+ * (idx_orders_tenant(tenant_id, created_at desc)) and orders has no closed_at.
+ * Known consequence — an order opened 23:50 and billed 00:10 lists under the
+ * previous day. Fixing that properly means a closed_at column and index.
+ */
+export function completedOrdersQuery(
+  supabase: SupabaseClient,
+  tenantId: string,
+  timeZone: string,
+  now: Date = new Date(),
+) {
+  return supabase
+    .from("orders")
+    .select(COMPLETED_ORDER_SELECT)
+    .eq("tenant_id", tenantId)
+    .in("status", ORDER_DONE_STATUSES)
+    .gte("created_at", tzDayStart(now, timeZone).toISOString())
+    .order("created_at", { ascending: false })
+    .order("created_at", { referencedTable: "order_items" })
+    .limit(COMPLETED_ORDER_LIMIT)
+}
+
+/**
+ * The KOT tab's tickets, shared server+client for the same reason.
+ *
+ * Active tickets are never date-bound — one fired at 23:55 is still the
+ * kitchen's problem at 00:05 — but the finished tail is capped to today, which
+ * is what stops this query growing for the life of the tenant.
+ */
+export function kotTabQuery(
+  supabase: SupabaseClient,
+  tenantId: string,
+  timeZone: string,
+  now: Date = new Date(),
+) {
+  const since = tzDayStart(now, timeZone).toISOString()
+  return supabase
+    .from("kots")
+    .select(KOT_CARD_SELECT)
+    .eq("tenant_id", tenantId)
+    .in("status", KOT_TAB_STATUSES)
+    .or(`status.in.(${KOT_ACTIVE_STATUSES.join(",")}),created_at.gte.${since}`)
+    .order("created_at", { ascending: false })
+    .limit(KOT_TAB_LIMIT)
+}

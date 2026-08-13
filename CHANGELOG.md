@@ -8,7 +8,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
-Nothing yet.
+### Changed
+- **Confirming an order sends it to the kitchen.** The new-order screen had two buttons — *Confirm & fire* and *Confirm only* — and *Confirm only* left the order sitting where no kitchen screen or printer could see it. There is now one button: confirm an order and the tickets go out. Orders taken offline fire by themselves the moment the connection is back, instead of waiting for someone to remember them. Holding a course back is still done from the order itself, by adding the later dishes when you want them cooked.
 
 ---
 

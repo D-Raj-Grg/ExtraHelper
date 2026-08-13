@@ -1,12 +1,16 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { PlusIcon, WifiOffIcon } from "lucide-react"
 
 import { createClient } from "@/lib/supabase/client"
-import { ACTIVE_ORDER_STATUSES, ORDER_CARD_SELECT } from "@/lib/pos-constants"
-import { KOT_ACTIVE_STATUSES } from "@/lib/kds-constants"
+import {
+  ACTIVE_ORDER_STATUSES,
+  completedOrdersQuery,
+  isKotCompleted,
+  ORDER_CARD_SELECT,
+} from "@/lib/pos-constants"
 import { loadMenuCache, saveMenuCache } from "@/lib/offline/menu-cache"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -14,10 +18,16 @@ import { useOffline } from "@/components/offline-sync-provider"
 import { OrdersTab } from "@/components/pos/orders-tab"
 import { TableTab } from "@/components/pos/table-tab"
 import { KotTab } from "@/components/pos/kot-tab"
+import { CompletedTab } from "@/components/pos/completed-tab"
 import { PosTabs, type PosTab } from "@/components/pos/pos-tabs"
 import { OrderModal, type PosModalState } from "@/components/pos/order-modal"
 import { usePosRealtime } from "@/components/pos/use-pos-realtime"
-import type { PosData, PosOrderCard, PosOrderDetail } from "@/components/pos/types"
+import type {
+  PosCompletedOrder,
+  PosData,
+  PosOrderCard,
+  PosOrderDetail,
+} from "@/components/pos/types"
 
 
 /**
@@ -86,6 +96,7 @@ export function PosScreen({
     setModal(openOrderId ? { mode: "amend", orderId: openOrderId } : startNew ? { mode: "create" } : null)
   }
   const [orders, setOrders] = useState<PosOrderCard[]>(data.orders)
+  const [completed, setCompleted] = useState<PosCompletedOrder[]>(data.completed)
 
   // Offline fallbacks, so a warm tab keeps working when the server props are
   // empty because the fetch failed.
@@ -100,6 +111,7 @@ export function PosScreen({
   if (seed !== data) {
     setSeed(data)
     setOrders(data.orders)
+    setCompleted(data.completed)
     if (data.menu.length > 0) {
       setMenu(data.menu)
       setTables(data.tables)
@@ -148,7 +160,38 @@ export function PosScreen({
     if (rows) setOrders(rows as unknown as PosOrderCard[])
   }, [tenantId])
 
-  usePosRealtime(tenantId, () => void refetchOrders())
+  // Unlike refetchOrders above, this one shares the *query* with the server
+  // rather than the select string, so the two can't drift at all.
+  const refetchCompleted = useCallback(async () => {
+    const { data: rows } = await completedOrdersQuery(createClient(), tenantId, timeZone)
+    if (rows) setCompleted(rows as unknown as PosCompletedOrder[])
+  }, [tenantId, timeZone])
+
+  // Read through a ref so the Realtime callback doesn't need `tab` in its deps
+  // (usePosRealtime holds the callback in a ref of its own precisely so the
+  // channel isn't torn down and rebuilt on every render).
+  const tabRef = useRef(tab)
+  useEffect(() => {
+    tabRef.current = tab
+  }, [tab])
+
+  usePosRealtime(tenantId, () => {
+    void refetchOrders()
+    // Only while the pane is on screen — the board shouldn't pay for a list
+    // nobody is looking at. Billing an order is an `orders` UPDATE, so the
+    // existing channel already covers this; a *payment* writes bills/payments
+    // instead, and the Bill badge catches up on the hook's 45s safety tick.
+    if (tabRef.current === "completed") void refetchCompleted()
+  })
+
+  // Opening the tab pulls fresh: the seed is as old as the last server render.
+  // Scheduled rather than awaited inline, the same way KotTab does its
+  // mount refetch — a bare call reads to the lint rule as setState-in-effect.
+  useEffect(() => {
+    if (tab !== "completed") return
+    const t = setTimeout(() => void refetchCompleted(), 0)
+    return () => clearTimeout(t)
+  }, [tab, refetchCompleted])
 
   const close = useCallback(() => {
     setModal(null)
@@ -159,12 +202,15 @@ export function PosScreen({
     else void refetchOrders()
   }, [openOrderId, startNew, router, refetchOrders])
 
-  const posData: PosData = { ...data, menu, tables, categories, floors, orders }
+  const posData: PosData = { ...data, menu, tables, categories, floors, orders, completed }
 
-  const counts: Record<PosTab, number> = {
+  // No `completed` key: see PosTabs — a badge there would be a today-total that
+  // only ever climbs, competing with the two counts that mean "act on me".
+  const counts: Partial<Record<PosTab, number>> = {
     orders: orders.length,
     table: tables.length,
-    kot: posData.kots.filter((k) => KOT_ACTIVE_STATUSES.includes(k.status)).length,
+    // Same predicate the KOT tab partitions on, so the badge and the tab agree.
+    kot: posData.kots.filter((k) => !isKotCompleted(k)).length,
   }
 
   return (
@@ -185,6 +231,7 @@ export function PosScreen({
         </Button>
       </div>
 
+      {/* Four panes now — a nested ternary chain stops being readable here. */}
       {tab === "orders" ? (
         <OrdersTab
           orders={orders}
@@ -195,7 +242,9 @@ export function PosScreen({
           onOpen={(orderId) => setModal({ mode: "amend", orderId })}
           onNew={() => setModal({ mode: "create" })}
         />
-      ) : tab === "table" ? (
+      ) : null}
+
+      {tab === "table" ? (
         <TableTab
           tables={tables}
           floors={floors}
@@ -203,14 +252,26 @@ export function PosScreen({
           onOpenOrder={(orderId) => setModal({ mode: "amend", orderId })}
           onNewForTable={(tableId) => setModal({ mode: "create", tableId })}
         />
-      ) : (
+      ) : null}
+
+      {tab === "kot" ? (
         <KotTab
           initialKots={posData.kots}
           staff={data.staff}
           timeZone={timeZone}
           tenantId={tenantId}
         />
-      )}
+      ) : null}
+
+      {tab === "completed" ? (
+        <CompletedTab
+          orders={completed}
+          currency={currency}
+          timeZone={timeZone}
+          canCheckout={data.canCheckout}
+          onGoToOrders={() => selectTab("orders")}
+        />
+      ) : null}
 
       <OrderModal
         state={modal}

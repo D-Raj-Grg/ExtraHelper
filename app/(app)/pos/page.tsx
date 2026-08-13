@@ -7,7 +7,7 @@ import { loadPosData } from "./data"
 
 export const dynamic = "force-dynamic"
 
-const TABS: PosTab[] = ["orders", "table", "kot"]
+const TABS: PosTab[] = ["orders", "table", "kot", "completed"]
 
 export default async function PosPage({
   searchParams,
@@ -15,7 +15,10 @@ export default async function PosPage({
   searchParams: Promise<{ new?: string; tab?: string }>
 }) {
   const tenant = await requirePermission("order.view")
-  const [data, params] = await Promise.all([loadPosData(tenant.tenantId), searchParams])
+  const [data, params] = await Promise.all([
+    loadPosData(tenant.tenantId, tenant.timezone),
+    searchParams,
+  ])
   const initialTab: PosTab = TABS.includes(params.tab as PosTab) ? (params.tab as PosTab) : "orders"
 
   return (

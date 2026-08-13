@@ -10,7 +10,7 @@ import {
 } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { placeStaffOrder } from "@/app/(app)/pos/actions"
+import { fireOrder, placeStaffOrder } from "@/app/(app)/pos/actions"
 import { takePayment } from "@/app/(app)/bill/actions"
 import {
   MAX_ATTEMPTS,
@@ -53,7 +53,17 @@ async function replay(entry: QueueEntry): Promise<ReplayResult> {
       entry.payload.items,
       entry.payload.meta ?? {},
     )
-    return "ok" in res ? "ok" : "reject"
+    if (!("ok" in res)) return "reject"
+    // Confirming an order online fires it, so a replayed one has to fire too —
+    // otherwise a queued order syncs and then sits invisible to the kitchen.
+    // Best-effort: the placement is already committed, so a fire failure must
+    // still report "ok" (a "retry" would re-run place on the next sync). The
+    // order lands un-fired and can be fired from the order screen.
+    const fr = await fireOrder(res.orderId)
+    if ("error" in fr) {
+      toast.error("Order synced but not sent to kitchen — fire it from the order.")
+    }
+    return "ok"
   } catch {
     return "retry" // network/throw — don't count against the attempt cap
   }

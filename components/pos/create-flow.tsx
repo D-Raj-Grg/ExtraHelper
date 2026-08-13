@@ -59,7 +59,7 @@ export function CreateFlow({
   const table = data.tables.find((t) => t.id === tableId)
   const destinationLabel = table ? `Table ${table.label}` : "Takeaway"
 
-  function confirm(alsoFire: boolean) {
+  function confirm() {
     if (cart.lines.length === 0) return
     const items = toPlaceLines(cart.lines)
     const meta = {
@@ -91,29 +91,32 @@ export function CreateFlow({
           toast.error(res.error)
           return
         }
-        // One-tap path: fire the just-placed order to the kitchen before we
-        // leave the create modal, so the common "take order, send it now" case
-        // doesn't need a second tap on the amend screen. Fire needs the server,
-        // so it only runs online (this branch is online-only already).
-        if (alsoFire) {
-          const fr = await fireOrder(res.orderId)
-          if ("error" in fr) {
-            // Order IS created but the fire failed — the one case worth keeping
-            // the composer open for, on the amend screen where fire can be
-            // retried. Just the push, no onClose() first: onClose navigates
-            // too, and two navigations in one tick race and leave you on
-            // neither. The route change swaps this modal to amend mode.
-            toast.error(fr.error)
-            router.push(`/pos/${res.orderId}`)
-            return
-          }
-          if (fr.kotIds.length) toast.success(`Placed · ${fr.kotIds.length} ticket(s) to kitchen`)
-          // Nothing is printed from here. Creating the tickets queues them in
-          // Postgres, so they come out wherever the printers are — including
-          // when this till is not the machine wired to the kitchen.
-        } else {
-          toast.success(`${destinationLabel} order placed`)
+        // Confirming IS sending: an order the kitchen can't see isn't confirmed
+        // in any sense a waiter means, so there is no "place but don't fire"
+        // path here. Fire needs the server, which this branch already has
+        // (offline short-circuits above and replays with a fire on reconnect).
+        const fr = await fireOrder(res.orderId)
+        if ("error" in fr) {
+          // Order IS created but the fire failed — the one case worth keeping
+          // the composer open for, on the amend screen where fire can be
+          // retried. Just the push, no onClose() first: onClose navigates
+          // too, and two navigations in one tick race and leave you on
+          // neither. The route change swaps this modal to amend mode.
+          toast.error(fr.error)
+          router.push(`/pos/${res.orderId}`)
+          return
         }
+        // Zero tickets is a real outcome (every line already on a ticket, or
+        // printed the instant it was made) — still say the order went, never
+        // close on silence.
+        toast.success(
+          fr.kotIds.length
+            ? `Placed · ${fr.kotIds.length} ticket(s) to kitchen`
+            : `${destinationLabel} order sent to the kitchen`,
+        )
+        // Nothing is printed from here. Creating the tickets queues them in
+        // Postgres, so they come out wherever the printers are — including
+        // when this till is not the machine wired to the kitchen.
         // Taking an order ends here: back to the board. Billing is a separate
         // decision made later from the order card, not a step tacked onto
         // ordering. onClose refetches (or drops the deep link back to /pos),
@@ -168,36 +171,14 @@ export function CreateFlow({
       footer={
         <div className="flex shrink-0 flex-col gap-2 border-t p-3">
           {!online ? <OfflineNote /> : null}
-          {online ? (
-            <>
-              <Button
-                size="lg"
-                className="w-full"
-                disabled={cart.lines.length === 0 || pending}
-                onClick={() => confirm(true)}
-              >
-                {pending ? "Placing…" : "Confirm & fire"}
-              </Button>
-              <Button
-                size="lg"
-                variant="outline"
-                className="w-full"
-                disabled={cart.lines.length === 0 || pending}
-                onClick={() => confirm(false)}
-              >
-                Confirm only
-              </Button>
-            </>
-          ) : (
-            <Button
-              size="lg"
-              className="w-full"
-              disabled={cart.lines.length === 0 || pending}
-              onClick={() => confirm(false)}
-            >
-              Queue order
-            </Button>
-          )}
+          <Button
+            size="lg"
+            className="w-full"
+            disabled={cart.lines.length === 0 || pending}
+            onClick={() => confirm()}
+          >
+            {online ? (pending ? "Placing…" : "Confirm & fire") : "Queue order"}
+          </Button>
         </div>
       }
     />

@@ -36,6 +36,24 @@ export type PosOrderCard = {
   order_items: PosCardLine[]
 }
 
+/**
+ * A finished order, as the Completed tab lists it. Carries the bill it settled
+ * on so the row can say whether the money actually arrived — null on a
+ * cancelled order, which never had one.
+ */
+export type PosCompletedOrder = {
+  id: string
+  order_type: string
+  status: string
+  created_at: string
+  guests: number | null
+  table_id: string | null
+  bill_id: string | null
+  restaurant_tables: { label: string } | null
+  order_items: PosCardLine[]
+  bills: { id: string; status: string; total_cents: number } | null
+}
+
 /** A modifier line as the KOT tab shows it. */
 export type PosKotMod = { name_snapshot: string; qty: number }
 
@@ -118,4 +136,8 @@ export type PosData = {
   staff: PosStaff[]
   orders: PosOrderCard[]
   kots: PosKot[]
+  /** Today's finished orders. Deliberately not offline-cached — a stale history is worse than none. */
+  completed: PosCompletedOrder[]
+  /** Holds checkout.view ⇒ may open a bill and reprint its receipt. UX gating only. */
+  canCheckout: boolean
 }

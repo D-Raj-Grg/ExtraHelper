@@ -1,23 +1,21 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react"
-import { ChefHatIcon } from "lucide-react"
+import { CheckCircle2Icon, ChefHatIcon, FlameIcon } from "lucide-react"
 import { toast } from "sonner"
 
 import { bumpKot } from "@/app/(app)/kds/actions"
 import { voidLine } from "@/app/(app)/pos/actions"
 import { createClient } from "@/lib/supabase/client"
-import { KOT_CARD_SELECT, KOT_TAB_STATUSES } from "@/lib/pos-constants"
-import { KOT_ACTIVE_STATUSES, KOT_FLOW } from "@/lib/kds-constants"
+import { isKotCompleted, kotTabQuery, ORDER_DONE_STATUSES } from "@/lib/pos-constants"
+import { KOT_FLOW } from "@/lib/kds-constants"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { usePrint } from "@/components/print/use-print"
 import { KotCard, type KotTicket, type KotTicketLine } from "@/components/pos/kot-card"
+import { Frame } from "@/components/pos/pos-empty-state"
+import { SegmentedControl } from "@/components/pos/segmented-control"
 import type { PosKot, PosStaff } from "@/components/pos/types"
-
-// Once an order is billed/closed/cancelled a line void can't recompute a paid
-// bill — cancel is withdrawn rather than corrupting the total.
-const UNCANCELLABLE = ["billed", "closed", "cancelled"]
 
 /** Least-advanced status across a set — a combined ticket is "cooking" if any station still is. */
 function slowestStatus(kots: PosKot[]): string {
@@ -64,7 +62,7 @@ export function KotTab({
 }) {
   const [pending, startTransition] = useTransition()
   const { printKots } = usePrint()
-  const [showCompleted, setShowCompleted] = useState(false)
+  const [view, setView] = useState<"active" | "completed">("active")
   const [splitByType, setSplitByType] = useState(true)
   const [kots, setKots] = useState<PosKot[]>(initialKots)
 
@@ -83,15 +81,9 @@ export function KotTab({
   }, [staff])
 
   const refetch = useCallback(async () => {
-    const supabase = createClient()
-    const { data } = await supabase
-      .from("kots")
-      .select(KOT_CARD_SELECT)
-      .eq("tenant_id", tenantId)
-      .in("status", KOT_TAB_STATUSES)
-      .order("created_at", { ascending: false })
+    const { data } = await kotTabQuery(createClient(), tenantId, timeZone)
     if (data) setKots(data as unknown as PosKot[])
-  }, [tenantId])
+  }, [tenantId, timeZone])
 
   // Live: debounced refetch on any ticket / line / order change (joins mean a
   // row-level merge isn't enough — the same reason kds-board refetches).
@@ -119,14 +111,21 @@ export function KotTab({
     }
   }, [tenantId, refetch])
 
-  const visible = showCompleted ? kots : kots.filter((k) => KOT_ACTIVE_STATUSES.includes(k.status))
+  // Partitioned on isKotCompleted, not on the ticket's own status: a `ready`
+  // ticket whose order has since been billed is history, and filtering on
+  // KOT_ACTIVE_STATUSES alone left it sitting on the active pass forever.
+  const done = kots.filter(isKotCompleted)
+  const live = kots.filter((k) => !isKotCompleted(k))
+  const visible = view === "completed" ? done : live
 
   const tickets: KotTicket[] = useMemo(() => {
     const meta = (k: PosKot) => ({
       tableLabel: k.orders?.restaurant_tables?.label ?? null,
       orderType: k.orders?.order_type ?? "dine_in",
       staffName: (k.orders?.waiter_id && staffName.get(k.orders.waiter_id)) || "Staff",
-      canCancel: !UNCANCELLABLE.includes(k.orders?.status ?? ""),
+      // Once an order is billed/closed/cancelled a line void can't recompute a
+      // paid bill — cancel is withdrawn rather than corrupting the total.
+      canCancel: !ORDER_DONE_STATUSES.includes(k.orders?.status ?? ""),
     })
 
     if (splitByType) {
@@ -217,19 +216,23 @@ export function KotTab({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold text-muted-foreground">
-          {showCompleted ? "All tickets" : "Pending orders"}
-        </h3>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Two views, not a hidden toggle: "where did my ticket go?" was
+              unanswerable when the completed half was behind an off-by-default
+              button that named itself rather than the view it opened. */}
+          <SegmentedControl
+            ariaLabel="Ticket view"
+            value={view}
+            onChange={setView}
+            items={[
+              { key: "active", label: "Active", icon: FlameIcon, count: live.length },
+              { key: "completed", label: "Completed", icon: CheckCircle2Icon, count: done.length },
+            ]}
+          />
+        </div>
         <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            variant={showCompleted ? "default" : "outline"}
-            aria-pressed={showCompleted}
-            className="min-h-11"
-            onClick={() => setShowCompleted((v) => !v)}
-          >
-            Completed KOTs
-          </Button>
+          {/* Stays a toggle: it modifies how the visible tickets are grouped,
+              it doesn't select which set you're looking at. */}
           <Button
             type="button"
             variant={splitByType ? "default" : "outline"}
@@ -243,17 +246,16 @@ export function KotTab({
       </div>
 
       {tickets.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed px-6 py-16 text-center">
-          <ChefHatIcon className="size-8 text-muted-foreground" aria-hidden />
+        <Frame icon={<ChefHatIcon className="size-8 text-muted-foreground" aria-hidden />}>
           <p className="text-base font-semibold">
-            {showCompleted ? "No tickets yet" : "No pending tickets"}
+            {view === "completed" ? "No tickets finished today" : "Nothing on the pass"}
           </p>
           <p className="max-w-md text-sm text-muted-foreground">
-            {showCompleted
-              ? "Fire an order and its kitchen tickets show up here."
-              : "Everything fired has been served. Toggle Completed KOTs to see the rest."}
+            {view === "completed"
+              ? "Fire an order and its kitchen tickets land here once the kitchen bumps them through, or once the bill is settled."
+              : "Everything fired has been served. Switch to Completed to look back over today's tickets."}
           </p>
-        </div>
+        </Frame>
       ) : (
         <div className={cn("grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3")}>
           {tickets.map((t) => (

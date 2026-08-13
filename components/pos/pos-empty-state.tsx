@@ -56,7 +56,7 @@ export function PosEmptyState({
       <p className="text-base font-semibold">No orders yet</p>
       <p className="max-w-md text-sm text-muted-foreground">
         Start one and it&apos;ll show up here. Pick a table or takeaway, tap the dishes, then confirm
-        — the kitchen gets its ticket when you fire it.
+        — the kitchen gets its ticket straight away.
       </p>
       <Button onClick={onNew} className="mt-1">
         <PlusIcon />
@@ -66,7 +66,8 @@ export function PosEmptyState({
   )
 }
 
-function Frame({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
+/** The dashed "nothing here" box. Exported so every POS pane uses one shape. */
+export function Frame({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed px-6 py-16 text-center">
       {icon}

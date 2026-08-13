@@ -1,22 +1,25 @@
 "use client"
 
-import { ChefHatIcon, ClipboardListIcon, LayoutGridIcon } from "lucide-react"
+import { CheckCircle2Icon, ChefHatIcon, ClipboardListIcon, LayoutGridIcon } from "lucide-react"
 
-import { cn } from "@/lib/utils"
-import { Badge } from "@/components/ui/badge"
+import { SegmentedControl, type SegmentedItem } from "@/components/pos/segmented-control"
 
-export type PosTab = "orders" | "table" | "kot"
+export type PosTab = "orders" | "table" | "kot" | "completed"
 
-const TABS: { key: PosTab; label: string; icon: typeof ClipboardListIcon }[] = [
+const TABS: { key: PosTab; label: string; icon: SegmentedItem<PosTab>["icon"] }[] = [
   { key: "orders", label: "Orders", icon: ClipboardListIcon },
   { key: "table", label: "Table", icon: LayoutGridIcon },
   { key: "kot", label: "KOT", icon: ChefHatIcon },
+  { key: "completed", label: "Completed", icon: CheckCircle2Icon },
 ]
 
 /**
- * The three POS panes as one segmented control. Native radio group underneath —
- * arrow keys walk the set and a screen reader announces the selection — with a
- * count badge per tab so the board's shape reads before you switch to it.
+ * The POS panes as one segmented control.
+ *
+ * `counts` is partial on purpose: a badge here means "this many things want
+ * you", which is true of open orders and live tickets and false of a completed
+ * count that only ever climbs. Omitting the key says that; passing 0 would be a
+ * number pretending to be information.
  */
 export function PosTabs({
   value,
@@ -25,51 +28,14 @@ export function PosTabs({
 }: {
   value: PosTab
   onChange: (tab: PosTab) => void
-  counts: Record<PosTab, number>
+  counts: Partial<Record<PosTab, number>>
 }) {
   return (
-    <div
-      role="radiogroup"
-      aria-label="POS view"
-      className="inline-flex gap-1 rounded-xl bg-muted p-1"
-    >
-      {TABS.map(({ key, label, icon: Icon }) => {
-        const active = value === key
-        return (
-          <button
-            key={key}
-            type="button"
-            role="radio"
-            aria-checked={active}
-            onClick={() => onChange(key)}
-            className={cn(
-              "flex min-h-11 items-center gap-2 rounded-lg px-4 text-sm font-semibold transition-colors",
-              "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring motion-reduce:transition-none",
-              active
-                ? "bg-primary text-primary-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            <Icon className="size-4 shrink-0" aria-hidden />
-            {label}
-            {counts[key] > 0 ? (
-              <Badge
-                className={cn(
-                  // Both cases set their own text colour: the default variant's
-                  // white foreground on a light `bg-background` pill was an
-                  // invisible count.
-                  "min-w-5 border-transparent px-1.5 font-semibold tabular-nums",
-                  active
-                    ? "bg-primary-foreground/25 text-primary-foreground"
-                    : "bg-background text-foreground shadow-xs",
-                )}
-              >
-                {counts[key]}
-              </Badge>
-            ) : null}
-          </button>
-        )
-      })}
-    </div>
+    <SegmentedControl
+      ariaLabel="POS view"
+      value={value}
+      onChange={onChange}
+      items={TABS.map((t) => ({ ...t, count: counts[t.key] }))}
+    />
   )
 }

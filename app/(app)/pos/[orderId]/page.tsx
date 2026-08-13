@@ -21,7 +21,7 @@ export default async function OrderBuilderPage({
   const tenant = await requirePermission("order.view")
 
   const [data, detail] = await Promise.all([
-    loadPosData(tenant.tenantId),
+    loadPosData(tenant.tenantId, tenant.timezone),
     loadOrderDetail(orderId, tenant.tenantId),
   ])
 

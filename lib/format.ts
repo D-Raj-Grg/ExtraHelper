@@ -132,6 +132,26 @@ export function tzOffsetMs(date: Date, timeZone: string): number {
 }
 
 /**
+ * The UTC instant at which the tenant-local day containing `at` begins.
+ *
+ * "Today" on a POS is the restaurant's today, not the server's — a till in
+ * Kathmandu closing at 23:00 local is already tomorrow in UTC. Lives here rather
+ * than in report-range so client components can import it too (this module has
+ * no server imports); report-range keeps its own tzMidnight, which takes a
+ * user-typed "YYYY-MM-DD" rather than an instant.
+ */
+export function tzDayStart(at: Date, timeZone: string): Date {
+  const [y, mo, d] = new Intl.DateTimeFormat("en-CA", { timeZone })
+    .format(at)
+    .split("-")
+    .map(Number)
+  // Probe the offset at local noon: midnight itself can fall inside a DST gap,
+  // where the zone has no such wall-clock time at all.
+  const off = tzOffsetMs(new Date(Date.UTC(y, mo - 1, d, 12)), timeZone)
+  return new Date(Date.UTC(y, mo - 1, d) - off)
+}
+
+/**
  * Interpret a timezone-less wall-clock string (a `datetime-local` value like
  * "2026-07-12T19:00") as local time in `timeZone`, returning the matching UTC
  * instant. Without this, `new Date(wall)` parses in the SERVER's zone (UTC in
