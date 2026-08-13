@@ -59,8 +59,16 @@ export async function updateSession(request: NextRequest) {
 
   const { pathname } = request.nextUrl
 
+  // Route handlers authenticate themselves and answer in JSON, so they are
+  // never redirected. Two reasons this matters: a cookie-less client (the
+  // headless print agent, which carries a bearer token) would be bounced to
+  // /login and never reach the handler that understands its token; and any API
+  // client handed an HTML login page instead of a 401 has to guess what went
+  // wrong. Every route under /api checks its own caller — audited, not assumed.
+  const isApi = pathname === "/api" || pathname.startsWith("/api/")
+
   // Unauthenticated hitting a protected route → login.
-  if (!user && !isPublic(pathname)) {
+  if (!user && !isApi && !isPublic(pathname)) {
     const url = request.nextUrl.clone()
     url.pathname = "/login"
     url.searchParams.set("next", pathname)
