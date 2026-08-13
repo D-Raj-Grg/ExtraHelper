@@ -315,7 +315,7 @@ export type BillDoc = {
  * groups them; paper has to group them identically or the two documents
  * disagree about a number the guest is holding.
  */
-function groupParticulars(items: BillDoc["items"]) {
+export function groupParticulars(items: BillDoc["items"]) {
   const by = new Map<string, { name: string; rate: number; qty: number; amount: number }>()
   for (const it of items) {
     const key = `${it.description}|${it.unitPriceCents}`
@@ -335,6 +335,33 @@ function groupParticulars(items: BillDoc["items"]) {
   return [...by.values()]
 }
 
+
+/**
+ * Does anything sit between the sub total and the total?
+ *
+ * Sub total only earns its line when the answer is yes. Otherwise it is the
+ * same figure twice, two lines apart, and a guest hunts for the difference
+ * between them. Exported because the printed slip and the browser receipt must
+ * agree about it — a number showing on one and not the other is exactly the
+ * kind of drift that made those two documents diverge in the first place.
+ */
+export function hasBillAdjustments(r: {
+  serviceChargeCents: number
+  taxCents: number
+  discountCents: number
+  tipCents?: number
+  roundingCents?: number
+  charges?: unknown[]
+}): boolean {
+  return (
+    r.serviceChargeCents > 0 ||
+    r.taxCents > 0 ||
+    r.discountCents > 0 ||
+    (r.tipCents ?? 0) > 0 ||
+    (r.roundingCents ?? 0) !== 0 ||
+    (r.charges?.length ?? 0) > 0
+  )
+}
 
 /**
  * Mirrors `components/checkout/invoice-preview.tsx` block for block.
@@ -384,17 +411,9 @@ export function buildBill(r: BillDoc): PrintDocModel {
     })),
   })
 
-  // Sub total only earns its line when something sits between it and the total.
-  // Printing the same figure twice, two lines apart, makes a guest hunt for the
-  // difference between them. With nothing to show, the section collapses
-  // entirely — including its rule, or the ticket prints two dividers touching.
-  const hasAdjustments =
-    r.serviceChargeCents > 0 ||
-    r.taxCents > 0 ||
-    r.discountCents > 0 ||
-    (r.tipCents ?? 0) > 0 ||
-    (r.roundingCents ?? 0) !== 0 ||
-    (r.charges?.length ?? 0) > 0
+  // With nothing to show, the section collapses entirely — including its rule,
+  // or the ticket prints two dividers touching.
+  const hasAdjustments = hasBillAdjustments(r)
   if (hasAdjustments) {
     blocks.push({ kind: "divider" })
     blocks.push({ kind: "row", label: "Sub total", value: money(r.subtotalCents, r.currency) })
