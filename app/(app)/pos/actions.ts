@@ -260,7 +260,7 @@ export async function addCustomItem(
     seat?: number | null
   },
 ): Promise<PosState> {
-  const tenant = await requireRole(...ORDER_ROLES)
+  await requireRole(...ORDER_ROLES)
   const name = fields.name.trim()
   if (!name) return { error: "Give the item a name." }
 
@@ -269,40 +269,26 @@ export async function addCustomItem(
     return { error: "That price looks wrong. Enter an amount between 0 and 100,000." }
   }
 
+  // One trusted implementation, shared with the Flutter app.
+  //
+  // This used to insert into `order_items` directly behind the `requireRole`
+  // above — but a role check inside a server action is not a guard: RLS on
+  // `order_items` is tenant-scoped only, so the same row could be written
+  // straight through PostgREST, with a price of the caller's choosing and no
+  // audit row. The RPC re-checks the role AND `order.create`, refuses a billed
+  // or closed order, clamps the price, and writes the `custom_price` audit in
+  // the same transaction as the line.
   const supabase = await createClient()
-  const qty = Math.max(1, Math.min(99, Math.floor(fields.qty ?? 1)))
-  const { data: line, error } = await supabase
-    .from("order_items")
-    .insert({
-      tenant_id: tenant.tenantId,
-      order_id: orderId,
-      item_id: null,
-      name_snapshot: name,
-      qty,
-      unit_price_cents: price,
-      notes: fields.notes?.trim() || null,
-      course: fields.course ?? null,
-      seat: fields.seat ?? null,
-      status: "draft",
-    })
-    .select("id")
-    .single()
-  if (error || !line) return { error: error?.message ?? "Could not add the item." }
-
-  // Rule #5: a hand-typed price is a price change → audited. Mirrors the audit
-  // place_staff_order writes for the create path. Best-effort: a failed audit
-  // insert must not lose the line the staff already added.
-  const { data: auth } = await supabase.auth.getUser()
-  if (auth.user) {
-    await supabase.from("audit_logs").insert({
-      tenant_id: tenant.tenantId,
-      actor_id: auth.user.id,
-      action: "custom_price",
-      entity_type: "order_item",
-      entity_id: line.id,
-      metadata: { name, unit_price_cents: price, qty, order_id: orderId, source: "addCustomItem" },
-    })
-  }
+  const { error } = await supabase.rpc("amend_order_add_custom_item", {
+    _order_id: orderId,
+    _name: name,
+    _unit_price_cents: price,
+    _qty: Math.max(1, Math.min(99, Math.floor(fields.qty ?? 1))),
+    _notes: fields.notes?.trim() || null,
+    _course: fields.course ?? null,
+    _seat: fields.seat ?? null,
+  })
+  if (error) return { error: error.message }
 
   revalidatePos(orderId)
   return { ok: true }

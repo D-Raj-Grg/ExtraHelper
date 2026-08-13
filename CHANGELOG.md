@@ -8,6 +8,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Security
+- **Adding an off-menu item is now enforced by the database, not by the page.** "Something off the menu" is the one place in ExtraHelper where a price is typed rather than looked up, and until now the check that you were allowed to do it lived only in the web app's own code. Anyone able to sign in to a restaurant could have written the same line another way — at a price of their choosing, and with nothing in the manager log to show for it. The rule now lives in the database: it re-checks your role and your permission, refuses an order that has already been billed or closed, caps the price, and records the amount in the manager log in the same step as the line. Nothing changes on screen. The mobile app uses the same rule, so both apps behave identically.
+
 ### Changed
 - **Confirming an order sends it to the kitchen.** The new-order screen had two buttons — *Confirm & fire* and *Confirm only* — and *Confirm only* left the order sitting where no kitchen screen or printer could see it. There is now one button: confirm an order and the tickets go out. Orders taken offline fire by themselves the moment the connection is back, instead of waiting for someone to remember them. Holding a course back is still done from the order itself, by adding the later dishes when you want them cooked.
 
