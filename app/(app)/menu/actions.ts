@@ -216,13 +216,103 @@ export async function addVariant(
   const n = Number(String(priceDelta ?? "0").trim())
   if (Number.isNaN(n)) return { error: "Price delta must be a number." }
   const supabase = await createClient()
+  // New variants land at the bottom of the item's list — appending is what the
+  // owner just did, so anything else would look like the row jumped.
+  const { data: last } = await supabase
+    .from("item_variants")
+    .select("sort")
+    .eq("tenant_id", tenant.tenantId)
+    .eq("item_id", itemId)
+    .order("sort", { ascending: false })
+    .limit(1)
+    .maybeSingle()
   const { error } = await supabase.from("item_variants").insert({
     tenant_id: tenant.tenantId,
     item_id: itemId,
     name: trimmed,
     price_delta_cents: Math.round(n * 100),
+    sort: (last?.sort ?? 0) + 1,
   })
   if (error) return { error: error.message }
+  revalidatePath("/menu")
+  revalidatePath("/pos")
+  return { ok: true }
+}
+
+/** Rename a variant and/or change its price delta. */
+export async function updateVariant(
+  variantId: string,
+  name: string,
+  priceDelta: string,
+): Promise<MenuState> {
+  const tenant = await requireRole("owner", "manager")
+  const trimmed = name.trim()
+  if (!trimmed) return { error: "Variant name is required." }
+  // Delta may be negative (e.g. Half −$2), so parse without the non-negative guard.
+  const n = Number(String(priceDelta ?? "0").trim())
+  if (Number.isNaN(n)) return { error: "Price delta must be a number." }
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from("item_variants")
+    .update({ name: trimmed, price_delta_cents: Math.round(n * 100) })
+    .eq("id", variantId)
+    .eq("tenant_id", tenant.tenantId)
+  if (error) return { error: error.message }
+  revalidatePath("/menu")
+  revalidatePath("/pos")
+  return { ok: true }
+}
+
+/**
+ * Move a variant one position up or down within its item.
+ *
+ * Renumbers the whole item 1..n rather than swapping two rows: legacy rows can
+ * share a `sort` (the column defaulted to 0 before the backfill), and a swap
+ * between two equal values is a silent no-op.
+ */
+export async function moveVariant(
+  variantId: string,
+  direction: "up" | "down",
+): Promise<MenuState> {
+  const tenant = await requireRole("owner", "manager")
+  const supabase = await createClient()
+
+  const { data: target, error: targetErr } = await supabase
+    .from("item_variants")
+    .select("id, item_id")
+    .eq("id", variantId)
+    .eq("tenant_id", tenant.tenantId)
+    .single()
+  if (targetErr) return { error: targetErr.message }
+
+  const { data: siblings, error: listErr } = await supabase
+    .from("item_variants")
+    .select("id, sort, name")
+    .eq("tenant_id", tenant.tenantId)
+    .eq("item_id", target.item_id)
+    .order("sort")
+    .order("name")
+  if (listErr) return { error: listErr.message }
+
+  const rows = siblings ?? []
+  const from = rows.findIndex((r) => r.id === variantId)
+  const to = direction === "up" ? from - 1 : from + 1
+  if (from < 0 || to < 0 || to >= rows.length) return { ok: true } // already at the edge
+
+  const reordered = [...rows]
+  const [moved] = reordered.splice(from, 1)
+  reordered.splice(to, 0, moved)
+
+  for (const [i, row] of reordered.entries()) {
+    if (row.sort === i + 1) continue
+    const { error } = await supabase
+      .from("item_variants")
+      .update({ sort: i + 1 })
+      .eq("id", row.id)
+      .eq("tenant_id", tenant.tenantId)
+    if (error) return { error: error.message }
+  }
+
   revalidatePath("/menu")
   revalidatePath("/pos")
   return { ok: true }

@@ -28,12 +28,15 @@ export default async function MenuPage() {
     // column is NOT a type error — the field would just be undefined at runtime.
     "id, name, description, base_price_cents, is_86, is_veg, image_url, category_id, " +
           "item_station_routes(station_id, kitchen_stations(name)), " +
-          "item_variants(id, name, price_delta_cents), " +
+          "item_variants(id, name, price_delta_cents, sort), " +
           "item_modifiers(modifier_id, is_default, max_qty, modifiers(id, name, price_cents)), " +
           "item_availability(id, day_of_week, start_time, end_time)",
       )
       .eq("tenant_id", tenant.tenantId)
-      .order("name"),
+      .order("name")
+      // Variant order is owner-chosen (Small → Large); without this the
+      // embedded rows come back in no defined order and reshuffle per fetch.
+      .order("sort", { referencedTable: "item_variants" }),
     supabase
       .from("kitchen_stations")
       .select("id, name, kind, printer_id")

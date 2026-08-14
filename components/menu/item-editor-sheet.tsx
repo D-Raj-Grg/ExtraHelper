@@ -1,7 +1,7 @@
 "use client"
 
 import { useActionState, useEffect, useState, useTransition } from "react"
-import { Trash2Icon, XIcon } from "lucide-react"
+import { CheckIcon, ChevronDownIcon, ChevronUpIcon, PencilIcon, Trash2Icon, XIcon } from "lucide-react"
 import {
   addAvailability,
   addItemStationRoute,
@@ -10,8 +10,10 @@ import {
   linkModifier,
   removeAvailability,
   removeItemStationRoute,
+  moveVariant,
   removeVariant,
   unlinkModifier,
+  updateVariant,
   updateItem,
   uploadItemImage,
   type MenuState,
@@ -220,6 +222,10 @@ function ItemEditorBody({
   const [vDelta, setVDelta] = useState("")
   const [vErr, setVErr] = useState<string | null>(null)
   const [vPending, startVariant] = useTransition()
+  // Open editor tracked by id — see the row comment below.
+  const [vEditId, setVEditId] = useState<string | null>(null)
+  const [vEditName, setVEditName] = useState("")
+  const [vEditDelta, setVEditDelta] = useState("")
 
   // Modifiers / stations / availability
   const [modErr, setModErr] = useState<string | null>(null)
@@ -394,39 +400,154 @@ function ItemEditorBody({
                   <TableHead className="px-3 py-2 font-medium">Variant</TableHead>
                   <TableHead className="px-3 py-2 text-right font-medium">Price change</TableHead>
                   <TableHead className="px-3 py-2 text-right font-medium">Sells for</TableHead>
-                  <TableHead className="w-10 px-3 py-2" />
+                  <TableHead className="w-40 px-3 py-2 text-right font-medium">
+                    <span className="sr-only">Reorder and edit</span>
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {item.item_variants.map((v) => (
-                  <TableRow key={v.id}>
-                    <TableCell className="px-3 py-2 font-medium">{v.name}</TableCell>
-                    <TableCell className="px-3 py-2 text-right tabular-nums text-muted-foreground">
-                      {v.price_delta_cents >= 0 ? "+" : "−"}
-                      {money(Math.abs(v.price_delta_cents), currency)}
-                    </TableCell>
-                    <TableCell className="px-3 py-2 text-right tabular-nums">
-                      {money(item.base_price_cents + v.price_delta_cents, currency)}
-                    </TableCell>
-                    <TableCell className="px-3 py-2 text-right">
-                      <Button
-                        size="icon-sm"
-                        variant="ghost"
-                        className="text-destructive"
-                        disabled={vPending}
-                        onClick={() =>
-                          startVariant(async () => {
-                            const res = await removeVariant(v.id)
-                            if (res && "error" in res) setVErr(res.error)
-                          })
-                        }
-                      >
-                        <Trash2Icon className="size-4" />
-                        <span className="sr-only">Remove variant {v.name}</span>
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {item.item_variants.map((v, i) =>
+                  // Hold the open editor by id, not by object: the row is
+                  // re-derived from revalidated data, so a stored snapshot
+                  // would show stale values until the sheet is reopened.
+                  vEditId === v.id ? (
+                    <TableRow key={v.id}>
+                      <TableCell className="px-3 py-2">
+                        <Label htmlFor={`variant-name-${v.id}`} className="sr-only">
+                          Variant name
+                        </Label>
+                        <Input
+                          id={`variant-name-${v.id}`}
+                          value={vEditName}
+                          onChange={(e) => setVEditName(e.target.value)}
+                          className="h-9"
+                        />
+                      </TableCell>
+                      <TableCell className="px-3 py-2">
+                        <Label htmlFor={`variant-delta-${v.id}`} className="sr-only">
+                          Price change for {v.name}
+                        </Label>
+                        <Input
+                          id={`variant-delta-${v.id}`}
+                          type="number"
+                          step="0.01"
+                          value={vEditDelta}
+                          onChange={(e) => setVEditDelta(e.target.value)}
+                          className="h-9 text-right tabular-nums"
+                        />
+                      </TableCell>
+                      <TableCell className="px-3 py-2 text-right text-muted-foreground">
+                        <span className="text-xs">Editing…</span>
+                      </TableCell>
+                      <TableCell className="px-3 py-2">
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            size="icon-sm"
+                            variant="ghost"
+                            disabled={vPending}
+                            onClick={() =>
+                              startVariant(async () => {
+                                setVErr(null)
+                                const res = await updateVariant(v.id, vEditName, vEditDelta || "0")
+                                if (res && "error" in res) setVErr(res.error)
+                                else setVEditId(null)
+                              })
+                            }
+                          >
+                            <CheckIcon className="size-4" />
+                            <span className="sr-only">Save variant {v.name}</span>
+                          </Button>
+                          <Button
+                            size="icon-sm"
+                            variant="ghost"
+                            disabled={vPending}
+                            onClick={() => {
+                              setVErr(null)
+                              setVEditId(null)
+                            }}
+                          >
+                            <XIcon className="size-4" />
+                            <span className="sr-only">Cancel editing {v.name}</span>
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    <TableRow key={v.id}>
+                      <TableCell className="px-3 py-2 font-medium">{v.name}</TableCell>
+                      <TableCell className="px-3 py-2 text-right tabular-nums text-muted-foreground">
+                        {v.price_delta_cents >= 0 ? "+" : "−"}
+                        {money(Math.abs(v.price_delta_cents), currency)}
+                      </TableCell>
+                      <TableCell className="px-3 py-2 text-right tabular-nums">
+                        {money(item.base_price_cents + v.price_delta_cents, currency)}
+                      </TableCell>
+                      <TableCell className="px-3 py-2">
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            size="icon-sm"
+                            variant="ghost"
+                            disabled={vPending || i === 0}
+                            onClick={() =>
+                              startVariant(async () => {
+                                setVErr(null)
+                                const res = await moveVariant(v.id, "up")
+                                if (res && "error" in res) setVErr(res.error)
+                              })
+                            }
+                          >
+                            <ChevronUpIcon className="size-4" />
+                            <span className="sr-only">Move {v.name} up</span>
+                          </Button>
+                          <Button
+                            size="icon-sm"
+                            variant="ghost"
+                            disabled={vPending || i === item.item_variants.length - 1}
+                            onClick={() =>
+                              startVariant(async () => {
+                                setVErr(null)
+                                const res = await moveVariant(v.id, "down")
+                                if (res && "error" in res) setVErr(res.error)
+                              })
+                            }
+                          >
+                            <ChevronDownIcon className="size-4" />
+                            <span className="sr-only">Move {v.name} down</span>
+                          </Button>
+                          <Button
+                            size="icon-sm"
+                            variant="ghost"
+                            disabled={vPending}
+                            onClick={() => {
+                              setVErr(null)
+                              setVEditId(v.id)
+                              setVEditName(v.name)
+                              setVEditDelta((v.price_delta_cents / 100).toFixed(2))
+                            }}
+                          >
+                            <PencilIcon className="size-4" />
+                            <span className="sr-only">Edit variant {v.name}</span>
+                          </Button>
+                          <Button
+                            size="icon-sm"
+                            variant="ghost"
+                            className="text-destructive"
+                            disabled={vPending}
+                            onClick={() =>
+                              startVariant(async () => {
+                                const res = await removeVariant(v.id)
+                                if (res && "error" in res) setVErr(res.error)
+                              })
+                            }
+                          >
+                            <Trash2Icon className="size-4" />
+                            <span className="sr-only">Remove variant {v.name}</span>
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ),
+                )}
               </TableBody>
             </Table>
           </div>
