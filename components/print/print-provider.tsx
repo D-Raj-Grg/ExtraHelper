@@ -122,11 +122,19 @@ export function PrintProvider({ children }: { children: React.ReactNode }) {
 
         // Signing is what makes printing silent. The private key never leaves
         // the server — the browser only ever asks it to sign a request.
+        // A failed fetch here is not a hard error: the agent library sends an
+        // empty certificate/signature instead and QZ Tray downgrades the
+        // request to "anonymous", prompting the operator for every ticket. That
+        // downgrade is invisible unless we say so, so say so — the console line
+        // is the only trace of why the prompts came back.
         qz.security.setCertificatePromise((resolve, reject) => {
           fetch("/api/qz/cert")
-            .then((r) => (r.ok ? r.text() : Promise.reject(new Error("no cert"))))
+            .then((r) => (r.ok ? r.text() : Promise.reject(new Error(`cert ${r.status}`))))
             .then(resolve)
-            .catch(reject)
+            .catch((e: unknown) => {
+              console.warn("[print] no signing certificate — QZ will prompt per job:", e)
+              reject(e)
+            })
         })
         qz.security.setSignatureAlgorithm("SHA512")
         qz.security.setSignaturePromise((toSign) => (resolve, reject) => {
@@ -135,9 +143,12 @@ export function PrintProvider({ children }: { children: React.ReactNode }) {
             headers: { "content-type": "text/plain" },
             body: toSign,
           })
-            .then((r) => (r.ok ? r.text() : Promise.reject(new Error("sign failed"))))
+            .then((r) => (r.ok ? r.text() : Promise.reject(new Error(`sign ${r.status}`))))
             .then(resolve)
-            .catch(reject)
+            .catch((e: unknown) => {
+              console.warn("[print] request not signed — QZ will prompt to allow it:", e)
+              reject(e)
+            })
         })
 
         qz.websocket.setClosedCallbacks(() => {

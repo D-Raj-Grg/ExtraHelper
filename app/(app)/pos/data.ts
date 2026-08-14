@@ -69,12 +69,14 @@ export async function loadPosData(tenantId: string, timeZone: string): Promise<P
       .from("menu_items")
       .select(
         "id, name, base_price_cents, is_86, is_veg, image_url, category_id, " +
-          "item_variants(id, name, price_delta_cents), " +
+          "item_variants(id, name, price_delta_cents, sort), " +
           "item_modifiers(modifiers(id, name, price_cents))",
       )
       .eq("tenant_id", tenantId)
       .eq("is_active", true)
-      .order("name"),
+      .order("name")
+      // Variant order is owner-chosen on /menu — keep the till showing it.
+      .order("sort", { referencedTable: "item_variants" }),
     supabase
       .from("orders")
       .select(ORDER_CARD_SELECT)

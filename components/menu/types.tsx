@@ -22,7 +22,7 @@ export type Item = {
   image_url: string | null
   category_id: string | null
   item_station_routes: { station_id: string; kitchen_stations: { name: string } | null }[]
-  item_variants: { id: string; name: string; price_delta_cents: number }[]
+  item_variants: { id: string; name: string; price_delta_cents: number; sort: number }[]
   item_modifiers: {
     modifier_id: string
     is_default: boolean

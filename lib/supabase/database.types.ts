@@ -881,6 +881,7 @@ export type Database = {
           name: string
           price_delta_cents: number
           recipe_scale: number
+          sort: number
           tenant_id: string
         }
         Insert: {
@@ -889,6 +890,7 @@ export type Database = {
           name: string
           price_delta_cents?: number
           recipe_scale?: number
+          sort?: number
           tenant_id: string
         }
         Update: {
@@ -897,6 +899,7 @@ export type Database = {
           name?: string
           price_delta_cents?: number
           recipe_scale?: number
+          sort?: number
           tenant_id?: string
         }
         Relationships: [
