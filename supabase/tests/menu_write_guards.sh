@@ -59,7 +59,13 @@ bad()  { FAIL=$((FAIL+1)); echo "  FAIL — $1: $2"; }
 check() { # check <label> <expected substring> <actual>
   case "$3" in *"$2"*) ok "$1";; *) bad "$1" "$3";; esac
 }
-jqf() { python3 -c "import json,sys;d=json.load(sys.stdin);print(d.get('$1','') if isinstance(d,dict) else '')"; }
+# A void RPC answers with an empty body, which is a pass, not a parse error.
+jqf() { python3 -c "
+import json,sys
+raw = sys.stdin.read().strip()
+d = json.loads(raw) if raw else {}
+print(d.get('$1','') if isinstance(d, dict) else '')
+"; }
 
 echo "== fixture =="
 ITEM=$(curl -s -X POST "$URL/rest/v1/menu_items" \
