@@ -212,15 +212,28 @@ established by the menu write guards.
 
 | Function | Permission | Behaviour |
 |---|---|---|
-| `record_cash_movement(_kind, _category, _amount_cents, _note, _po_id default null)` | `cash.payout` | Inserts against the caller's open session with `status = 'pending'`. Raises if no open session. |
-| `approve_cash_movement(_id)` | `cash.manage` | Sets `approved`. Only while the session is open. |
-| `reject_cash_movement(_id)` | `cash.manage` | Sets `rejected`. Only while the session is open. |
+| `record_cash_movement(_kind, _category, _amount_cents, _note)` | `cash.manage` | Inserts against the caller's open session with `status = 'pending'`. Raises if no open session. |
+| `approve_cash_movement(_id)` | `cash.approve` | Sets `approved`. Only while the session is open. |
+| `reject_cash_movement(_id)` | `cash.approve` | Sets `rejected`. Only while the session is open. |
 | `record_supplier_payment(_supplier_id, _po_id, _amount_cents, _method, _paid_at, _note)` | `purchasing.edit` | Inserts `supplier_payments`. If `_method = 'cash'`, also inserts a linked `cash_movements` payout with category `supplier` on the open session. Atomic: both rows or neither. Raises if `_method = 'cash'` and no session is open. |
 | `supplier_balances()` | `purchasing.view` | Per supplier: received value, paid, outstanding. |
 
-Approval reuses the existing `cash.manage` key rather than adding a second one.
-`purchasing.edit` and `purchasing.view` already exist. The only new key is
-`cash.payout`, seeded to owner, manager, and cashier.
+`record_cash_movement` takes no PO reference. A movement's link to purchasing is
+`supplier_payment_id`, written by `record_supplier_payment`; a second, looser
+link would be a way for the two to disagree.
+
+Recording reuses the existing `cash.manage` key, which the cashier role already
+holds (`20260712091000_seed_system_roles.sql:15`). Approval **cannot** reuse it
+for exactly that reason — a cashier holding `cash.manage` would approve their
+own payouts and the review step would be decorative. So the one new key is
+`cash.approve`, and it must not reach the cashier role.
+
+`default_role_permissions` gives owner every key and manager every key except
+`billing.view`, so both pick up `cash.approve` automatically for members whose
+`role_id` is null. Members pointed at a system role carry explicit
+`role_permissions` rows and need a backfill.
+
+`purchasing.edit` and `purchasing.view` already exist and are unchanged.
 
 RLS on both new tables: tenant-scoped select for tenant members; no direct
 insert, update, or delete for any role. All writes go through the RPCs above.
@@ -230,10 +243,18 @@ insert, update, or delete for any role. All writes go through the RPCs above.
 ### Cash drawer (`app/(app)/cash/`, `components/cash/`)
 
 The open session card gains a movements panel: a `Cash out` and `Cash in`
-action, the session's movements with status, and a live expected figure with its
-breakdown, so a cashier is not blind until close.
+action, and the session's movements with status and a running total of
+movements.
 
-Approve and reject controls render only for holders of `cash.manage`.
+**The panel must not show expected, cash sales, or any figure derived from
+them while the session is open.** `components/cash/session-card.tsx` already
+states the reason to the user — *"The expected total is only worked out after
+you submit, so the count stays honest."* A cashier who can see expected can tune
+the physical count to match it, which drives variance permanently to zero and
+destroys the signal this whole feature exists to produce. Movement amounts are
+safe to show: the cashier handed that money over and already knows it.
+
+Approve and reject controls render only for holders of `cash.approve`.
 
 The close dialog warns when entries are still pending: *"3 entries will be
 auto-approved on close."*
@@ -293,7 +314,8 @@ Forward-only, one file each:
 2. `refunds.method`, backfill, updated `refund_payment()`.
 3. New RPCs; rewritten `close_cash_session`.
 4. Drop `purchase_orders.total_cents`.
-5. Seed the `cash.payout` permission key.
+5. Add the `cash.approve` permission key and backfill it onto existing system
+   owner and manager roles.
 
 ## Backfilling 2026-08-14
 
