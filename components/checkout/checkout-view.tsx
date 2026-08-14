@@ -11,6 +11,8 @@ import {
   addOrderToBill,
   applyCoupon,
   applyDiscount,
+  removeDiscount,
+  removeItemDiscount,
   applyItemDiscount,
   attachCustomer,
   payByCard,
@@ -72,6 +74,7 @@ export function CheckoutView({
   paidCents,
   meta,
   canDiscount = false,
+  hasStaffDiscount = false,
   customer = null,
   pointsValueCents = 1,
   mergeableOrders = [],
@@ -84,6 +87,7 @@ export function CheckoutView({
   paidCents: number
   meta: InvoiceMeta
   canDiscount?: boolean
+  hasStaffDiscount?: boolean
   customer?: CheckoutCustomer | null
   pointsValueCents?: number
   mergeableOrders?: MergeableOrder[]
@@ -96,6 +100,12 @@ export function CheckoutView({
 
   const settled = bill.status === "paid"
   const due = Math.max(0, bill.total_cents - paidCents)
+
+  // Nothing is locked by printing — a table that orders another round after
+  // asking for the bill is normal. What is not normal is charging a guest a
+  // total they never saw, so the screen says so and offers the reprint.
+  const printedStale =
+    bill.bill_printed_at !== null && bill.bill_printed_total_cents !== bill.total_cents
 
   const [mode, setMode] = useState<PayMode>("paid")
   const [method, setMethod] = useState<PayMethod>("cash")
@@ -163,12 +173,20 @@ export function CheckoutView({
    */
   async function collect(cents: number): Promise<{ error: string } | { ok: true } | "queued"> {
     if (method === "online") {
-      if (!online) return { error: "Card (online) needs a connection. Use cash, or reconnect." }
+      if (!online)
+        return {
+          error: "Card (online) needs a connection. Use cash, or reconnect.",
+        }
       const res = await payByCard(bill.id, cents)
       return res ?? { ok: true }
     }
 
-    const payload = { billId: bill.id, method, amountCents: cents, label: destination }
+    const payload = {
+      billId: bill.id,
+      method,
+      amountCents: cents,
+      label: destination,
+    }
     // Decide from live connectivity — the `online` state can lag the event.
     const offlineNow = typeof navigator !== "undefined" ? !navigator.onLine : !online
     const key = keyFor(cents)
@@ -193,6 +211,28 @@ export function CheckoutView({
   /** Tip / round-off / remark all land in one gated call. */
   function saveExtras(tipCents: number, roundingCents: number, nextNote = note) {
     run(() => setBillExtras(bill.id, tipCents, roundingCents, nextNote))
+  }
+
+  /**
+   * Send the estimate to paper, before a rupee moves.
+   *
+   * This is the step the screen used to skip: the guest reads the slip, checks
+   * it, and only then hands over cash or a card. `enqueue_print_job` stamps
+   * `bill_printed_total_cents` as it queues, which is what lets the reprint
+   * warning below know the paper has gone stale — so this refreshes afterwards
+   * rather than trusting the local copy.
+   *
+   * A reprint carries no idempotency key on purpose: asking for a second copy
+   * is the entire point, and the key the settled receipt uses is the same
+   * `bill:<id>:<printer>` string, so deduping here would eat that receipt.
+   */
+  function presentBill() {
+    run(async () => {
+      const outcome = await printBill(bill.id)
+      if (outcome === "queued") toast.success("Bill sent to the printer.")
+      router.refresh()
+      return { ok: true }
+    })
   }
 
   /** Finish: settle (or leave on credit), then leave the screen. */
@@ -252,10 +292,19 @@ export function CheckoutView({
         }
         actions={
           <>
-            <Badge className={cn("border-transparent", BILL_STATUS_STYLE[bill.status] ?? "bg-muted text-foreground")}>
+            <Badge
+              className={cn(
+                "border-transparent",
+                BILL_STATUS_STYLE[bill.status] ?? "bg-muted text-foreground",
+              )}
+            >
               {billStatusLabel(bill.status)}
             </Badge>
-            <Button variant="outline" nativeButton={false} render={<Link href={`/receipt/${bill.id}`} />}>
+            <Button
+              variant="outline"
+              nativeButton={false}
+              render={<Link href={`/receipt/${bill.id}`} />}
+            >
               <ReceiptIcon className="size-4" /> Receipt
             </Button>
             <Button variant="ghost" nativeButton={false} render={<Link href="/pos" />}>
@@ -289,6 +338,9 @@ export function CheckoutView({
                 canDiscount={canDiscount}
                 settled={settled}
                 disabled={pending}
+                onRemoveDiscount={(orderItemId) =>
+                  run(() => removeItemDiscount(orderItemId, bill.id))
+                }
                 onDiscount={(orderItemId, u, value) =>
                   run(() =>
                     applyItemDiscount(
@@ -340,11 +392,13 @@ export function CheckoutView({
                   charges={charges}
                   itemTotalCents={items.reduce((n, it) => n + it.total_cents, 0)}
                   canDiscount={canDiscount}
+                  hasStaffDiscount={hasStaffDiscount}
                   settled={settled}
                   disabled={pending}
                   onBillDiscount={(type, value, reason) =>
                     run(() => applyDiscount(bill.id, type, value, reason))
                   }
+                  onRemoveDiscount={() => run(() => removeDiscount(bill.id))}
                   onCoupon={(code) => run(() => applyCoupon(bill.id, code))}
                   onAddCharge={(label, cents) => run(() => addCharge(bill.id, label, cents))}
                   onRemoveCharge={(id) => run(() => removeCharge(id, bill.id))}
@@ -408,9 +462,14 @@ export function CheckoutView({
                 {mergeableOrders.map((o) => (
                   <div key={o.id} className="flex items-center justify-between gap-2 text-sm">
                     <span className="flex items-center gap-2">
-                      {o.restaurant_tables?.label ? `Table ${o.restaurant_tables.label}` : o.order_type}
+                      {o.restaurant_tables?.label
+                        ? `Table ${o.restaurant_tables.label}`
+                        : o.order_type}
                       <Badge
-                        className={cn("border-transparent", ORDER_STATUS_STYLE[o.status] ?? "bg-muted text-foreground")}
+                        className={cn(
+                          "border-transparent",
+                          ORDER_STATUS_STYLE[o.status] ?? "bg-muted text-foreground",
+                        )}
                       >
                         {orderStatusLabel(o.status)}
                       </Badge>
@@ -451,8 +510,11 @@ export function CheckoutView({
             pending={pending}
             canConfirm={settled || items.length > 0}
             confirmLabel={confirmLabel}
+            printedBefore={bill.bill_printed_at !== null}
+            printedStale={printedStale}
             onConfirm={() => confirm(false)}
             onConfirmAndPrint={() => confirm(true)}
+            onPrintBill={presentBill}
           />
           {!settled && due !== bill.total_cents ? (
             <p className="mt-2 text-center text-xs text-muted-foreground">

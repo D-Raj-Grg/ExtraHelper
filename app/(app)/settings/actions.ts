@@ -51,6 +51,10 @@ export async function updateSettings(
   }
 
   const blockNegativeStock = formData.get("blockNegativeStock") === "on"
+  // Unchecked boxes are absent from the body, so this reads as "off" only when
+  // the operator actually cleared it — which is what makes waiter confirmation
+  // an opt-in and auto-fire the default.
+  const qrAutoFire = formData.get("qrAutoFire") === "on"
 
   // Pluggable payment gateway (rule #6). Only registered keys are accepted.
   const GATEWAYS = ["sandbox", "manual"]
@@ -67,6 +71,7 @@ export async function updateSettings(
       packaging_fee: packagingFee,
       tax_rules: taxRules,
       block_negative_stock: blockNegativeStock,
+      qr_auto_fire: qrAutoFire,
       payment_gateway: paymentGateway,
     })
     .eq("tenant_id", tenant.tenantId)

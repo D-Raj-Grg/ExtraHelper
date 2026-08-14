@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { PercentIcon, Trash2Icon } from "lucide-react"
+import { PercentIcon, Trash2Icon, XIcon } from "lucide-react"
 
 import { money } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -50,6 +50,7 @@ export function CheckoutItemsTable({
   settled,
   disabled,
   onDiscount,
+  onRemoveDiscount,
   onVoid,
 }: {
   items: CheckoutItem[]
@@ -60,6 +61,7 @@ export function CheckoutItemsTable({
   settled: boolean
   disabled: boolean
   onDiscount: (orderItemId: string, unit: DiscountUnit, value: number) => void
+  onRemoveDiscount: (orderItemId: string) => void
   onVoid: (orderItemId: string, reason: string) => void
 }) {
   const editable = canDiscount && !settled
@@ -171,9 +173,22 @@ export function CheckoutItemsTable({
                   />
                 ) : null}
                 {it.discount_cents > 0 ? (
-                  <p className="mt-1 text-xs font-medium tabular-nums text-emerald-700 dark:text-emerald-400">
-                    − {money(it.discount_cents, currency)} off
-                  </p>
+                  <div className="mt-1 flex items-center gap-1">
+                    <p className="text-xs font-medium tabular-nums text-emerald-700 dark:text-emerald-400">
+                      − {money(it.discount_cents, currency)} off
+                    </p>
+                    {editable && it.order_item_id ? (
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        disabled={disabled}
+                        onClick={() => onRemoveDiscount(it.order_item_id!)}
+                      >
+                        <XIcon className="size-3.5" />
+                        <span className="sr-only">Remove the discount on {it.description}</span>
+                      </Button>
+                    ) : null}
+                  </div>
                 ) : null}
               </TableCell>
               <TableCell className="text-right font-medium tabular-nums">

@@ -17,6 +17,14 @@ export type CheckoutBill = {
   rounding_cents: number
   total_cents: number
   note: string | null
+  /** When an estimate was last queued for this bill. Null until one is. */
+  bill_printed_at: string | null
+  /**
+   * The total on that estimate. Once this and `total_cents` disagree, the guest
+   * is holding a slip that no longer matches the bill — see the reprint note in
+   * invoice-preview.tsx.
+   */
+  bill_printed_total_cents: number | null
   restaurant_tables: { label: string } | null
 }
 

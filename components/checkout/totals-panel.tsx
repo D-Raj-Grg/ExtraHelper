@@ -73,9 +73,11 @@ export function CheckoutTotalsPanel({
   charges,
   itemTotalCents,
   canDiscount,
+  hasStaffDiscount,
   settled,
   disabled,
   onBillDiscount,
+  onRemoveDiscount,
   onCoupon,
   onAddCharge,
   onRemoveCharge,
@@ -87,9 +89,12 @@ export function CheckoutTotalsPanel({
   charges: CheckoutCharge[]
   itemTotalCents: number
   canDiscount: boolean
+  /** A typed discount or a comp is on the bill — a coupon alone is not. */
+  hasStaffDiscount: boolean
   settled: boolean
   disabled: boolean
   onBillDiscount: (type: "percent" | "flat", value: number, reason: string) => void
+  onRemoveDiscount: () => void
   onCoupon: (code: string) => void
   onAddCharge: (label: string, amountCents: number) => void
   onRemoveCharge: (chargeId: string) => void
@@ -158,7 +163,20 @@ export function CheckoutTotalsPanel({
         />
       ))}
       {bill.discount_cents > 0 ? (
-        <Row label="Discount" cents={-bill.discount_cents} currency={currency} muted />
+        <Row
+          label="Discount"
+          cents={-bill.discount_cents}
+          currency={currency}
+          muted
+          action={
+            canDiscount && !settled && hasStaffDiscount ? (
+              <Button variant="ghost" size="icon-sm" disabled={disabled} onClick={onRemoveDiscount}>
+                <XIcon className="size-3.5" />
+                <span className="sr-only">Remove the discount</span>
+              </Button>
+            ) : null
+          }
+        />
       ) : null}
       {bill.tip_cents > 0 ? (
         <Row label="Tip" cents={bill.tip_cents} currency={currency} muted />
@@ -303,17 +321,16 @@ export function CheckoutTotalsPanel({
                 className="tabular-nums"
                 value={tip}
                 onChange={(e) => setTip(e.target.value)}
-                onBlur={() => onExtras(Math.max(0, Math.round(Number(tip) * 100)), bill.rounding_cents)}
+                onBlur={() =>
+                  onExtras(Math.max(0, Math.round(Number(tip) * 100)), bill.rounding_cents)
+                }
               />
             </Field>
             <Button
               variant="outline"
               disabled={disabled || (roundOffCents === 0 && bill.rounding_cents === 0)}
               onClick={() =>
-                onExtras(
-                  bill.tip_cents,
-                  bill.rounding_cents !== 0 ? 0 : roundOffCents,
-                )
+                onExtras(bill.tip_cents, bill.rounding_cents !== 0 ? 0 : roundOffCents)
               }
             >
               {bill.rounding_cents !== 0
@@ -345,9 +362,8 @@ export function CheckoutTotalsPanel({
           <AlertDialogHeader>
             <AlertDialogTitle>Make this bill complimentary?</AlertDialogTitle>
             <AlertDialogDescription>
-              The whole {money(bill.total_cents, currency)} is written off — it counts as a
-              discount in reports, not as revenue, and is recorded against your account with this
-              reason.
+              The whole {money(bill.total_cents, currency)} is written off — it counts as a discount
+              in reports, not as revenue, and is recorded against your account with this reason.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <Input

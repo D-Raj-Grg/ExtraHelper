@@ -386,6 +386,25 @@ export async function fireOrder(
   return { ok: true, kotIds: (kots ?? []).map((k) => k.id) }
 }
 
+/**
+ * Accept a guest's QR order and send it to the kitchen.
+ *
+ * Only reachable when the tenant turned `qr_auto_fire` off — with it on (the
+ * default) `place_qr_order` builds the tickets itself and the order is already
+ * `in_kitchen` by the time it lands on this board. The RPC is idempotent, so a
+ * second tap on a slow connection returns 0 tickets rather than an error.
+ */
+export async function acceptQrOrder(
+  orderId: string,
+): Promise<{ error: string } | { ok: true; kots: number }> {
+  await requireRole(...ORDER_ROLES)
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc("accept_qr_order", { _order_id: orderId })
+  if (error) return { error: error.message }
+  revalidatePos(orderId)
+  return { ok: true, kots: (data as number) ?? 0 }
+}
+
 /** Cancel a whole order (manager approval + reason + audit + stock restore) via RPC. */
 export async function cancelOrder(orderId: string, reason: string): Promise<PosState> {
   await requireRole(...ORDER_ROLES)

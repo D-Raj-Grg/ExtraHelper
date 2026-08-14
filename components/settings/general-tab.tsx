@@ -19,12 +19,14 @@ export function GeneralTab({
   timezone,
   paymentGateway,
   blockNegativeStock,
+  qrAutoFire,
 }: {
   restaurantName: string
   currency: string
   timezone: string
   paymentGateway: string
   blockNegativeStock: boolean
+  qrAutoFire: boolean
 }) {
   return (
     <div className={CARD_GRID}>
@@ -112,9 +114,29 @@ export function GeneralTab({
         <Card>
           <CardHeader>
             <CardTitle>Operations</CardTitle>
-            <CardDescription>How the floor behaves when stock runs out.</CardDescription>
+            <CardDescription>
+              How the floor behaves when stock runs out, and what happens to a guest&apos;s QR
+              order the moment they send it.
+            </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-6">
+            <Field>
+              <FieldLabel htmlFor="qrAutoFire" className="flex items-center gap-2 font-medium">
+                <Checkbox
+                  id="qrAutoFire"
+                  name="qrAutoFire"
+                  value="on"
+                  defaultChecked={qrAutoFire}
+                />
+                Send QR orders straight to the kitchen
+              </FieldLabel>
+              <FieldDescription>
+                On by default — a guest&apos;s order prints its tickets the moment it is placed.
+                Turn it off if a waiter should check the table first: the order then waits on the
+                POS board with a “Send to kitchen” button, and the cooks see nothing until it is
+                tapped.
+              </FieldDescription>
+            </Field>
             <Field>
               <FieldLabel
                 htmlFor="blockNegativeStock"

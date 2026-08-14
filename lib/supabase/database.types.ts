@@ -160,6 +160,8 @@ export type Database = {
       }
       bills: {
         Row: {
+          bill_printed_at: string | null
+          bill_printed_total_cents: number | null
           branch_id: string | null
           created_at: string
           discount_cents: number
@@ -177,6 +179,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          bill_printed_at?: string | null
+          bill_printed_total_cents?: number | null
           branch_id?: string | null
           created_at?: string
           discount_cents?: number
@@ -194,6 +198,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          bill_printed_at?: string | null
+          bill_printed_total_cents?: number | null
           branch_id?: string | null
           created_at?: string
           discount_cents?: number
@@ -3040,6 +3046,7 @@ export type Database = {
       tenant_settings: {
         Row: {
           block_negative_stock: boolean
+          qr_auto_fire: boolean
           currency: string
           order_type_fees: Json
           packaging_fee: number
@@ -3055,6 +3062,7 @@ export type Database = {
         }
         Insert: {
           block_negative_stock?: boolean
+          qr_auto_fire?: boolean
           currency?: string
           order_type_fees?: Json
           packaging_fee?: number
@@ -3070,6 +3078,7 @@ export type Database = {
         }
         Update: {
           block_negative_stock?: boolean
+          qr_auto_fire?: boolean
           currency?: string
           order_type_fees?: Json
           packaging_fee?: number
@@ -3442,7 +3451,9 @@ export type Database = {
         }
         Returns: string
       }
+      accept_qr_order: { Args: { _order_id: string }; Returns: number }
       fire_order: { Args: { _order_id: string }; Returns: number }
+      fire_order_kots: { Args: { _order_id: string; _tenant: string }; Returns: number }
       get_my_permissions: { Args: { _tenant: string }; Returns: string[] }
       has_permission: {
         Args: { _key: string; _tenant: string }
@@ -3580,6 +3591,11 @@ export type Database = {
         Returns: Database["public"]["Enums"]["bill_status"]
       }
       remove_bill_charge: { Args: { _charge_id: string }; Returns: undefined }
+      remove_bill_discount: { Args: { _bill_id: string }; Returns: number }
+      remove_item_discount: {
+        Args: { _order_item_id: string }
+        Returns: undefined
+      }
       remove_member: {
         Args: { _tenant: string; _user_id: string }
         Returns: undefined
@@ -3823,6 +3839,10 @@ export type Database = {
       sync_order_status_from_kots: {
         Args: { _order_id: string }
         Returns: undefined
+      }
+      tenant_day_start: {
+        Args: { _at?: string; _tenant: string }
+        Returns: string
       }
       tenant_has_feature: {
         Args: { _key: string; _tenant: string }

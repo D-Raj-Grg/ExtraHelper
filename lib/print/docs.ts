@@ -479,6 +479,20 @@ export function buildBill(r: BillDoc): PrintDocModel {
       { kind: "line", text: `Served by: ${r.servedBy}`, align: "left" },
     )
 
+  // The same sentence the checkout preview carries. A slip handed over before
+  // payment is a request, not a record, and the guest must not be able to walk
+  // out with it believing otherwise.
+  if (!settled)
+    blocks.push(
+      { kind: "divider" },
+      {
+        kind: "line",
+        text: "This is not a tax invoice — the final bill comes from the counter.",
+        align: "center",
+        bold: true,
+      },
+    )
+
   // Below the money, above the footer: the guest reads the total, then scans.
   if (r.qr) {
     blocks.push({ kind: "divider" })
@@ -492,7 +506,7 @@ export function buildBill(r: BillDoc): PrintDocModel {
   )
   if (r.terms) blocks.push({ kind: "line", text: r.terms, align: "center" })
 
-  return { label: "Receipt", blocks, wantsDrawer: r.openDrawer }
+  return { label: settled ? "Receipt" : "Bill", blocks, wantsDrawer: r.openDrawer }
 }
 
 // ---------------------------------------------------------------------------

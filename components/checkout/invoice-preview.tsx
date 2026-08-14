@@ -1,6 +1,6 @@
 "use client"
 
-import { CheckCircle2Icon, PrinterIcon } from "lucide-react"
+import { AlertTriangleIcon, CheckCircle2Icon, PrinterIcon } from "lucide-react"
 
 import { amountInWords, formatDateTime, money } from "@/lib/format"
 import { Button } from "@/components/ui/button"
@@ -55,8 +55,11 @@ export function CheckoutInvoicePreview({
   pending,
   canConfirm,
   confirmLabel,
+  printedBefore,
+  printedStale,
   onConfirm,
   onConfirmAndPrint,
+  onPrintBill,
 }: {
   bill: CheckoutBill
   items: CheckoutItem[]
@@ -70,8 +73,13 @@ export function CheckoutInvoicePreview({
   pending: boolean
   canConfirm: boolean
   confirmLabel: string
+  /** An estimate has already gone out for this bill. */
+  printedBefore: boolean
+  /** …and the bill has moved on since it did. */
+  printedStale: boolean
   onConfirm: () => void
   onConfirmAndPrint: () => void
+  onPrintBill: () => void
 }) {
   const rows = groupParticulars(items)
   const due = Math.max(0, bill.total_cents - paidCents)
@@ -222,20 +230,49 @@ export function CheckoutInvoicePreview({
             Paid in full · order closed
           </p>
         ) : null}
-        <div className="mt-3 grid gap-2 sm:grid-cols-2">
-          <Button
-            variant="outline"
-            className="h-12"
-            disabled={pending || !canConfirm}
-            onClick={onConfirmAndPrint}
-          >
-            <PrinterIcon className="size-4" />
-            {settled ? "Print receipt" : "Confirm & print"}
-          </Button>
-          <Button className="h-12" disabled={pending || !canConfirm} onClick={onConfirm}>
-            {pending ? "Working…" : confirmLabel}
-          </Button>
-        </div>
+        {/* The order of these two is the order of the real transaction: the
+            guest reads the bill, then pays it. Stacked rather than side by side
+            so neither reads as the alternative to the other — printing is what
+            you do first, not instead. */}
+        {settled ? (
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <Button
+              variant="outline"
+              className="h-12"
+              disabled={pending || !canConfirm}
+              onClick={onConfirmAndPrint}
+            >
+              <PrinterIcon className="size-4" />
+              Print receipt
+            </Button>
+            <Button className="h-12" disabled={pending || !canConfirm} onClick={onConfirm}>
+              {pending ? "Working…" : confirmLabel}
+            </Button>
+          </div>
+        ) : (
+          <div className="mt-3 flex flex-col gap-2">
+            {printedStale ? (
+              <p
+                className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-2 text-xs text-amber-700 dark:text-amber-400"
+                role="status"
+              >
+                <AlertTriangleIcon className="mt-px size-4 shrink-0" aria-hidden />
+                <span>The bill changed after it was printed — the guest is holding an old total.</span>
+              </p>
+            ) : null}
+            <Button variant="outline" className="h-12 w-full" disabled={pending} onClick={onPrintBill}>
+              <PrinterIcon className="size-4" />
+              {printedBefore ? "Reprint bill" : "Print bill"}
+            </Button>
+            <Button
+              className="h-12 w-full"
+              disabled={pending || !canConfirm}
+              onClick={onConfirm}
+            >
+              {pending ? "Working…" : confirmLabel}
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   )

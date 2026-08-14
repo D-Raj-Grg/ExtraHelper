@@ -4,6 +4,7 @@ import { useState, useTransition } from "react"
 import { toast } from "sonner"
 import {
   ArmchairIcon,
+  ChefHatIcon,
   EllipsisVerticalIcon,
   PinIcon,
   PinOffIcon,
@@ -15,7 +16,7 @@ import {
   XCircleIcon,
 } from "lucide-react"
 
-import { cancelOrder, pinOrder } from "@/app/(app)/pos/actions"
+import { acceptQrOrder, cancelOrder, pinOrder } from "@/app/(app)/pos/actions"
 import { generateBill } from "@/app/(app)/bill/actions"
 import { money } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -42,6 +43,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { useHasPermission } from "@/components/permission-provider"
 import { usePrint } from "@/components/print/use-print"
 import { RelativeTime } from "@/components/pos/relative-time"
 import type { PosOrderCard } from "@/components/pos/types"
@@ -67,6 +69,9 @@ export function OrderCard({
 }) {
   const [pending, startTransition] = useTransition()
   const { printOrderSlip } = usePrint()
+  // Kitchen holds `order.view` but not `order.fire`, so it reaches this board
+  // and must not be offered a button the RPC will only ever refuse.
+  const canFire = useHasPermission("order.fire")
   const [clearOpen, setClearOpen] = useState(false)
   const [reason, setReason] = useState("")
 
@@ -83,6 +88,12 @@ export function OrderCard({
   const isTakeaway = !order.restaurant_tables
   const pinned = !!order.pinned_at
   const label = order.restaurant_tables?.label ? `Table ${order.restaurant_tables.label}` : "Takeaway"
+
+  // A guest's QR order still sitting at `placed` has no kitchen tickets yet —
+  // this tenant asked for waiter confirmation (settings → `qr_auto_fire` off).
+  // With auto-fire on it arrives here already `in_kitchen`, so nothing shows.
+  const awaitingAccept =
+    canFire && order.order_type === "qr" && order.status === "placed"
 
   // An order slip is the guest's itemised copy, with prices. It used to
   // re-print the kitchen tickets, which is a different piece of paper for a
@@ -106,6 +117,18 @@ export function OrderCard({
     startTransition(async () => {
       const res = await generateBill(order.id)
       if (res && "error" in res) toast.error(res.error)
+    })
+  }
+
+  function acceptQr() {
+    startTransition(async () => {
+      const res = await acceptQrOrder(order.id)
+      if ("error" in res) return void toast.error(res.error)
+      toast.success(
+        res.kots
+          ? `${label} sent to the kitchen · ${res.kots} ticket(s)`
+          : `${label} is already with the kitchen`,
+      )
     })
   }
 
@@ -270,6 +293,20 @@ export function OrderCard({
           </div>
         </div>
       </div>
+
+      {/*
+       * Outside the hover overlay's box on purpose: a guest order nobody has
+       * accepted is the one action on this card that must be reachable by a
+       * single tap on a phone, where there is no hover.
+       */}
+      {awaitingAccept ? (
+        <div className="border-t p-4">
+          <Button className="min-h-11 w-full" disabled={pending} onClick={acceptQr}>
+            <ChefHatIcon />
+            Send to kitchen
+          </Button>
+        </div>
+      ) : null}
 
       <AlertDialog
         open={clearOpen}

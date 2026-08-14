@@ -87,12 +87,46 @@ export async function applyItemDiscount(
   return { ok: true }
 }
 
+/**
+ * Take the staff discount back off the bill.
+ *
+ * Removes the typed discount or the comp — never a coupon, which the guest
+ * redeemed and `remove_bill_discount` deliberately leaves alone.
+ */
+export async function removeDiscount(billId: string): Promise<BillState> {
+  await requirePermission("order.discount")
+  const supabase = await createClient()
+  const { error } = await supabase.rpc("remove_bill_discount", {
+    _bill_id: billId,
+  })
+  if (error) return { error: error.message }
+
+  revalidatePath(`/bill/${billId}`)
+  return { ok: true }
+}
+
+/** Take the discount back off one line. Other lines keep theirs. */
+export async function removeItemDiscount(orderItemId: string, billId: string): Promise<BillState> {
+  await requirePermission("order.discount")
+  const supabase = await createClient()
+  const { error } = await supabase.rpc("remove_item_discount", {
+    _order_item_id: orderItemId,
+  })
+  if (error) return { error: error.message }
+
+  revalidatePath(`/bill/${billId}`)
+  return { ok: true }
+}
+
 /** Apply a coupon code to the bill (cashier-usable; validated server-side). */
 export async function applyCoupon(billId: string, code: string): Promise<BillState> {
   await requirePermission("payment.take")
   if (!code.trim()) return { error: "Enter a coupon code." }
   const supabase = await createClient()
-  const { error } = await supabase.rpc("apply_coupon", { _bill_id: billId, _code: code })
+  const { error } = await supabase.rpc("apply_coupon", {
+    _bill_id: billId,
+    _code: code,
+  })
   if (error) return { error: error.message }
   revalidatePath(`/bill/${billId}`)
   return { ok: true }
@@ -123,7 +157,9 @@ export async function addCharge(
 export async function removeCharge(chargeId: string, billId: string): Promise<BillState> {
   await requirePermission("order.discount")
   const supabase = await createClient()
-  const { error } = await supabase.rpc("remove_bill_charge", { _charge_id: chargeId })
+  const { error } = await supabase.rpc("remove_bill_charge", {
+    _charge_id: chargeId,
+  })
   if (error) return { error: error.message }
   revalidatePath(`/bill/${billId}`)
   return { ok: true }
@@ -215,10 +251,7 @@ export async function refundBill(
  * Charge a card online via the tenant's payment gateway (sandbox by default),
  * then record the payment. Demonstrates the pluggable gateway adapter (rule #6).
  */
-export async function payByCard(
-  billId: string,
-  amountCents: number,
-): Promise<BillState> {
+export async function payByCard(billId: string, amountCents: number): Promise<BillState> {
   const tenant = await requirePermission("payment.take")
   if (!Number.isInteger(amountCents) || amountCents <= 0)
     return { error: "Amount must be a positive number." }

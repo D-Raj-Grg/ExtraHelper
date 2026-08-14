@@ -21,6 +21,7 @@ export function SettingsManager({
   taxRules,
   receipt,
   blockNegativeStock,
+  qrAutoFire,
   paymentGateway,
   logoUrl,
   qrUrl,
@@ -42,6 +43,7 @@ export function SettingsManager({
   taxRules: TaxRule[]
   receipt: { header: string; footer: string; terms: string }
   blockNegativeStock: boolean
+  qrAutoFire: boolean
   paymentGateway: string
   logoUrl: string | null
   qrUrl: string | null
@@ -92,6 +94,7 @@ export function SettingsManager({
             timezone={timezone}
             paymentGateway={paymentGateway}
             blockNegativeStock={blockNegativeStock}
+            qrAutoFire={qrAutoFire}
           />
         </TabsContent>
         <TabsContent value="charges" keepMounted>

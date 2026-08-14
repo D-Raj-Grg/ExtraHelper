@@ -29,7 +29,7 @@ export default async function BillPage({
     supabase
       .from("bills")
       .select(
-        "id, status, created_at, subtotal_cents, tax_cents, service_charge_cents, discount_cents, tip_cents, rounding_cents, total_cents, note, restaurant_tables(label)",
+        "id, status, created_at, subtotal_cents, tax_cents, service_charge_cents, discount_cents, tip_cents, rounding_cents, total_cents, note, bill_printed_at, bill_printed_total_cents, restaurant_tables(label)",
       )
       .eq("id", billId)
       .eq("tenant_id", tenant.tenantId)
@@ -78,32 +78,44 @@ export default async function BillPage({
 
   // Modifiers and per-line discounts hang off the ORDER item, not the bill
   // line — the checkout table shows both against the line they belong to.
-  const [{ data: modifiers }, { data: lineDiscounts }, { data: people }] = await Promise.all([
-    orderItemIds.length
-      ? supabase
-          .from("order_item_modifiers")
-          .select("id, order_item_id, name_snapshot, price_cents, qty")
-          .in("order_item_id", orderItemIds)
-          .eq("tenant_id", tenant.tenantId)
-      : Promise.resolve({ data: [] as never[] }),
-    orderItemIds.length
-      ? supabase
-          .from("discounts")
-          .select("order_item_id, type, value")
-          .eq("bill_id", billId)
-          .eq("tenant_id", tenant.tenantId)
-          .not("order_item_id", "is", null)
-      : Promise.resolve({ data: [] as never[] }),
-    supabase
-      .from("profiles")
-      .select("id, full_name, username")
-      .in(
-        "id",
-        [auth.user?.id, (order as { waiter_id: string | null } | null)?.waiter_id].filter(
-          (id): id is string => Boolean(id),
+  const [{ data: modifiers }, { data: lineDiscounts }, { data: people }, { data: staffDiscount }] =
+    await Promise.all([
+      orderItemIds.length
+        ? supabase
+            .from("order_item_modifiers")
+            .select("id, order_item_id, name_snapshot, price_cents, qty")
+            .in("order_item_id", orderItemIds)
+            .eq("tenant_id", tenant.tenantId)
+        : Promise.resolve({ data: [] as never[] }),
+      orderItemIds.length
+        ? supabase
+            .from("discounts")
+            .select("order_item_id, type, value")
+            .eq("bill_id", billId)
+            .eq("tenant_id", tenant.tenantId)
+            .not("order_item_id", "is", null)
+        : Promise.resolve({ data: [] as never[] }),
+      supabase
+        .from("profiles")
+        .select("id, full_name, username")
+        .in(
+          "id",
+          [auth.user?.id, (order as { waiter_id: string | null } | null)?.waiter_id].filter(
+            (id): id is string => Boolean(id),
+          ),
         ),
-      ),
-  ])
+      // The one discount staff put on the whole bill — a typed one or a comp.
+      // Same predicate as `remove_bill_discount`: a coupon is the guest's and is
+      // never taken off by the Remove control next to the Discount row.
+      supabase
+        .from("discounts")
+        .select("id")
+        .eq("bill_id", billId)
+        .eq("tenant_id", tenant.tenantId)
+        .is("order_item_id", null)
+        .is("coupon_code", null)
+        .limit(1),
+    ])
 
   // Orders that could be merged onto this open bill (fired, not yet billed).
   const { data: mergeable } =
@@ -122,7 +134,12 @@ export default async function BillPage({
   const modsByItem = new Map<string, CheckoutItem["modifiers"]>()
   for (const m of modifiers ?? []) {
     const list = modsByItem.get(m.order_item_id) ?? []
-    list.push({ id: m.id, name: m.name_snapshot, price_cents: m.price_cents, qty: m.qty })
+    list.push({
+      id: m.id,
+      name: m.name_snapshot,
+      price_cents: m.price_cents,
+      qty: m.qty,
+    })
     modsByItem.set(m.order_item_id, list)
   }
 
@@ -176,7 +193,10 @@ export default async function BillPage({
     const p = (people ?? []).find((row) => row.id === id)
     return p?.full_name ?? p?.username ?? null
   }
-  const orderRow = order as { created_at: string; waiter_id: string | null } | null
+  const orderRow = order as {
+    created_at: string
+    waiter_id: string | null
+  } | null
   const template = (settings?.receipt_template ?? {}) as ReceiptTemplate
 
   return (
@@ -189,6 +209,7 @@ export default async function BillPage({
         charges={charges ?? []}
         paidCents={paid}
         canDiscount={tenant.role === "owner" || tenant.role === "manager"}
+        hasStaffDiscount={(staffDiscount ?? []).length > 0}
         customer={customer}
         pointsValueCents={settings?.points_value_cents ?? 1}
         mergeableOrders={(mergeable ?? []) as never}
