@@ -1,22 +1,21 @@
-import { createClient } from "@/lib/supabase/server"
-
 /**
  * Public half of the print-agent signing key pair. The agent asks for it before
- * it will accept a signed request; it is safe to hand out, but there is no
- * reason for anyone but a signed-in staff member to have it, so it is gated the
- * same way the signing route is.
+ * it will accept a signed request.
+ *
+ * Deliberately NOT gated on a session. This is a public certificate — the same
+ * bytes are installed in plain sight as `override.crt` on every operator's
+ * machine, so a session check protects nothing. It did cost something, though:
+ * when auth hiccuped the route answered 401, the agent library treated the
+ * failed fetch as "no certificate" and fell back to sending an *empty* one, and
+ * QZ Tray asked the operator to allow every ticket as "an anonymous request" —
+ * a silent, confusing downgrade with no error anywhere. The private key stays
+ * gated in `/api/qz/sign`; that is the half that matters.
  *
  * Returning an empty body when unconfigured is deliberate: the agent treats
  * that as "unsigned", falls back to its own allow-prompt, and printing still
  * works — it just isn't silent yet.
  */
 export async function GET(request: Request): Promise<Response> {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return new Response("", { status: 401 })
-
   const cert = process.env.QZ_PUBLIC_CERT ?? ""
 
   // `?download=1` is the same bytes, named the way QZ Tray expects to find
