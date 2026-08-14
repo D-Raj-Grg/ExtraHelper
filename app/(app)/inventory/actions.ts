@@ -275,14 +275,17 @@ export async function setDishRecipe(
  * this when that variant is sold. 1 = same as the base recipe.
  */
 export async function updateVariantScale(variantId: string, scale: number): Promise<InvState> {
-  const tenant = await requireRole(...INV_ROLES)
+  await requireRole(...INV_ROLES)
   if (!Number.isFinite(scale) || scale < 0) return { error: "Scale must be zero or more." }
   const supabase = await createClient()
-  const { error } = await supabase
-    .from("item_variants")
-    .update({ recipe_scale: scale })
-    .eq("id", variantId)
-    .eq("tenant_id", tenant.tenantId)
+  // Through an RPC, not the table: `item_variants` writes now require
+  // `menu.edit` (20260814170000) and the store keeper holds `inventory.edit`
+  // instead. Recipe scale is a stock decision that happens to live on a menu
+  // row, so it carries the stock permission.
+  const { error } = await supabase.rpc("set_variant_recipe_scale", {
+    _variant_id: variantId,
+    _scale: scale,
+  })
   if (error) return { error: error.message }
   revalidatePath("/inventory")
   return { ok: true }

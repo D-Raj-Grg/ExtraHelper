@@ -203,35 +203,33 @@ export async function updateCategory(
 // ============================================================================
 // Variants (Small / Large / Half — price delta)
 // ============================================================================
+//
+// All four go through RPCs rather than table writes. Two reasons: the phone
+// talks to PostgREST directly and cannot call a Server Action, so the rules
+// would otherwise exist twice and drift; and `item_variants` writes are gated
+// on `menu.edit` at the policy level (20260814170000) — the definer function is
+// what carries that permission, and it is the boundary, not `requireRole`.
+
+/** Dollars (string, may be negative — Half −$2) → integer cents. */
+function toDeltaCents(raw: unknown): number | null {
+  const n = Number(String(raw ?? "0").trim())
+  if (Number.isNaN(n)) return null
+  return Math.round(n * 100)
+}
 
 export async function addVariant(
   itemId: string,
   name: string,
   priceDelta: string,
 ): Promise<MenuState> {
-  const tenant = await requireRole("owner", "manager")
-  const trimmed = name.trim()
-  if (!trimmed) return { error: "Variant name is required." }
-  // Delta may be negative (e.g. Half −$2), so parse without the non-negative guard.
-  const n = Number(String(priceDelta ?? "0").trim())
-  if (Number.isNaN(n)) return { error: "Price delta must be a number." }
+  await requireRole("owner", "manager")
+  const cents = toDeltaCents(priceDelta)
+  if (cents === null) return { error: "Price delta must be a number." }
   const supabase = await createClient()
-  // New variants land at the bottom of the item's list — appending is what the
-  // owner just did, so anything else would look like the row jumped.
-  const { data: last } = await supabase
-    .from("item_variants")
-    .select("sort")
-    .eq("tenant_id", tenant.tenantId)
-    .eq("item_id", itemId)
-    .order("sort", { ascending: false })
-    .limit(1)
-    .maybeSingle()
-  const { error } = await supabase.from("item_variants").insert({
-    tenant_id: tenant.tenantId,
-    item_id: itemId,
-    name: trimmed,
-    price_delta_cents: Math.round(n * 100),
-    sort: (last?.sort ?? 0) + 1,
+  const { error } = await supabase.rpc("add_variant", {
+    _item_id: itemId,
+    _name: name,
+    _price_delta_cents: cents,
   })
   if (error) return { error: error.message }
   revalidatePath("/menu")
@@ -245,18 +243,15 @@ export async function updateVariant(
   name: string,
   priceDelta: string,
 ): Promise<MenuState> {
-  const tenant = await requireRole("owner", "manager")
-  const trimmed = name.trim()
-  if (!trimmed) return { error: "Variant name is required." }
-  // Delta may be negative (e.g. Half −$2), so parse without the non-negative guard.
-  const n = Number(String(priceDelta ?? "0").trim())
-  if (Number.isNaN(n)) return { error: "Price delta must be a number." }
+  await requireRole("owner", "manager")
+  const cents = toDeltaCents(priceDelta)
+  if (cents === null) return { error: "Price delta must be a number." }
   const supabase = await createClient()
-  const { error } = await supabase
-    .from("item_variants")
-    .update({ name: trimmed, price_delta_cents: Math.round(n * 100) })
-    .eq("id", variantId)
-    .eq("tenant_id", tenant.tenantId)
+  const { error } = await supabase.rpc("update_variant", {
+    _variant_id: variantId,
+    _name: name,
+    _price_delta_cents: cents,
+  })
   if (error) return { error: error.message }
   revalidatePath("/menu")
   revalidatePath("/pos")
@@ -266,66 +261,30 @@ export async function updateVariant(
 /**
  * Move a variant one position up or down within its item.
  *
- * Renumbers the whole item 1..n rather than swapping two rows: legacy rows can
- * share a `sort` (the column defaulted to 0 before the backfill), and a swap
- * between two equal values is a silent no-op.
+ * The RPC renumbers the item rather than swapping two rows: rows created before
+ * `sort` existed can share the value 0, and a swap between two equal values is
+ * a silent no-op.
  */
 export async function moveVariant(
   variantId: string,
   direction: "up" | "down",
 ): Promise<MenuState> {
-  const tenant = await requireRole("owner", "manager")
+  await requireRole("owner", "manager")
   const supabase = await createClient()
-
-  const { data: target, error: targetErr } = await supabase
-    .from("item_variants")
-    .select("id, item_id")
-    .eq("id", variantId)
-    .eq("tenant_id", tenant.tenantId)
-    .single()
-  if (targetErr) return { error: targetErr.message }
-
-  const { data: siblings, error: listErr } = await supabase
-    .from("item_variants")
-    .select("id, sort, name")
-    .eq("tenant_id", tenant.tenantId)
-    .eq("item_id", target.item_id)
-    .order("sort")
-    .order("name")
-  if (listErr) return { error: listErr.message }
-
-  const rows = siblings ?? []
-  const from = rows.findIndex((r) => r.id === variantId)
-  const to = direction === "up" ? from - 1 : from + 1
-  if (from < 0 || to < 0 || to >= rows.length) return { ok: true } // already at the edge
-
-  const reordered = [...rows]
-  const [moved] = reordered.splice(from, 1)
-  reordered.splice(to, 0, moved)
-
-  for (const [i, row] of reordered.entries()) {
-    if (row.sort === i + 1) continue
-    const { error } = await supabase
-      .from("item_variants")
-      .update({ sort: i + 1 })
-      .eq("id", row.id)
-      .eq("tenant_id", tenant.tenantId)
-    if (error) return { error: error.message }
-  }
-
+  const { error } = await supabase.rpc("move_variant", {
+    _variant_id: variantId,
+    _direction: direction,
+  })
+  if (error) return { error: error.message }
   revalidatePath("/menu")
   revalidatePath("/pos")
   return { ok: true }
 }
 
 export async function removeVariant(variantId: string): Promise<MenuState> {
-  const tenant = await requireRole("owner", "manager")
+  await requireRole("owner", "manager")
   const supabase = await createClient()
-  const { error } = await supabase
-    .from("item_variants")
-    .delete()
-    .eq("id", variantId)
-    .eq("tenant_id", tenant.tenantId)
+  const { error } = await supabase.rpc("delete_variant", { _variant_id: variantId })
   if (error) return { error: error.message }
   revalidatePath("/menu")
   revalidatePath("/pos")

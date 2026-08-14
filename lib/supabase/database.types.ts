@@ -3773,6 +3773,26 @@ export type Database = {
         }
         Returns: number
       }
+      add_variant: {
+        Args: { _item_id: string; _name: string; _price_delta_cents: number }
+        Returns: string
+      }
+      update_variant: {
+        Args: { _name: string; _price_delta_cents: number; _variant_id: string }
+        Returns: undefined
+      }
+      delete_variant: {
+        Args: { _variant_id: string }
+        Returns: undefined
+      }
+      move_variant: {
+        Args: { _direction: string; _variant_id: string }
+        Returns: number
+      }
+      set_variant_recipe_scale: {
+        Args: { _scale: number; _variant_id: string }
+        Returns: undefined
+      }
       set_item_86: {
         Args: { _is_86: boolean; _item_id: string }
         Returns: undefined
