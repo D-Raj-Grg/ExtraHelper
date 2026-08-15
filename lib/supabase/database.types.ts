@@ -4135,6 +4135,7 @@ export type Database = {
         | "esewa"
         | "fonepay"
         | "bank"
+        | "other"
       payment_status: "pending" | "completed" | "failed" | "refunded"
       po_status: "draft" | "sent" | "partial" | "received" | "cancelled"
       print_doc: "kot" | "bot" | "full_kot" | "order_slip" | "bill" | "test"
@@ -4341,6 +4342,7 @@ export const Constants = {
         "esewa",
         "fonepay",
         "bank",
+        "other",
       ],
       payment_status: ["pending", "completed", "failed", "refunded"],
       po_status: ["draft", "sent", "partial", "received", "cancelled"],

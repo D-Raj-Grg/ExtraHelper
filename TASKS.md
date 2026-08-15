@@ -6,6 +6,87 @@
 
 ---
 
+## Cash movements & supplier payments (2026-08-15, web + DB)
+
+The first real shift at The Sekuwa Station exposed a hole: `close_cash_session` only ever *added*
+cash sales to the opening float, so every rupee that left the drawer read as an unexplained
+shortfall. That day opened on 4,350, paid out 3,655 in cash purchases, took 3,080 in cash sales and
+counted 3,775. The app reported `expected 4,320 / counted 3,775 / variance -545` — two large
+unrecorded flows that nearly cancelled. The variance detected neither.
+
+Design: `docs/superpowers/specs/2026-08-14-cash-movements-and-supplier-payments-design.md`
+Plan: `docs/superpowers/plans/2026-08-14-cash-movements-backend-and-web.md`
+
+- [x] `cash_movements` + `supplier_payments`, enums, indexes, RLS select-only
+      (`20260815090000`). `cash_movements` means strictly one thing: physical cash in or out of the
+      POS drawer. `session_id` is NOT NULL — cash cannot leave a drawer that is not open.
+- [x] `cash.approve` permission + backfill onto system owner/manager roles (`20260815090100`).
+      **Could not reuse `cash.manage`:** the cashier role already holds it, so approval would have
+      been a cashier signing off their own payout.
+- [x] `record_cash_movement`, `approve_cash_movement`, `reject_cash_movement` (`20260815090200`).
+- [x] `record_supplier_payment` (cash writes its drawer payout in the same transaction) and
+      `supplier_balances` — received value minus payments, derived not stored (`20260815090300`).
+- [x] `refunds.method` + `refund_payment` dropped and recreated at 4 args (`20260815090400`).
+      Backfill covers single-tender bills only; null stays non-cash.
+- [x] `close_cash_session` rewritten (`20260815090500`): auto-approves pending movements, then
+      `expected = float + cash sales - cash refunds - payouts + paid_in`.
+- [x] Dropped `purchase_orders.total_cents` (`20260815090600`) — never written by anything, always
+      read 0.
+- [x] `payment_method` gains `other` (`20260815090700`) for supplier money that never touched the
+      till. Absent from `PAYMENT_METHODS`, so it is never offered at checkout.
+- [x] Cash drawer UI: movements panel, cash out / cash in dialog, approve + reject.
+- [x] Purchasing UI: quick purchase, PO payments, payables block.
+- [x] Backfilled 2026-08-14: Mata 2,450 as a quick purchase; Xtreme 6x110, Surya 1x295, Wai Wai
+      1x20, Lemon 1kg x200, Shikhar Ice 2x15 as inventory + PO + GRN. Total 3,655.
+
+**The open-session UI must never show expected, cash sales, or anything derived from them.**
+`components/cash/session-card.tsx` already tells the user expected is withheld until submit "so the
+count stays honest". A cashier who can see expected can tune the physical count to match it, which
+drives variance permanently to zero and destroys the only signal this feature produces. Movement
+amounts are safe — the cashier handed that money over and already knows it.
+
+**Auto-approve at close is a deliberate loosening.** Approval is a review step, not a hard control:
+anything still pending when the shift closes is approved rather than stranding a cashier at 11pm.
+`auto_approved` marks those rows so an owner can scan for them. The upside is that a closed session
+is final — no closed session ever needs recomputing.
+
+### Verification (2026-08-15, against the live tenant)
+
+Applied with the Supabase MCP `apply_migration` — this project has no `supabase/config.toml` and no
+CLI link, so `npx supabase db push` does not work here. Guards were driven by JWT impersonation
+(`set local role authenticated` + `request.jwt.claims`) rather than the bash suites, which need
+credentials nobody has set and a cashier account that does not exist.
+
+- 4/4 RLS: direct inserts refused 42501 for owner and kitchen; members can select.
+- 3/3 permissions: cashier keeps `cash.manage`, does **not** get `cash.approve`; owner/manager do.
+- 9/9 movement RPCs: record, approve, reject, zero amount, blank note, no-session, and a user
+  without `cash.approve` refused 42501.
+- 10/10 supplier payments, including atomicity — a cash payment with no open session raises and
+  leaves **no** orphan `supplier_payments` row.
+- 8/8 close: the 2026-08-14 shift replayed to `expected 377500, variance 0`; a session with no
+  movements still closes to float + cash sales; rejected movements excluded.
+- 8/8 backfill: 3,655 recorded, 5 stock movements from the PO, none from the quick purchase.
+- `tsc --noEmit` clean, `eslint` clean on every touched file, `npm run build` compiles.
+
+### Open follow-ups
+
+- [ ] **Flutter surface** — repository, providers, movements panel, `cash.approve` gating, and a
+      simulator integration test. Its own plan, deferred until these RPC signatures settled.
+- [ ] **Refund method picker** (web + Flutter). Refunding a **split-tender** bill now raises rather
+      than guessing the tender. Rare, and the message names the fix, but the UI should ask.
+- [ ] **`record_cash_movement`'s `cash.manage` check is untested** — unreachable for default roles,
+      since only owner/manager/cashier can open a session and all three hold the key. It only bites
+      a custom role with it revoked.
+- [ ] `20260814180000_digital_payment_methods.sql` is applied but **missing from
+      `supabase_migrations.schema_migrations`** (it went in via raw SQL). Harmless — its statements
+      are idempotent — but a fresh environment replays it.
+- [ ] Duplicate tenant `6a290e99-...` also named "The Sekuwa Station", no sessions. Left alone.
+- [ ] Empty draft PO + supplier "14 Aug" (`73957319-...`) from an earlier manual attempt. Left alone.
+- [ ] "Local Purchase" is a placeholder supplier for the non-Mata goods; rename it if they came
+      from a named shop.
+
+---
+
 ## Digital payment methods — eSewa, FonePay, bank (2026-08-14, both clients)
 
 Nepal restaurants settle most non-cash bills through a wallet or bank QR the guest scans. Added

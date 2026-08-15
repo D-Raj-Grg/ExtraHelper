@@ -103,6 +103,9 @@ const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   wallet: "Wallet",
   online: "Card (online)",
   points: "Loyalty points",
+  // Supplier-side only: money that never passed through the till. Absent from
+  // PAYMENT_METHODS above, so it is never offered at checkout.
+  other: "Other",
 }
 
 /** Enum values never reach staff — reports and receipts go through here. */
