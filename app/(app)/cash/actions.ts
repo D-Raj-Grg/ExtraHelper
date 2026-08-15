@@ -76,7 +76,7 @@ export async function recordMovement(
   _prev: CashState,
   formData: FormData,
 ): Promise<CashState> {
-  await requireRole(...CASH_ROLES)
+  const tenant = await requireRole(...CASH_ROLES)
   const kind = String(formData.get("kind") ?? "")
   const category = String(formData.get("category") ?? "")
   const note = String(formData.get("note") ?? "").trim()
@@ -92,6 +92,9 @@ export async function recordMovement(
 
   const supabase = await createClient()
   const { error } = await supabase.rpc("record_cash_movement", {
+    // Passed explicitly: a user in two tenants can hold two open drawers, and
+    // letting the RPC guess picks whichever was opened last.
+    _tenant: tenant.tenantId,
     _kind: kind as MovementKind,
     _category: category as MovementCategory,
     _amount_cents: amountCents,

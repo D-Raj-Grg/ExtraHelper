@@ -3745,6 +3745,7 @@ export type Database = {
           _category: Database["public"]["Enums"]["cash_movement_category"]
           _kind: Database["public"]["Enums"]["cash_movement_kind"]
           _note: string
+          _tenant: string
         }
         Returns: string
       }

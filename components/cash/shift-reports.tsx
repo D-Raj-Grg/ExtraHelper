@@ -1,3 +1,4 @@
+import { ZapIcon } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Table,
@@ -56,6 +57,7 @@ export function ShiftReports({
                   <TableHead className="px-3 py-2 font-medium">Cashier</TableHead>
                   <TableHead className="px-3 py-2 font-medium">Closed</TableHead>
                   <TableHead className="px-3 py-2 text-right font-medium">Float</TableHead>
+                  <TableHead className="px-3 py-2 text-right font-medium">Cash out</TableHead>
                   <TableHead className="px-3 py-2 text-right font-medium">Expected</TableHead>
                   <TableHead className="px-3 py-2 text-right font-medium">Counted</TableHead>
                   <TableHead className="px-3 py-2 text-right font-medium">Variance</TableHead>
@@ -72,6 +74,23 @@ export function ShiftReports({
                       </TableCell>
                       <TableCell className="px-3 py-2 text-right tabular-nums text-muted-foreground">
                         {money(s.opening_float_cents, currency)}
+                      </TableCell>
+                      <TableCell className="px-3 py-2 text-right tabular-nums text-muted-foreground">
+                        {s.payouts_cents > 0 ? `−${money(s.payouts_cents, currency)}` : "—"}
+                        {s.paid_in_cents > 0 ? (
+                          <span className="block text-xs">
+                            +{money(s.paid_in_cents, currency)} in
+                          </span>
+                        ) : null}
+                        {s.auto_approved_count > 0 ? (
+                          <span
+                            className="mt-0.5 flex items-center justify-end gap-1 text-xs text-amber-600 dark:text-amber-400"
+                            title="Approved by the close, not by a manager"
+                          >
+                            <ZapIcon className="size-3" />
+                            {s.auto_approved_count} auto
+                          </span>
+                        ) : null}
                       </TableCell>
                       <TableCell className="px-3 py-2 text-right tabular-nums">
                         {money(s.expected_cents ?? 0, currency)}

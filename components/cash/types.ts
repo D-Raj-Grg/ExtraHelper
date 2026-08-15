@@ -41,4 +41,14 @@ export type ClosedSession = {
   closed_at: string | null
   /** Display name of the cashier who ran the shift; null if unknown. */
   cashier: string | null
+  /** Approved cash out of the drawer during the shift. */
+  payouts_cents: number
+  /** Approved cash added to the drawer from outside a sale. */
+  paid_in_cents: number
+  /**
+   * How many movements the close approved on the cashier's behalf. This is the
+   * compensating control for auto-approve-at-close: nothing blocks a shift from
+   * ending, but an owner can see which entries no manager ever reviewed.
+   */
+  auto_approved_count: number
 }

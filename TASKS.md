@@ -68,6 +68,27 @@ credentials nobody has set and a cashier account that does not exist.
 - 8/8 backfill: 3,655 recorded, 5 stock movements from the PO, none from the quick purchase.
 - `tsc --noEmit` clean, `eslint` clean on every touched file, `npm run build` compiles.
 
+### Review pass (2026-08-15) — three defects found and fixed
+
+- [x] **Cross-tenant session lookup.** `record_supplier_payment` took its tenant
+      from the supplier but found the open drawer by `cashier_id` alone. One open
+      session per cashier *per tenant* is allowed, so a user in two tenants could
+      write a `cash_movements` row stamped tenant A pointing at tenant B's
+      session — and `close_cash_session` sums by `session_id`, so B's drawer
+      would have been debited for A's purchase. Latent (no user is in two
+      tenants), fixed in `20260815041500`: both RPCs now filter the session by
+      tenant, `record_cash_movement` takes `_tenant` explicitly rather than
+      guessing, and a `before insert or update` trigger refuses any movement
+      whose tenant does not match its session.
+- [x] **Shift report auto-approved marker was never built.** The spec called it
+      the compensating control for auto-approve-at-close and `shift-reports.tsx`
+      had no trace of it. Added: a Cash out column with payouts, paid-in, and a
+      ⚡ count of entries the close approved rather than a manager.
+- [x] **Migration filenames did not match the applied versions.** `apply_migration`
+      stamps its own timestamp, so the repo said `20260815090000…` while the
+      registry said `20260815031948…`. Files renamed to the registered versions
+      so a fresh environment sees them as already applied.
+
 ### Open follow-ups
 
 - [ ] **Flutter surface** — repository, providers, movements panel, `cash.approve` gating, and a

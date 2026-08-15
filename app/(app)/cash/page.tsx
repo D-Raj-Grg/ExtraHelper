@@ -73,6 +73,29 @@ export default async function CashPage() {
     (profiles ?? []).map((p) => [p.id, p.full_name || (p.username ? `@${p.username}` : null)]),
   )
 
+  // Movement totals for the closed sessions on show, so a shift report can say
+  // what left the drawer and how much of it no manager ever reviewed.
+  const closedIds = rows.map((s) => s.id)
+  const { data: closedMovements } = closedIds.length
+    ? await supabase
+        .from("cash_movements")
+        .select("session_id, kind, amount_cents, auto_approved, status")
+        .in("session_id", closedIds)
+        .eq("status", "approved")
+    : { data: [] }
+
+  const bySession = new Map<
+    string,
+    { payouts: number; paidIn: number; auto: number }
+  >()
+  for (const m of closedMovements ?? []) {
+    const agg = bySession.get(m.session_id) ?? { payouts: 0, paidIn: 0, auto: 0 }
+    if (m.kind === "payout") agg.payouts += m.amount_cents
+    else agg.paidIn += m.amount_cents
+    if (m.auto_approved) agg.auto += 1
+    bySession.set(m.session_id, agg)
+  }
+
   const movements: CashMovement[] = movementsRaw.map((m) => ({
     id: m.id,
     kind: m.kind,
@@ -85,16 +108,22 @@ export default async function CashPage() {
     recorded_by: nameById.get(m.created_by) ?? null,
   }))
 
-  const sessions: ClosedSession[] = rows.map((s) => ({
-    id: s.id,
-    opening_float_cents: s.opening_float_cents,
-    expected_cents: s.expected_cents,
-    counted_cents: s.counted_cents,
-    variance_cents: s.variance_cents,
-    opened_at: s.opened_at,
-    closed_at: s.closed_at,
-    cashier: nameById.get(s.cashier_id) ?? null,
-  }))
+  const sessions: ClosedSession[] = rows.map((s) => {
+    const agg = bySession.get(s.id)
+    return {
+      id: s.id,
+      opening_float_cents: s.opening_float_cents,
+      expected_cents: s.expected_cents,
+      counted_cents: s.counted_cents,
+      variance_cents: s.variance_cents,
+      opened_at: s.opened_at,
+      closed_at: s.closed_at,
+      cashier: nameById.get(s.cashier_id) ?? null,
+      payouts_cents: agg?.payouts ?? 0,
+      paid_in_cents: agg?.paidIn ?? 0,
+      auto_approved_count: agg?.auto ?? 0,
+    }
+  })
 
   return (
     <PageShell>
