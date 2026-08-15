@@ -77,6 +77,9 @@ export function CheckoutPaymentPanel({
 }) {
   const [tender, setTender] = useState("")
 
+  /** Only cash is physically handed over, so only cash can produce change. */
+  const takesCash = method === "cash"
+
   const amountCents = mode === "paid" ? due : Math.round(Number(amount) * 100)
   const tenderCents = Math.round(Number(tender) * 100)
   const change =
@@ -155,7 +158,7 @@ export function CheckoutPaymentPanel({
             </Field>
           ) : null}
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className={cn("grid gap-3", takesCash && "sm:grid-cols-2")}>
             <Field>
               <FieldLabel htmlFor="pay-amount">Amount ({currency})</FieldLabel>
               <Input
@@ -170,23 +173,30 @@ export function CheckoutPaymentPanel({
                 className="h-12 text-lg font-semibold tabular-nums"
               />
             </Field>
-            <Field>
-              <FieldLabel htmlFor="tender-amount">Tendered ({currency})</FieldLabel>
-              <Input
-                id="tender-amount"
-                type="number"
-                inputMode="decimal"
-                min={0}
-                step="0.01"
-                value={tender}
-                onChange={(e) => setTender(e.target.value)}
-                placeholder="Handed over"
-                className="h-12 text-lg font-semibold tabular-nums"
-              />
-            </Field>
+            {/*
+              Cash only. Nothing is handed over on a wallet scan or a card, so
+              there is no change to work out — and a "Cash received" box beside
+              eSewa reads as a field the cashier has failed to fill in.
+            */}
+            {takesCash ? (
+              <Field>
+                <FieldLabel htmlFor="tender-amount">Cash received ({currency})</FieldLabel>
+                <Input
+                  id="tender-amount"
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  step="0.01"
+                  value={tender}
+                  onChange={(e) => setTender(e.target.value)}
+                  placeholder="Handed over"
+                  className="h-12 text-lg font-semibold tabular-nums"
+                />
+              </Field>
+            ) : null}
           </div>
 
-          {tender.trim() !== "" && Number.isFinite(tenderCents) ? (
+          {takesCash && tender.trim() !== "" && Number.isFinite(tenderCents) ? (
             <div
               className={cn(
                 "flex items-baseline justify-between gap-3 rounded-lg border p-3",

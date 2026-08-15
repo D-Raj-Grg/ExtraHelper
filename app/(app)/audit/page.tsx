@@ -31,7 +31,7 @@ export default async function AuditPage() {
   return (
     <PageShell>
       <PageHeader
-        title={<>{tenant.name} · Audit Log</>}
+        title="Audit Log"
         description={<>Sensitive actions — voids, discounts, refunds, plan &amp; status changes.</>}
       />
 

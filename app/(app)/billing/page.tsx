@@ -31,7 +31,7 @@ export default async function BillingPage() {
   return (
     <PageShell>
       <PageHeader
-        title={<>{tenant.name} · Billing</>}
+        title="Billing"
         description="Your subscription, plan features, and invoices."
       />
       <BillingManager

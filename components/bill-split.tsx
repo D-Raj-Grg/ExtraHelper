@@ -90,7 +90,7 @@ export function BillSplit({
   function payTender() {
     const cents = Math.round(Number(tAmount) * 100)
     if (!Number.isFinite(cents) || cents <= 0) {
-      setError("Enter a valid tender amount.")
+      setError("Enter a valid amount.")
       return
     }
     if (!tenderNonce.current) tenderNonce.current = freshNonce()
@@ -287,7 +287,7 @@ export function BillSplit({
       {mode === "tender" ? (
         <div className="space-y-2">
           <p className="text-xs text-muted-foreground">
-            Add each tender (e.g. {money(Math.ceil(due / 2), currency)} cash +{" "}
+            Add each payment (e.g. {money(Math.ceil(due / 2), currency)} cash +{" "}
             {money(due - Math.ceil(due / 2), currency)} card). Remaining due:{" "}
             <span className="font-medium">{money(due, currency)}</span>
           </p>
