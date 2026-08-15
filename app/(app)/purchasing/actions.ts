@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
 import { requireRole } from "@/lib/supabase/guards"
+import { SUPPLIER_METHODS, type SupplierMethod } from "@/lib/purchasing-constants"
 
 export type PurchState = { error: string } | { ok: true } | undefined
 
@@ -115,5 +116,48 @@ export async function receivePOPartial(
   if (error) return { error: error.message }
   revalidatePath("/purchasing")
   revalidatePath("/inventory")
+  return { ok: true }
+}
+
+/**
+ * Record money paid to a supplier — against a purchase order, or on its own as
+ * a quick purchase when the receipt is one total for several goods.
+ *
+ * Paying by cash also writes a payout against the caller's open drawer, in the
+ * same transaction, so the shift still reconciles. That is why there is no
+ * inventory item here: this records money, not stock.
+ */
+export async function recordSupplierPayment(
+  _prev: PurchState,
+  formData: FormData,
+): Promise<PurchState> {
+  await requireRole(...PURCH_ROLES)
+  const supplierId = String(formData.get("supplierId") ?? "").trim()
+  const poId = String(formData.get("poId") ?? "").trim() || null
+  const method = String(formData.get("method") ?? "").trim()
+  const note = String(formData.get("note") ?? "").trim() || null
+  const paidAt = String(formData.get("paidAt") ?? "").trim() || null
+  const amountCents = Math.round(Number(formData.get("amount") ?? 0) * 100)
+
+  if (!supplierId) return { error: "Pick a supplier." }
+  if (!SUPPLIER_METHODS.includes(method as SupplierMethod))
+    return { error: "Pick how it was paid." }
+  if (!Number.isFinite(amountCents) || amountCents <= 0)
+    return { error: "Amount must be more than zero." }
+
+  const supabase = await createClient()
+  const { error } = await supabase.rpc("record_supplier_payment", {
+    _supplier_id: supplierId,
+    _po_id: poId,
+    _amount_cents: amountCents,
+    _method: method as SupplierMethod,
+    // Date-only input: anchor to midday so a timezone shift can't move the day.
+    _paid_at: paidAt ? new Date(`${paidAt}T12:00:00`).toISOString() : null,
+    _note: note,
+  })
+  if (error) return { error: error.message }
+
+  revalidatePath("/purchasing")
+  revalidatePath("/cash")
   return { ok: true }
 }

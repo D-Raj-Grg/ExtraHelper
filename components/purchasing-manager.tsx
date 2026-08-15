@@ -21,6 +21,8 @@ import {
 } from "@/app/(app)/purchasing/actions"
 import { money } from "@/lib/format"
 import { cn } from "@/lib/utils"
+import { PaymentDialog } from "@/components/purchasing/payment-dialog"
+import { Payables, type SupplierBalance } from "@/components/purchasing/payables"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -41,8 +43,17 @@ type PO = {
   id: string
   status: string
   created_at: string
+  supplier_id: string | null
   suppliers: { name: string } | null
   po_items: POLine[]
+}
+
+/** Received value of a PO — what you owe for what actually arrived. */
+function receivedCents(po: PO) {
+  return po.po_items.reduce(
+    (sum, l) => sum + Number(l.qty_received) * Number(l.unit_cost_cents),
+    0,
+  )
 }
 
 /** Status carries an icon + label + semantic colour — never colour alone. */
@@ -83,17 +94,24 @@ function POCard({
   po,
   currency,
   items,
+  suppliers,
+  paidCents,
   lineAction,
   linePending,
 }: {
   po: PO
   currency: string
   items: ItemOpt[]
+  suppliers: Supplier[]
+  /** Already paid against this PO, from supplier_payments. */
+  paidCents: number
   lineAction: (payload: FormData) => void
   linePending: boolean
 }) {
   const [pending, startTransition] = useTransition()
   const closed = po.status === "received" || po.status === "cancelled"
+  const received = receivedCents(po)
+  const outstandingValue = received - paidCents
 
   // Per-line entered receive qty, keyed by po_item_id; default to outstanding.
   const [entered, setEntered] = useState<Record<string, string>>(() =>
@@ -116,6 +134,30 @@ function POCard({
         <span className="font-medium">{po.suppliers?.name ?? "No supplier"}</span>
         <StatusBadge status={po.status} />
       </div>
+
+      {received > 0 ? (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+          <span className="tabular-nums">Received {money(received, currency)}</span>
+          <span className="tabular-nums">Paid {money(paidCents, currency)}</span>
+          {outstandingValue > 0 ? (
+            <span className="tabular-nums text-amber-700 dark:text-amber-400">
+              {money(outstandingValue, currency)} owing
+            </span>
+          ) : (
+            <span className="tabular-nums text-emerald-700 dark:text-emerald-400">Settled</span>
+          )}
+          {po.supplier_id ? (
+            <PaymentDialog
+              currency={currency}
+              suppliers={suppliers}
+              poId={po.id}
+              supplierId={po.supplier_id}
+              triggerLabel="Record payment"
+              outstandingCents={outstandingValue}
+            />
+          ) : null}
+        </div>
+      ) : null}
 
       {po.po_items.length > 0 ? (
         <Table className="text-sm">
@@ -232,11 +274,16 @@ export function PurchasingManager({
   suppliers,
   items,
   purchaseOrders,
+  balances,
+  paidByPo,
 }: {
   currency: string
   suppliers: Supplier[]
   items: ItemOpt[]
   purchaseOrders: PO[]
+  balances: SupplierBalance[]
+  /** Total paid against each PO, keyed by po id. */
+  paidByPo: Record<string, number>
 }) {
   const [supState, supAction, supPending] = useActionState<PurchState, FormData>(createSupplier, undefined)
   const [poState, poAction, poPending] = useActionState<PurchState, FormData>(createPO, undefined)
@@ -268,6 +315,33 @@ export function PurchasingManager({
           <FormError state={supState} />
         </form>
       </section>
+
+      {/* Quick purchase — money, not stock */}
+      <section>
+        <h2 className="mb-2 text-lg font-semibold">Quick purchase</h2>
+        <Card className="gap-3 p-4">
+          <p className="text-sm text-muted-foreground">
+            A receipt that is one total for several things — tissue, plastic, a packet of noodles.
+            Records the spend and what you owe, and takes it off the drawer if you paid cash. It
+            does <strong>not</strong> change stock counts; use a purchase order for goods you want
+            to track.
+          </p>
+          <div>
+            {suppliers.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Add a supplier above first.</p>
+            ) : (
+              <PaymentDialog
+                currency={currency}
+                suppliers={suppliers}
+                triggerLabel="Record a purchase"
+              />
+            )}
+          </div>
+        </Card>
+      </section>
+
+      {/* What you owe */}
+      <Payables balances={balances} currency={currency} />
 
       {/* Create PO */}
       <section>
@@ -306,6 +380,8 @@ export function PurchasingManager({
               po={po}
               currency={currency}
               items={items}
+              suppliers={suppliers}
+              paidCents={paidByPo[po.id] ?? 0}
               lineAction={lineAction}
               linePending={linePending}
             />
