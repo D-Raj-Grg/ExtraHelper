@@ -19,6 +19,7 @@ export default async function InventoryPage() {
     { data: suppliers },
     { data: counts },
     { data: costHistory },
+    { data: units },
   ] = await Promise.all([
       supabase
         .from("inventory_items")
@@ -69,6 +70,11 @@ export default async function InventoryPage() {
         .not("unit_cost_cents", "is", null)
         .order("created_at", { ascending: false })
         .limit(200),
+      supabase
+        .from("inventory_units")
+        .select("id, name, kind")
+        .eq("tenant_id", tenant.tenantId)
+        .order("name"),
     ])
 
   const canCount = ["owner", "manager", "inventory"].includes(tenant.role)
@@ -91,6 +97,7 @@ export default async function InventoryPage() {
         suppliers={suppliers ?? []}
         costHistory={(costHistory ?? []) as never}
         counts={counts ?? []}
+        units={units ?? []}
         canCount={canCount}
       />
     </PageShell>

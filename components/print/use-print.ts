@@ -67,8 +67,18 @@ export function usePrint() {
     [print],
   )
 
+  /** The estimate, presented before the guest pays. */
   const printBill = useCallback(
     (billId: string) => print({ doc: "bill", billId, reprint: true }),
+    [print],
+  )
+
+  /**
+   * Proof of payment. Routed separately from the bill on purpose — a counter
+   * that prints the bill may not want a second slip after every card tap.
+   */
+  const printReceipt = useCallback(
+    (billId: string) => print({ doc: "receipt", billId, reprint: true }),
     [print],
   )
 
@@ -94,6 +104,7 @@ export function usePrint() {
     printKot,
     printKots,
     printBill,
+    printReceipt,
     printOrderSlip,
     printFullKot,
     printTest,

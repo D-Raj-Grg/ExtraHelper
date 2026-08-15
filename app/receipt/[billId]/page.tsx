@@ -46,13 +46,14 @@ export default async function ReceiptPage({
       .maybeSingle(),
     // The paper this tenant's bill printer is actually loaded with, so the
     // browser fallback prints the same slip the ESC/POS queue would. Assigning
-    // the `bill` document is what makes a printer a receipt printer since
-    // 20260731160100_printing_v2.sql replaced `printers.role`.
+    // the `bill` or `receipt` document is what makes a printer a counter
+    // printer since 20260731160100_printing_v2.sql replaced `printers.role`;
+    // either assignment answers "how wide is the counter's paper".
     supabase
       .from("printer_documents")
       .select("printers!inner(paper_width, is_active)")
       .eq("tenant_id", tenant.tenantId)
-      .eq("doc", "bill")
+      .in("doc", ["bill", "receipt"])
       .eq("printers.is_active", true)
       .limit(1)
       .maybeSingle(),

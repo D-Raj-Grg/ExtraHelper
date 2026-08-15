@@ -8,7 +8,12 @@ import type { PrintDocModel } from "./docs"
 
 export type PrinterConnection = "network" | "usb" | "system" | "bluetooth"
 export type PrinterRenderMode = "text" | "image"
-export type PrintDoc = "kot" | "bot" | "full_kot" | "order_slip" | "bill" | "test"
+/**
+ * `bill` and `receipt` are two documents on purpose. The estimate the guest
+ * reads before paying and the slip that follows the money are separate
+ * decisions — plenty of counters print the first and skip the second.
+ */
+export type PrintDoc = "kot" | "bot" | "full_kot" | "order_slip" | "bill" | "receipt" | "test"
 export type PrintJobStatus = "queued" | "claimed" | "printed" | "failed" | "cancelled"
 
 /** Everything the agent needs to address one printer and lay a page out for it. */
@@ -78,6 +83,7 @@ export const ASSIGNABLE_DOCS = [
   "full_kot",
   "order_slip",
   "bill",
+  "receipt",
 ] as const satisfies readonly PrintDoc[]
 
 export const DOC_LABELS: Record<PrintDoc, string> = {
@@ -85,7 +91,8 @@ export const DOC_LABELS: Record<PrintDoc, string> = {
   bot: "BOT",
   full_kot: "Full KOT",
   order_slip: "Order slip",
-  bill: "Bill & receipt",
+  bill: "Bill",
+  receipt: "Receipt",
   test: "Test page",
 }
 
@@ -94,7 +101,8 @@ export const DOC_DESCRIPTIONS: Record<PrintDoc, string> = {
   bot: "Bar order ticket — one per bar station",
   full_kot: "The whole order on one ticket, for the pass",
   order_slip: "Itemised slip with prices, for the guest or the waiter",
-  bill: "The bill and its receipt, printed when it is settled",
+  bill: "The bill the guest checks, printed before they pay",
+  receipt: "Proof of payment, printed on its own once the bill is settled",
   test: "A width and cut test, printed on demand",
 }
 

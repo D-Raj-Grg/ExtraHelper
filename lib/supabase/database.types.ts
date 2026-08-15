@@ -820,6 +820,38 @@ export type Database = {
           },
         ]
       }
+      inventory_units: {
+        Row: {
+          created_at: string
+          id: string
+          kind: string | null
+          name: string
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kind?: string | null
+          name: string
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kind?: string | null
+          name?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_units_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       item_availability: {
         Row: {
           created_at: string
@@ -3859,6 +3891,10 @@ export type Database = {
         Args: { _tenant: string; _user_id: string }
         Returns: undefined
       }
+      rename_inventory_unit: {
+        Args: { _new_name: string; _unit_id: string }
+        Returns: undefined
+      }
       reopen_po: { Args: { _po_id: string }; Returns: undefined }
       report_by_branch: {
         Args: { _from: string; _tenant: string; _to: string }
@@ -4214,7 +4250,14 @@ export type Database = {
         | "other"
       payment_status: "pending" | "completed" | "failed" | "refunded"
       po_status: "draft" | "sent" | "partial" | "received" | "cancelled"
-      print_doc: "kot" | "bot" | "full_kot" | "order_slip" | "bill" | "test"
+      print_doc:
+        | "kot"
+        | "bot"
+        | "full_kot"
+        | "order_slip"
+        | "bill"
+        | "test"
+        | "receipt"
       print_job_status:
         | "queued"
         | "printed"
@@ -4422,7 +4465,15 @@ export const Constants = {
       ],
       payment_status: ["pending", "completed", "failed", "refunded"],
       po_status: ["draft", "sent", "partial", "received", "cancelled"],
-      print_doc: ["kot", "bot", "full_kot", "order_slip", "bill", "test"],
+      print_doc: [
+        "kot",
+        "bot",
+        "full_kot",
+        "order_slip",
+        "bill",
+        "test",
+        "receipt",
+      ],
       print_job_status: ["queued", "printed", "failed", "claimed", "cancelled"],
       printer_connection: ["network", "system", "usb", "bluetooth"],
       printer_render_mode: ["text", "image"],

@@ -415,3 +415,104 @@ export async function getItemMovements(
   if (error) return { error: error.message }
   return { ok: true, movements: (data ?? []) as MovementRow[] }
 }
+
+// ============================================================================
+// Units of measure
+//
+// Every unit a restaurant sees is a row in `inventory_units` — the usual
+// kg/ltr/pcs are seeded per tenant by trigger, not held in code. Rows rather
+// than values derived from `inventory_items.uom`, so a unit added by mistake
+// has somewhere to be renamed or deleted from; a derived list can only be
+// emptied by editing every item that carries the typo.
+// ============================================================================
+
+/** Add a unit to this restaurant's list. Idempotent on name, case-insensitive. */
+export async function createUnit(name: string): Promise<InvState> {
+  const tenant = await requireRole(...INV_ROLES)
+  const unit = name.trim()
+  if (!unit) return { error: "Enter a unit name." }
+  if (unit.length > 24) return { error: "Unit names are 24 characters at most." }
+
+  const supabase = await createClient()
+  // No `kind`: the seeded groups (Weight, Volume…) are ours, and guessing which
+  // one "half-crate" belongs to would be wrong more often than useful.
+  const { error } = await supabase
+    .from("inventory_units")
+    .insert({ tenant_id: tenant.tenantId, name: unit })
+  // Already on the list is the outcome the caller wanted, not a failure.
+  if (error && !error.message.includes("inventory_units_tenant_name_uidx")) {
+    return { error: error.message }
+  }
+  revalidatePath("/inventory")
+  return { ok: true }
+}
+
+/**
+ * Remove a unit from the list, by id.
+ *
+ * Refuses while items still carry it, and says how many — deleting the entry
+ * would not change those items, so the list would just re-suggest the unit and
+ * the store keeper would be left wondering why it came back.
+ */
+export async function deleteUnit(unitId: string): Promise<InvState> {
+  const tenant = await requireRole(...INV_ROLES)
+  if (!UUID_RE.test(unitId)) return { error: "Unknown unit." }
+
+  const supabase = await createClient()
+  const { data: unit } = await supabase
+    .from("inventory_units")
+    .select("id, name")
+    .eq("tenant_id", tenant.tenantId)
+    .eq("id", unitId)
+    .maybeSingle()
+  if (!unit) return { error: "That unit is already gone." }
+
+  // Compared in JS, not with ilike: a unit name is free text and `%`/`_` are
+  // pattern characters to Postgres, so "%" would match every item.
+  const { data: rows, error: rowsErr } = await supabase
+    .from("inventory_items")
+    .select("uom")
+    .eq("tenant_id", tenant.tenantId)
+  if (rowsErr) return { error: rowsErr.message }
+  const target = unit.name.trim().toLowerCase()
+  const inUse = (rows ?? []).filter((r) => (r.uom ?? "").trim().toLowerCase() === target).length
+  if (inUse > 0) {
+    return {
+      error: `${inUse} item${inUse === 1 ? "" : "s"} still use "${unit.name}". Change their unit first, then delete it.`,
+    }
+  }
+
+  const { error } = await supabase
+    .from("inventory_units")
+    .delete()
+    .eq("tenant_id", tenant.tenantId)
+    .eq("id", unitId)
+  if (error) return { error: error.message }
+  revalidatePath("/inventory")
+  return { ok: true }
+}
+
+/**
+ * Rename a unit — and every item measured in it, in one transaction.
+ *
+ * Goes through `rename_inventory_unit` rather than an update here: uom is free
+ * text with no foreign key, so the items have to move with the name or the old
+ * string comes back as an orphan on the next page load. UPDATE on the table is
+ * revoked to `authenticated`, making that RPC the only door.
+ */
+export async function renameUnit(unitId: string, name: string): Promise<InvState> {
+  await requireRole(...INV_ROLES)
+  if (!UUID_RE.test(unitId)) return { error: "Unknown unit." }
+  const next = name.trim()
+  if (!next) return { error: "Enter a unit name." }
+  if (next.length > 24) return { error: "Unit names are 24 characters at most." }
+
+  const supabase = await createClient()
+  const { error } = await supabase.rpc("rename_inventory_unit", {
+    _unit_id: unitId,
+    _new_name: next,
+  })
+  if (error) return { error: error.message }
+  revalidatePath("/inventory")
+  return { ok: true }
+}

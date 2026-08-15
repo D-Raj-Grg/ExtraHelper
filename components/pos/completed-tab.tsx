@@ -83,7 +83,7 @@ export function CompletedTab({
 }) {
   const [filter, setFilter] = useState<string>(ALL)
   const [pending, startTransition] = useTransition()
-  const { printBill } = usePrint()
+  const { printReceipt } = usePrint()
 
   // How many orders share each bill. add_order_to_bill merges tables, so the
   // same bill total can appear on several rows — see the Amount column.
@@ -124,7 +124,8 @@ export function CompletedTab({
 
   function reprint(billId: string) {
     startTransition(async () => {
-      await printBill(billId)
+      // These orders are done, so the paper wanted here is the receipt.
+      await printReceipt(billId)
     })
   }
 
