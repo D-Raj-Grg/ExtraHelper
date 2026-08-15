@@ -14,6 +14,7 @@ import type {
   ModifierOpt,
   Recipe,
   SupplierOpt,
+  UnitOpt,
   VariantOpt,
 } from "./types"
 
@@ -29,6 +30,7 @@ export function InventoryManager({
   suppliers,
   costHistory,
   counts,
+  units,
   canCount,
 }: {
   currency: string
@@ -42,6 +44,7 @@ export function InventoryManager({
   suppliers: SupplierOpt[]
   costHistory: CostRow[]
   counts: CountRow[]
+  units: UnitOpt[]
   canCount: boolean
 }) {
   // Cost history grouped by item, newest first (input already sorted newest-first).
@@ -70,6 +73,7 @@ export function InventoryManager({
             timezone={timezone}
             items={items}
             suppliers={suppliers}
+            units={units}
             historyByItem={historyByItem}
           />
         </TabsContent>

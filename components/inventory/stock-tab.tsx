@@ -13,7 +13,16 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { AddIngredientSheet, ItemSheet } from "./item-sheet"
 import { WasteSheet } from "./waste-sheet"
-import { fmt, LOW_BADGE, MOVE_LABELS, type CostRow, type Item, type MoveType, type SupplierOpt } from "./types"
+import {
+  fmt,
+  LOW_BADGE,
+  MOVE_LABELS,
+  type CostRow,
+  type Item,
+  type MoveType,
+  type SupplierOpt,
+  type UnitOpt,
+} from "./types"
 
 type StatusFilter = "all" | "low" | "oversold"
 
@@ -22,12 +31,14 @@ export function StockTab({
   timezone,
   items,
   suppliers,
+  units,
   historyByItem,
 }: {
   currency: string
   timezone: string
   items: Item[]
   suppliers: SupplierOpt[]
+  units: UnitOpt[]
   historyByItem: Map<string, CostRow[]>
 }) {
   const [query, setQuery] = useState("")
@@ -53,6 +64,17 @@ export function StockTab({
   // after a server action refreshed the list underneath it.
   const [editingId, setEditingId] = useState<string | null>(null)
   const editing = editingId === null ? null : (items.find((i) => i.id === editingId) ?? null)
+
+  // How many items measure in each unit — the manage dialog shows it next to
+  // the name so "why can't I delete this?" is answered before it's asked.
+  const unitUsage = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const i of items) {
+      const key = (i.uom ?? "").trim().toLowerCase()
+      if (key) map.set(key, (map.get(key) ?? 0) + 1)
+    }
+    return map
+  }, [items])
 
   const categories = useMemo(
     () => [...new Set(items.map((i) => i.category).filter((c): c is string => Boolean(c)))].sort(),
@@ -198,7 +220,7 @@ export function StockTab({
         </div>
       )}
 
-      <AddIngredientSheet open={addOpen} onOpenChange={setAddOpen} />
+      <AddIngredientSheet open={addOpen} onOpenChange={setAddOpen} units={units} unitUsage={unitUsage} />
       <WasteSheet items={items} open={wasteOpen} onOpenChange={setWasteOpen} />
       <ItemSheet
         item={editing}
@@ -210,6 +232,8 @@ export function StockTab({
         timezone={timezone}
         suppliers={suppliers}
         costHistory={editing ? (historyByItem.get(editing.id) ?? []) : []}
+        units={units}
+        unitUsage={unitUsage}
       />
     </div>
   )

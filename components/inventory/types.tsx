@@ -14,6 +14,11 @@ export type Item = {
   barcode: string | null
 }
 export type SupplierOpt = { id: string; name: string }
+/**
+ * A unit of measure on this restaurant's list. `kind` only groups the picker
+ * (weight / volume / count / packaging); null means a unit someone added.
+ */
+export type UnitOpt = { id: string; name: string; kind: string | null }
 export type ModifierOpt = { id: string; name: string }
 export type ModifierIngredient = {
   id: string

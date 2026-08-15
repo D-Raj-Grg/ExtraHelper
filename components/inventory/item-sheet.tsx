@@ -34,7 +34,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { ALL_MOVE_LABELS, fmt, FormError, type CostRow, type Item, type SupplierOpt } from "./types"
+import { UnitSelect } from "./unit-select"
+import {
+  ALL_MOVE_LABELS,
+  fmt,
+  FormError,
+  type CostRow,
+  type Item,
+  type SupplierOpt,
+  type UnitOpt,
+} from "./types"
 
 const NO_SUPPLIER = "__none__"
 
@@ -45,9 +54,13 @@ const NO_SUPPLIER = "__none__"
 export function AddIngredientSheet({
   open,
   onOpenChange,
+  units,
+  unitUsage,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
+  units: UnitOpt[]
+  unitUsage: Map<string, number>
 }) {
   const [state, action, pending] = useActionState<InvState, FormData>(createInventoryItem, undefined)
 
@@ -77,8 +90,8 @@ export function AddIngredientSheet({
           <div className="flex flex-wrap gap-4">
             <Field className="w-40">
               <FieldLabel htmlFor="add-inv-uom">Unit of measure</FieldLabel>
-              <Input id="add-inv-uom" name="uom" placeholder="kg" defaultValue="unit" />
-              <FieldDescription>How you buy/count it — kg, l, each.</FieldDescription>
+              <AddUomField units={units} unitUsage={unitUsage} />
+              <FieldDescription>How you buy/count it — kg, ltr, pcs.</FieldDescription>
             </Field>
             <Field className="w-40">
               <FieldLabel htmlFor="add-inv-category">Category</FieldLabel>
@@ -124,6 +137,17 @@ export function AddIngredientSheet({
   )
 }
 
+/**
+ * Lives inside the form so the form's remount `key` resets the chosen unit too
+ * — holding it in the sheet would carry the last ingredient's unit over.
+ */
+function AddUomField({ units, unitUsage }: { units: UnitOpt[]; unitUsage: Map<string, number> }) {
+  const [uom, setUom] = useState("unit")
+  return (
+    <UnitSelect id="add-inv-uom" name="uom" value={uom} onChange={setUom} units={units} usage={unitUsage} />
+  )
+}
+
 // ============================================================================
 // Edit-item sheet (levels + cost history)
 // ============================================================================
@@ -136,6 +160,8 @@ export function ItemSheet({
   timezone,
   suppliers,
   costHistory,
+  units,
+  unitUsage,
 }: {
   item: Item | null
   open: boolean
@@ -144,6 +170,8 @@ export function ItemSheet({
   timezone: string
   suppliers: SupplierOpt[]
   costHistory: CostRow[]
+  units: UnitOpt[]
+  unitUsage: Map<string, number>
 }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -157,7 +185,14 @@ export function ItemSheet({
               </SheetDescription>
             </SheetHeader>
             <div className="flex flex-1 flex-col gap-8 overflow-y-auto px-6 pb-8">
-              <ItemEditBody key={item.id} item={item} suppliers={suppliers} onSaved={() => onOpenChange(false)} />
+              <ItemEditBody
+                key={item.id}
+                item={item}
+                suppliers={suppliers}
+                units={units}
+                unitUsage={unitUsage}
+                onSaved={() => onOpenChange(false)}
+              />
               <UsageHistory key={`u-${item.id}`} itemId={item.id} uom={item.uom} timezone={timezone} open={open} />
               <CostHistory costHistory={costHistory} currency={currency} timezone={timezone} />
             </div>
@@ -168,7 +203,19 @@ export function ItemSheet({
   )
 }
 
-function ItemEditBody({ item, suppliers, onSaved }: { item: Item; suppliers: SupplierOpt[]; onSaved: () => void }) {
+function ItemEditBody({
+  item,
+  suppliers,
+  units,
+  unitUsage,
+  onSaved,
+}: {
+  item: Item
+  suppliers: SupplierOpt[]
+  units: UnitOpt[]
+  unitUsage: Map<string, number>
+  onSaved: () => void
+}) {
   const [name, setName] = useState(item.name)
   const [uom, setUom] = useState(item.uom)
   const [category, setCategory] = useState(item.category ?? "")
@@ -210,9 +257,9 @@ function ItemEditBody({ item, suppliers, onSaved }: { item: Item; suppliers: Sup
           <FieldLabel htmlFor="edit-inv-name">Name</FieldLabel>
           <Input id="edit-inv-name" value={name} onChange={(e) => setName(e.target.value)} />
         </Field>
-        <Field className="w-28">
+        <Field className="w-40">
           <FieldLabel htmlFor="edit-inv-uom">Unit</FieldLabel>
-          <Input id="edit-inv-uom" value={uom} onChange={(e) => setUom(e.target.value)} />
+          <UnitSelect id="edit-inv-uom" value={uom} onChange={setUom} units={units} usage={unitUsage} />
         </Field>
       </div>
       <div className="flex flex-wrap gap-4">
