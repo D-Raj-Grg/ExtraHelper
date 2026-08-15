@@ -266,7 +266,16 @@ function SupplierRow({
             </>
           ) : (
             <>
-              <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  // Rows never remount, so seed from the live record rather
+                  // than whatever was typed last time.
+                  setName(supplier.name)
+                  setEditing(true)
+                }}
+              >
                 Rename
               </Button>
               <Button size="sm" variant="outline" onClick={onOpen}>
@@ -383,7 +392,11 @@ function AddSupplier() {
   return (
     <Card className="p-4">
       <p className="mb-3 text-sm font-medium">Add a supplier</p>
-      <form action={action} className="flex flex-wrap items-end gap-2">
+      <form
+        action={action}
+        key={state && "ok" in state ? "added" : "editing"}
+        className="flex flex-wrap items-end gap-2"
+      >
         <Input name="name" placeholder="Name" aria-label="Supplier name" className="max-w-48" required />
         <Input name="contact" placeholder="Contact person" aria-label="Contact person" className="max-w-44" />
         <Input name="phone" placeholder="Phone" aria-label="Phone" className="max-w-36" />

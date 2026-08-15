@@ -48,6 +48,7 @@ export function OrdersTab({
   paidByPo,
   canDelete,
   run,
+  runAsync,
   onGoToSuppliers,
 }: {
   currency: string
@@ -62,6 +63,7 @@ export function OrdersTab({
   paidByPo: Record<string, number>
   canDelete: boolean
   run: (fn: () => Promise<PurchState>, ok?: string) => void
+  runAsync: (fn: () => Promise<PurchState>, ok?: string) => Promise<boolean>
   onGoToSuppliers: () => void
 }) {
   // Held by id, not by object: storing the row freezes a snapshot and
@@ -211,9 +213,10 @@ export function OrdersTab({
         onReload={() => openId && void loadLines(openId)}
         currency={currency}
         items={items}
+        suppliers={suppliers}
         paidCents={open ? (paidByPo[open.id] ?? 0) : 0}
         canDelete={canDelete}
-        run={run}
+        runAsync={runAsync}
         onOpenChange={(o) => !o && setOpenId(null)}
       />
     </div>

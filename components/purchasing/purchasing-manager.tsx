@@ -78,16 +78,26 @@ export function PurchasingManager({
   const [tab, setTab] = useState(initialTab)
   const [, startTransition] = useTransition()
 
-  /**
-   * One place where a mutation's outcome becomes something the user can see.
-   * Every action returns `{error} | {ok:true}`, so nothing is fire-and-forget.
-   */
+  /** Report the outcome of a mutation. Nothing here is fire-and-forget. */
+  const report = (res: PurchState, ok?: string) => {
+    if (res && "error" in res) toast.error(res.error)
+    else if (ok) toast.success(ok)
+    return !(res && "error" in res)
+  }
+
+  /** Row actions: the page revalidates itself, nothing local to refresh. */
   const run = (fn: () => Promise<PurchState>, ok?: string) =>
     startTransition(async () => {
-      const res = await fn()
-      if (res && "error" in res) toast.error(res.error)
-      else if (ok) toast.success(ok)
+      report(await fn(), ok)
     })
+
+  /**
+   * Sheet actions, which have to refetch their own detail afterwards. Awaited
+   * rather than run-and-hope: firing the reload on a timer races the write and
+   * leaves stale lines on screen when the round trip is slow.
+   */
+  const runAsync = async (fn: () => Promise<PurchState>, ok?: string) =>
+    report(await fn(), ok)
 
   const active = suppliers.filter((s) => !s.archived_at)
 
@@ -150,6 +160,7 @@ export function PurchasingManager({
             paidByPo={paidByPo}
             canDelete={canDelete}
             run={run}
+            runAsync={runAsync}
             onGoToSuppliers={() => setTab("suppliers")}
           />
         </TabsContent>

@@ -6,6 +6,7 @@ import { PlusIcon, Trash2Icon } from "lucide-react"
 import {
   addPOLine,
   correctPOReceipt,
+  setPOSupplier,
   createItemAndAddLine,
   deletePOLine,
   receivePO,
@@ -34,7 +35,14 @@ import {
 import { money } from "@/lib/format"
 import { ConfirmButton } from "./confirm-button"
 import { PaymentDialog } from "./payment-dialog"
-import { StatusBadge, receivedCents, type ItemOpt, type PO, type POLine } from "./types"
+import {
+  StatusBadge,
+  receivedCents,
+  type ItemOpt,
+  type PO,
+  type POLine,
+  type Supplier,
+} from "./types"
 
 export function POSheet({
   po,
@@ -43,9 +51,10 @@ export function POSheet({
   onReload,
   currency,
   items,
+  suppliers,
   paidCents,
   canDelete,
-  run,
+  runAsync,
   onOpenChange,
 }: {
   po: PO | null
@@ -59,9 +68,10 @@ export function POSheet({
   onReload: () => void
   currency: string
   items: ItemOpt[]
+  suppliers: Supplier[]
   paidCents: number
   canDelete: boolean
-  run: (fn: () => Promise<PurchState>, ok?: string) => void
+  runAsync: (fn: () => Promise<PurchState>, ok?: string) => Promise<boolean>
   onOpenChange: (open: boolean) => void
 }) {
   if (!po) return <Sheet open={false} onOpenChange={onOpenChange} />
@@ -116,7 +126,7 @@ export function POSheet({
                     currency={currency}
                     editable={editable}
                     canCorrect={canDelete && Number(l.qty_received) > 0}
-                    run={run}
+                    runAsync={runAsync}
                     onDone={reload}
                   />
                 ))}
@@ -125,11 +135,34 @@ export function POSheet({
           )}
 
           {editable ? (
-            <AddLine poId={po.id} items={items} run={run} onDone={reload} />
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm text-muted-foreground">Supplier</span>
+              <Select
+                value={po.supplier_id ?? ""}
+                onValueChange={(v) =>
+                  void runAsync(() => setPOSupplier(po.id, String(v)), "Supplier changed.")
+                }
+              >
+                <SelectTrigger className="max-w-64" aria-label="Order supplier">
+                  <SelectValue placeholder="Pick a supplier" />
+                </SelectTrigger>
+                <SelectContent>
+                  {suppliers.map((sup) => (
+                    <SelectItem key={sup.id} value={sup.id}>
+                      {sup.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
+
+          {editable ? (
+            <AddLine poId={po.id} items={items} runAsync={runAsync} onDone={reload} />
           ) : null}
 
           {receivable ? (
-            <ReceivePanel po={po} lines={lines} run={run} onDone={reload} />
+            <ReceivePanel po={po} lines={lines} runAsync={runAsync} onDone={reload} />
           ) : null}
 
           {received > 0 ? (
@@ -181,14 +214,14 @@ function LineRow({
   currency,
   editable,
   canCorrect,
-  run,
+  runAsync,
   onDone,
 }: {
   line: POLine
   currency: string
   editable: boolean
   canCorrect: boolean
-  run: (fn: () => Promise<PurchState>, ok?: string) => void
+  runAsync: (fn: () => Promise<PurchState>, ok?: string) => Promise<boolean>
   onDone: () => void
 }) {
   const [editing, setEditing] = useState(false)
@@ -230,13 +263,14 @@ function LineRow({
           <div className="flex justify-end gap-2">
             <Button
               size="sm"
-              onClick={() => {
-                run(
+              onClick={async () => {
+                if (await runAsync(
                   () => updatePOLine(line.id, Number(qty), Number(cost)),
                   `${itemName} updated.`,
-                )
-                setEditing(false)
-                setTimeout(onDone, 300)
+                )) {
+                  setEditing(false)
+                }
+                onDone()
               }}
             >
               Save
@@ -265,7 +299,17 @@ function LineRow({
         <div className="flex justify-end gap-2">
           {editable ? (
             <>
-              <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  // Rows are keyed by id and never remount, so state from a
+                  // previous edit would linger. Seed from the live line.
+                  setQty(String(line.qty_ordered))
+                  setCost((line.unit_cost_cents / 100).toFixed(2))
+                  setEditing(true)
+                }}
+              >
                 Edit
               </Button>
               <Button
@@ -273,9 +317,9 @@ function LineRow({
                 variant="ghost"
                 className="text-destructive"
                 aria-label={`Remove ${itemName}`}
-                onClick={() => {
-                  run(() => deletePOLine(line.id), `${itemName} removed.`)
-                  setTimeout(onDone, 300)
+                onClick={async () => {
+                  await runAsync(() => deletePOLine(line.id), `${itemName} removed.`)
+                  onDone()
                 }}
               >
                 <Trash2Icon className="size-4" />
@@ -283,7 +327,7 @@ function LineRow({
             </>
           ) : null}
           {canCorrect ? (
-            <CorrectLine line={line} currency={currency} run={run} onDone={onDone} />
+            <CorrectLine line={line} currency={currency} runAsync={runAsync} onDone={onDone} />
           ) : null}
         </div>
       </TableCell>
@@ -295,12 +339,12 @@ function LineRow({
 function CorrectLine({
   line,
   currency,
-  run,
+  runAsync,
   onDone,
 }: {
   line: POLine
   currency: string
-  run: (fn: () => Promise<PurchState>, ok?: string) => void
+  runAsync: (fn: () => Promise<PurchState>, ok?: string) => Promise<boolean>
   onDone: () => void
 }) {
   const [qty, setQty] = useState(String(line.qty_received))
@@ -352,11 +396,14 @@ function CorrectLine({
         </span>
       }
       onConfirm={() => {
-        run(
-          () => correctPOReceipt(line.id, Number(qty), Number(cost), reason),
-          `${name} corrected.`,
-        )
-        setTimeout(onDone, 300)
+        void (async () => {
+          await runAsync(
+            () => correctPOReceipt(line.id, Number(qty), Number(cost), reason),
+            `${name} corrected.`,
+          )
+          setReason("")
+          onDone()
+        })()
       }}
     />
   )
@@ -365,12 +412,12 @@ function CorrectLine({
 function AddLine({
   poId,
   items,
-  run,
+  runAsync,
   onDone,
 }: {
   poId: string
   items: ItemOpt[]
-  run: (fn: () => Promise<PurchState>, ok?: string) => void
+  runAsync: (fn: () => Promise<PurchState>, ok?: string) => Promise<boolean>
   onDone: () => void
 }) {
   const [itemId, setItemId] = useState("")
@@ -452,22 +499,20 @@ function AddLine({
             size="sm"
             variant="secondary"
             disabled={!itemId || !qty || (creating && !newName.trim())}
-            onClick={() => {
+            onClick={async () => {
               const q = Number(qty)
               const c = Number(cost)
-              if (creating) {
-                run(
-                  () => createItemAndAddLine(poId, newName, newUom, q, c),
-                  `${newName.trim()} created and added.`,
-                )
-              } else {
-                run(
-                  () => addPOLine(poId, itemId, q, c),
-                  "Line added — adding the same ingredient again tops it up.",
-                )
-              }
-              reset()
-              setTimeout(onDone, 300)
+              const ok = creating
+                ? await runAsync(
+                    () => createItemAndAddLine(poId, newName, newUom, q, c),
+                    `${newName.trim()} created and added.`,
+                  )
+                : await runAsync(
+                    () => addPOLine(poId, itemId, q, c),
+                    "Line added — adding the same ingredient again tops it up.",
+                  )
+              if (ok) reset()
+              onDone()
             }}
           >
             <PlusIcon className="size-4" /> Add line
@@ -481,12 +526,12 @@ function AddLine({
 function ReceivePanel({
   po,
   lines,
-  run,
+  runAsync,
   onDone,
 }: {
   po: PO
   lines: POLine[]
-  run: (fn: () => Promise<PurchState>, ok?: string) => void
+  runAsync: (fn: () => Promise<PurchState>, ok?: string) => Promise<boolean>
   onDone: () => void
 }) {
   const outstanding = (l: POLine) =>
@@ -516,9 +561,10 @@ function ReceivePanel({
       <div className="mt-3 flex flex-wrap gap-2">
         <Button
           size="sm"
-          onClick={() => {
-            run(() => receivePO(po.id), "Everything received — stock updated.")
-            setTimeout(onDone, 300)
+          onClick={async () => {
+            await runAsync(() => receivePO(po.id), "Everything received — stock updated.")
+            setEntered({})
+            onDone()
           }}
         >
           Receive all
@@ -526,15 +572,16 @@ function ReceivePanel({
         <Button
           size="sm"
           variant="secondary"
-          onClick={() => {
+          onClick={async () => {
             const payload = lines
               .map((l) => ({
                 po_item_id: l.id,
                 qty: Number(entered[l.id] ?? outstanding(l)),
               }))
               .filter((l) => Number.isFinite(l.qty) && l.qty > 0)
-            run(() => receivePOPartial(po.id, payload), "Received — stock updated.")
-            setTimeout(onDone, 300)
+            await runAsync(() => receivePOPartial(po.id, payload), "Received — stock updated.")
+            setEntered({})
+            onDone()
           }}
         >
           Receive entered
