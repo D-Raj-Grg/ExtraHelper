@@ -20,6 +20,7 @@ export function ChoiceChip({
   name,
   checked,
   onSelect,
+  onCommit,
   disabled = false,
   label,
   detail,
@@ -32,6 +33,12 @@ export function ChoiceChip({
   name: string
   checked: boolean
   onSelect: () => void
+  /**
+   * Selection was made deliberately — pointer tap, or Enter on a focused chip.
+   * Lets a caller treat picking as the whole answer (advance a step) without
+   * breaking arrow-key navigation, which moves the selection but never commits.
+   */
+  onCommit?: () => void
   disabled?: boolean
   label: React.ReactNode
   detail?: React.ReactNode
@@ -66,6 +73,18 @@ export function ChoiceChip({
         checked={checked}
         disabled={disabled}
         onChange={onSelect}
+        onClick={(e) => {
+          // Arrow-keying through a radio group also dispatches click, with
+          // detail 0. Only a real pointer tap (detail ≥ 1) commits — otherwise
+          // walking the list with the keyboard would fling you to the next step.
+          if (e.detail > 0) onCommit?.()
+        }}
+        onKeyDown={(e) => {
+          if (e.key !== "Enter") return
+          e.preventDefault()
+          if (!checked) onSelect()
+          onCommit?.()
+        }}
       />
       {leading}
       {dot ? (

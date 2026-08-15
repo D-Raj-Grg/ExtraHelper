@@ -153,6 +153,13 @@ export function CreateFlow({
             floors={data.floors}
             value={tableId}
             onChange={setTableId}
+            // Tapping a table IS the answer to "where does this go?" — no
+            // reason to make a waiter confirm it with a second tap. The footer
+            // button stays for the keyboard path and for the default takeaway.
+            onCommit={(id) => {
+              setTableId(id)
+              setStep("dishes")
+            }}
           />
         </div>
         <div className="flex shrink-0 items-center justify-between gap-2 border-t p-3">

@@ -55,11 +55,14 @@ export function DestinationStep({
   floors,
   value,
   onChange,
+  onCommit,
 }: {
   tables: PosTable[]
   floors: PosFloor[]
   value: string
   onChange: (id: string) => void
+  /** Picking a destination is the whole step — tapping one moves on. */
+  onCommit?: (id: string) => void
 }) {
   const groups = new Map<string, PosTable[]>()
   for (const t of tables) {
@@ -85,6 +88,7 @@ export function DestinationStep({
             name="pos-destination"
             checked={value === TAKEAWAY}
             onSelect={() => onChange(TAKEAWAY)}
+            onCommit={() => onCommit?.(TAKEAWAY)}
             label="Takeaway"
             detail="No table"
             showCheck
@@ -113,6 +117,7 @@ export function DestinationStep({
                     name="pos-destination"
                     checked={selected}
                     onSelect={() => onChange(t.id)}
+                    onCommit={() => onCommit?.(t.id)}
                     label={`Table ${t.label}`}
                     showCheck
                     // Same top-down glyph as the tables board, so a table looks
