@@ -29,7 +29,7 @@ export default async function LoyaltyPage() {
   return (
     <PageShell>
       <PageHeader
-        title={<>{tenant.name} · Loyalty &amp; CRM</>}
+        title="Loyalty & CRM"
         description="Customer points, tiers, and post-visit feedback."
       />
       <LoyaltyManager

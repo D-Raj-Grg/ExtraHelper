@@ -22,7 +22,7 @@ export default async function OnlinePage() {
   return (
     <PageShell>
       <PageHeader
-        title={<>{tenant.name} · Online Orders</>}
+        title="Online Orders"
         description={<>Delivery &amp; pickup orders from the storefront. Update status, dispatch delivery.</>}
       />
       <OnlineManager currency={tenant.currency} timezone={tenant.timezone} orders={(orders ?? []) as never} />

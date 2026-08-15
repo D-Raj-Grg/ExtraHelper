@@ -14,7 +14,7 @@ export type QrState =
  */
 export async function placeQrOrder(
   token: string,
-  items: { item_id: string; qty: number }[],
+  items: { item_id: string; variant_id?: string | null; qty: number }[],
 ): Promise<QrState> {
   if (!items.length) return { error: "Add at least one item." }
 

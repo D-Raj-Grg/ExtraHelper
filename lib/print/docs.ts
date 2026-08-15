@@ -12,6 +12,7 @@
  */
 
 import { amountInWords, formatDateTime, money } from "@/lib/format"
+import { paymentMethodLabel } from "@/lib/payment-constants"
 import type { PrintBitmap } from "./bitmap"
 
 export type DocAlign = "left" | "center" | "right"
@@ -459,7 +460,7 @@ export function buildBill(r: BillDoc): PrintDocModel {
     for (const pay of r.payments) {
       blocks.push({
         kind: "row",
-        label: `Paid · ${pay.method}`,
+        label: `Paid · ${paymentMethodLabel(pay.method)}`,
         value: money(pay.amountCents, r.currency),
       })
     }

@@ -13,7 +13,7 @@ import { DishStep } from "@/components/pos/dish-step"
 import { EMPTY_CHECK_IN, type CheckIn } from "@/components/pos/check-in-details"
 import { toPlaceLines } from "@/components/pos/cart-types"
 import { useCreateCart } from "@/components/pos/use-create-cart"
-import { TAKEAWAY, type PosData } from "@/components/pos/types"
+import { TAKEAWAY, type PosComposerData } from "@/components/pos/types"
 
 /**
  * Fresh idempotency key. Module scope, not the component body: it reads
@@ -37,7 +37,9 @@ export function CreateFlow({
   onClose,
   initialTableId,
 }: {
-  data: PosData
+  // Composer data, not the whole board: this flow also runs from the sidebar's
+  // New order dialog, which never loads orders/kots/completed.
+  data: PosComposerData
   currency: string
   onClose: () => void
   /** Preselect this table (from the Table tab). Still changeable on step 1. */
@@ -97,13 +99,22 @@ export function CreateFlow({
         // (offline short-circuits above and replays with a fire on reconnect).
         const fr = await fireOrder(res.orderId)
         if ("error" in fr) {
-          // Order IS created but the fire failed — the one case worth keeping
-          // the composer open for, on the amend screen where fire can be
-          // retried. Just the push, no onClose() first: onClose navigates
-          // too, and two navigations in one tick race and leave you on
-          // neither. The route change swaps this modal to amend mode.
-          toast.error(fr.error)
-          router.push(`/pos/${res.orderId}`)
+          // Order IS created but the kitchen can't see it. This composer also
+          // opens from the sidebar over /inventory or /reports, so navigating
+          // to the amend screen outright would yank someone out of unrelated
+          // work — the escape hatch rides on the toast instead, and they choose.
+          //
+          // duration: Infinity is load-bearing. An order stuck outside the
+          // kitchen must not quietly fade off screen on a timer; this one sits
+          // there until it's dismissed or acted on.
+          toast.error(fr.error, {
+            duration: Infinity,
+            action: {
+              label: "Open order",
+              onClick: () => router.push(`/pos/${res.orderId}`),
+            },
+          })
+          onClose()
           return
         }
         // Zero tickets is a real outcome (every line already on a ticket, or

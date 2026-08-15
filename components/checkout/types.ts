@@ -78,5 +78,9 @@ export type InvoiceMeta = {
 /** How the cashier intends to settle. */
 export type PayMode = "paid" | "credit" | "partial"
 
-/** In what form the money arrives. 'online' charges the gateway first. */
-export type PayMethod = "cash" | "card" | "online"
+/**
+ * In what form the money arrives. Every value here is recorded as taken —
+ * except 'online', which charges the gateway adapter first. The catalogue
+ * (labels, icons, which ones offer a reference field) is `lib/payment-constants`.
+ */
+export type PayMethod = "cash" | "card" | "esewa" | "fonepay" | "bank" | "wallet" | "online"

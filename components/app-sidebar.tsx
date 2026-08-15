@@ -153,7 +153,9 @@ export function AppSidebar({
         )}
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={navTop} groups={navGroups} />
+        {/* The CTA is hardcoded inside NavMain rather than being one of
+            `navTop`, so its NAV_PERM entry has to be applied by hand. */}
+        <NavMain items={navTop} groups={navGroups} showNewOrder={canSee("New Order")} />
         <NavSecondary items={navSecondary} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>

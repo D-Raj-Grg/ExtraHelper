@@ -8,6 +8,7 @@ import {
 } from "@/lib/pos-constants"
 import type {
   PosCompletedOrder,
+  PosComposerData,
   PosCustomer,
   PosData,
   PosKot,
@@ -30,28 +31,15 @@ type MenuRow = {
 }
 
 /**
- * Everything /pos and /pos/[orderId] render. Both show the same screen — the
- * only difference is whether the modal starts open — so the fetch lives here
- * rather than being written twice.
- *
- * `timeZone` is the tenant's: the Completed tab and the KOT tail are scoped to
- * the restaurant's own day, not the server's.
+ * What it takes to *compose* an order: the menu, where it can go, and who it's
+ * for. Split out of loadPosData because the sidebar's New order dialog opens on
+ * any screen — /inventory, /reports — and has no use for the board's orders,
+ * tickets or day history.
  */
-export async function loadPosData(tenantId: string, timeZone: string): Promise<PosData> {
+export async function loadComposerData(tenantId: string): Promise<PosComposerData> {
   const supabase = await createClient()
 
-  const [
-    tables,
-    floors,
-    categories,
-    menu,
-    orders,
-    customers,
-    staff,
-    kots,
-    completed,
-    canCheckout,
-  ] = await Promise.all([
+  const [tables, floors, categories, menu, customers, staff] = await Promise.all([
     supabase
       .from("restaurant_tables")
       .select("id, label, state, capacity, floor_id")
@@ -77,17 +65,6 @@ export async function loadPosData(tenantId: string, timeZone: string): Promise<P
       .order("name")
       // Variant order is owner-chosen on /menu — keep the till showing it.
       .order("sort", { referencedTable: "item_variants" }),
-    supabase
-      .from("orders")
-      .select(ORDER_CARD_SELECT)
-      .eq("tenant_id", tenantId)
-      .in("status", ACTIVE_ORDER_STATUSES)
-      // Pinned orders float to the top; newest-first within each group.
-      .order("pinned_at", { ascending: false, nullsFirst: false })
-      .order("created_at", { ascending: false })
-      // Without this the embedded lines come back in no defined order and
-      // reshuffle between fetches.
-      .order("created_at", { referencedTable: "order_items" }),
     // Capped: an unbounded customer select would ship the whole CRM to every
     // till. A type-ahead is the follow-up if a tenant outgrows this.
     supabase
@@ -97,16 +74,6 @@ export async function loadPosData(tenantId: string, timeZone: string): Promise<P
       .order("name")
       .limit(200),
     supabase.rpc("list_order_staff", { _tenant: tenantId }),
-    // Kitchen tickets for the KOT tab. Finished ones come down too so the
-    // Completed view has something to show without a second round trip — the
-    // builder is what keeps that tail from being every ticket ever fired.
-    kotTabQuery(supabase, tenantId, timeZone),
-    // Today's finished orders, for the Completed tab.
-    completedOrdersQuery(supabase, tenantId, timeZone),
-    // Whether this member may open a bill / reprint its receipt. A parallel
-    // round trip rather than reading `role`, because custom roles exist and
-    // `role === "cashier"` is not the same question.
-    supabase.rpc("has_permission", { _tenant: tenantId, _key: "checkout.view" }),
   ])
 
   // Flatten the modifier embed here so the client and the IndexedDB cache see
@@ -133,6 +100,51 @@ export async function loadPosData(tenantId: string, timeZone: string): Promise<P
     categories: categories.data ?? [],
     customers: (customers.data ?? []) as PosCustomer[],
     staff: (staff.data ?? []) as PosStaff[],
+  }
+}
+
+/**
+ * Everything /pos and /pos/[orderId] render. Both show the same screen — the
+ * only difference is whether the modal starts open — so the fetch lives here
+ * rather than being written twice.
+ *
+ * `timeZone` is the tenant's: the Completed tab and the KOT tail are scoped to
+ * the restaurant's own day, not the server's.
+ */
+export async function loadPosData(tenantId: string, timeZone: string): Promise<PosData> {
+  const supabase = await createClient()
+
+  // Nested rather than sequential: the composer's six and the board's four all
+  // go out together, so splitting the loader costs no latency here.
+  const [composer, [orders, kots, completed, canCheckout]] = await Promise.all([
+    loadComposerData(tenantId),
+    Promise.all([
+      supabase
+        .from("orders")
+        .select(ORDER_CARD_SELECT)
+        .eq("tenant_id", tenantId)
+        .in("status", ACTIVE_ORDER_STATUSES)
+        // Pinned orders float to the top; newest-first within each group.
+        .order("pinned_at", { ascending: false, nullsFirst: false })
+        .order("created_at", { ascending: false })
+        // Without this the embedded lines come back in no defined order and
+        // reshuffle between fetches.
+        .order("created_at", { referencedTable: "order_items" }),
+      // Kitchen tickets for the KOT tab. Finished ones come down too so the
+      // Completed view has something to show without a second round trip — the
+      // builder is what keeps that tail from being every ticket ever fired.
+      kotTabQuery(supabase, tenantId, timeZone),
+      // Today's finished orders, for the Completed tab.
+      completedOrdersQuery(supabase, tenantId, timeZone),
+      // Whether this member may open a bill / reprint its receipt. A parallel
+      // round trip rather than reading `role`, because custom roles exist and
+      // `role === "cashier"` is not the same question.
+      supabase.rpc("has_permission", { _tenant: tenantId, _key: "checkout.view" }),
+    ]),
+  ])
+
+  return {
+    ...composer,
     orders: (orders.data ?? []) as unknown as PosOrderCard[],
     kots: (kots.data ?? []) as unknown as PosKot[],
     completed: (completed.data ?? []) as unknown as PosCompletedOrder[],

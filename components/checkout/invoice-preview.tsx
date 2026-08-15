@@ -3,6 +3,7 @@
 import { AlertTriangleIcon, CheckCircle2Icon, PrinterIcon } from "lucide-react"
 
 import { amountInWords, formatDateTime, money } from "@/lib/format"
+import { paymentMethodLabel } from "@/lib/payment-constants"
 import { Button } from "@/components/ui/button"
 import type {
   CheckoutBill,
@@ -171,7 +172,7 @@ export function CheckoutInvoicePreview({
             {payments.map((p) => (
               <Line
                 key={p.id}
-                label={`Paid · ${p.method}`}
+                label={`Paid · ${paymentMethodLabel(p.method)}`}
                 value={money(p.amount_cents, currency)}
               />
             ))}

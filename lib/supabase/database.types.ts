@@ -278,6 +278,89 @@ export type Database = {
           },
         ]
       }
+      cash_movements: {
+        Row: {
+          amount_cents: number
+          approved_at: string | null
+          approved_by: string | null
+          auto_approved: boolean
+          branch_id: string | null
+          category: Database["public"]["Enums"]["cash_movement_category"]
+          created_at: string
+          created_by: string
+          id: string
+          kind: Database["public"]["Enums"]["cash_movement_kind"]
+          note: string
+          session_id: string
+          status: Database["public"]["Enums"]["cash_movement_status"]
+          supplier_payment_id: string | null
+          tenant_id: string
+        }
+        Insert: {
+          amount_cents: number
+          approved_at?: string | null
+          approved_by?: string | null
+          auto_approved?: boolean
+          branch_id?: string | null
+          category: Database["public"]["Enums"]["cash_movement_category"]
+          created_at?: string
+          created_by: string
+          id?: string
+          kind: Database["public"]["Enums"]["cash_movement_kind"]
+          note: string
+          session_id: string
+          status?: Database["public"]["Enums"]["cash_movement_status"]
+          supplier_payment_id?: string | null
+          tenant_id: string
+        }
+        Update: {
+          amount_cents?: number
+          approved_at?: string | null
+          approved_by?: string | null
+          auto_approved?: boolean
+          branch_id?: string | null
+          category?: Database["public"]["Enums"]["cash_movement_category"]
+          created_at?: string
+          created_by?: string
+          id?: string
+          kind?: Database["public"]["Enums"]["cash_movement_kind"]
+          note?: string
+          session_id?: string
+          status?: Database["public"]["Enums"]["cash_movement_status"]
+          supplier_payment_id?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cash_movements_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_movements_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "cash_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_movements_supplier_payment_id_fkey"
+            columns: ["supplier_payment_id"]
+            isOneToOne: false
+            referencedRelation: "supplier_payments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_movements_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cash_sessions: {
         Row: {
           branch_id: string | null
@@ -2259,7 +2342,6 @@ export type Database = {
           status: Database["public"]["Enums"]["po_status"]
           supplier_id: string | null
           tenant_id: string
-          total_cents: number
           updated_at: string
         }
         Insert: {
@@ -2269,7 +2351,6 @@ export type Database = {
           status?: Database["public"]["Enums"]["po_status"]
           supplier_id?: string | null
           tenant_id: string
-          total_cents?: number
           updated_at?: string
         }
         Update: {
@@ -2279,7 +2360,6 @@ export type Database = {
           status?: Database["public"]["Enums"]["po_status"]
           supplier_id?: string | null
           tenant_id?: string
-          total_cents?: number
           updated_at?: string
         }
         Relationships: [
@@ -2359,6 +2439,7 @@ export type Database = {
           bill_id: string | null
           created_at: string
           id: string
+          method: Database["public"]["Enums"]["payment_method"] | null
           payment_id: string | null
           reason: string | null
           tenant_id: string
@@ -2369,6 +2450,7 @@ export type Database = {
           bill_id?: string | null
           created_at?: string
           id?: string
+          method?: Database["public"]["Enums"]["payment_method"] | null
           payment_id?: string | null
           reason?: string | null
           tenant_id: string
@@ -2379,6 +2461,7 @@ export type Database = {
           bill_id?: string | null
           created_at?: string
           id?: string
+          method?: Database["public"]["Enums"]["payment_method"] | null
           payment_id?: string | null
           reason?: string | null
           tenant_id?: string
@@ -2925,8 +3008,89 @@ export type Database = {
           },
         ]
       }
+      supplier_payments: {
+        Row: {
+          amount_cents: number
+          branch_id: string | null
+          created_at: string
+          created_by: string
+          id: string
+          method: Database["public"]["Enums"]["payment_method"]
+          note: string | null
+          paid_at: string
+          po_id: string | null
+          supplier_id: string
+          tenant_id: string
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
+        }
+        Insert: {
+          amount_cents: number
+          branch_id?: string | null
+          created_at?: string
+          created_by: string
+          id?: string
+          method: Database["public"]["Enums"]["payment_method"]
+          note?: string | null
+          paid_at?: string
+          po_id?: string | null
+          supplier_id: string
+          tenant_id: string
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
+        }
+        Update: {
+          amount_cents?: number
+          branch_id?: string | null
+          created_at?: string
+          created_by?: string
+          id?: string
+          method?: Database["public"]["Enums"]["payment_method"]
+          note?: string | null
+          paid_at?: string
+          po_id?: string | null
+          supplier_id?: string
+          tenant_id?: string
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_payments_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_payments_po_id_fkey"
+            columns: ["po_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_payments_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_payments_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       suppliers: {
         Row: {
+          archived_at: string | null
           contact: string | null
           created_at: string
           email: string | null
@@ -2936,6 +3100,7 @@ export type Database = {
           tenant_id: string
         }
         Insert: {
+          archived_at?: string | null
           contact?: string | null
           created_at?: string
           email?: string | null
@@ -2945,6 +3110,7 @@ export type Database = {
           tenant_id: string
         }
         Update: {
+          archived_at?: string | null
           contact?: string | null
           created_at?: string
           email?: string | null
@@ -3049,13 +3215,13 @@ export type Database = {
       tenant_settings: {
         Row: {
           block_negative_stock: boolean
-          qr_auto_fire: boolean
           currency: string
           order_type_fees: Json
           packaging_fee: number
           payment_gateway: string
           points_value_cents: number
           printing_mode: string
+          qr_auto_fire: boolean
           receipt_template: Json
           service_charge: number
           tax_rules: Json
@@ -3065,13 +3231,13 @@ export type Database = {
         }
         Insert: {
           block_negative_stock?: boolean
-          qr_auto_fire?: boolean
           currency?: string
           order_type_fees?: Json
           packaging_fee?: number
           payment_gateway?: string
           points_value_cents?: number
           printing_mode?: string
+          qr_auto_fire?: boolean
           receipt_template?: Json
           service_charge?: number
           tax_rules?: Json
@@ -3081,13 +3247,13 @@ export type Database = {
         }
         Update: {
           block_negative_stock?: boolean
-          qr_auto_fire?: boolean
           currency?: string
           order_type_fees?: Json
           packaging_fee?: number
           payment_gateway?: string
           points_value_cents?: number
           printing_mode?: string
+          qr_auto_fire?: boolean
           receipt_template?: Json
           service_charge?: number
           tax_rules?: Json
@@ -3269,6 +3435,7 @@ export type Database = {
     }
     Functions: {
       _build_bill_for_order: { Args: { _order_id: string }; Returns: string }
+      accept_qr_order: { Args: { _order_id: string }; Returns: number }
       add_bill_charge: {
         Args: { _amount_cents: number; _bill_id: string; _label: string }
         Returns: string
@@ -3279,6 +3446,19 @@ export type Database = {
       }
       add_order_to_bill: {
         Args: { _bill_id: string; _order_id: string }
+        Returns: string
+      }
+      add_po_line: {
+        Args: {
+          _inventory_item_id: string
+          _po_id: string
+          _qty: number
+          _unit_cost_cents: number
+        }
+        Returns: string
+      }
+      add_variant: {
+        Args: { _item_id: string; _name: string; _price_delta_cents: number }
         Returns: string
       }
       adjust_inventory: {
@@ -3338,8 +3518,18 @@ export type Database = {
         Returns: undefined
       }
       apply_tenant_rls: { Args: { _table: unknown }; Returns: undefined }
+      approve_cash_movement: { Args: { _id: string }; Returns: undefined }
       approve_member: {
         Args: { _tenant: string; _user_id: string }
+        Returns: undefined
+      }
+      assert_may_delete_purchasing: {
+        Args: { _tenant: string }
+        Returns: undefined
+      }
+      assert_may_edit_menu: { Args: { _tenant: string }; Returns: undefined }
+      assert_may_edit_purchasing: {
+        Args: { _tenant: string }
         Returns: undefined
       }
       attach_bill_customer: {
@@ -3356,6 +3546,10 @@ export type Database = {
       }
       cancel_order: {
         Args: { _order_id: string; _reason: string }
+        Returns: undefined
+      }
+      cancel_po: {
+        Args: { _po_id: string; _reason?: string }
         Returns: undefined
       }
       cancel_tenant_deletion: { Args: { _tenant: string }; Returns: undefined }
@@ -3411,6 +3605,15 @@ export type Database = {
         }
         Returns: undefined
       }
+      correct_po_receipt: {
+        Args: {
+          _line_id: string
+          _new_qty_received: number
+          _new_unit_cost_cents: number
+          _reason: string
+        }
+        Returns: undefined
+      }
       create_bill_for_order: { Args: { _order_id: string }; Returns: string }
       create_draft_po_from_reorder: {
         Args: { _branch?: string; _tenant: string }
@@ -3418,6 +3621,10 @@ export type Database = {
       }
       create_join_code: {
         Args: { _role_id?: string; _tenant: string }
+        Returns: string
+      }
+      create_po: {
+        Args: { _supplier_id?: string; _tenant: string }
         Returns: string
       }
       create_public_reservation: {
@@ -3440,7 +3647,11 @@ export type Database = {
         Args: { _base: Database["public"]["Enums"]["app_role"] }
         Returns: string[]
       }
+      delete_po: { Args: { _po_id: string }; Returns: undefined }
+      delete_po_line: { Args: { _line_id: string }; Returns: undefined }
       delete_printer: { Args: { _printer_id: string }; Returns: undefined }
+      delete_supplier: { Args: { _supplier_id: string }; Returns: undefined }
+      delete_variant: { Args: { _variant_id: string }; Returns: undefined }
       enqueue_print_job: {
         Args: {
           _bill_id: string
@@ -3454,9 +3665,11 @@ export type Database = {
         }
         Returns: string
       }
-      accept_qr_order: { Args: { _order_id: string }; Returns: number }
       fire_order: { Args: { _order_id: string }; Returns: number }
-      fire_order_kots: { Args: { _order_id: string; _tenant: string }; Returns: number }
+      fire_order_kots: {
+        Args: { _order_id: string; _tenant: string }
+        Returns: number
+      }
       get_my_permissions: { Args: { _tenant: string }; Returns: string[] }
       has_permission: {
         Args: { _key: string; _tenant: string }
@@ -3503,6 +3716,10 @@ export type Database = {
       merge_receipt_template: {
         Args: { _patch: Json; _tenant: string }
         Returns: Json
+      }
+      move_variant: {
+        Args: { _direction: string; _variant_id: string }
+        Returns: number
       }
       open_cash_session: {
         Args: {
@@ -3561,6 +3778,17 @@ export type Database = {
         Args: { _order_id: string; _reference: string }
         Returns: Json
       }
+      purchasing_summary: {
+        Args: { _tenant: string }
+        Returns: {
+          awaiting_delivery: number
+          month_spend_cents: number
+          month_start: string
+          open_pos: number
+          owed_cents: number
+          owed_suppliers: number
+        }[]
+      }
       purge_scheduled_tenants: { Args: never; Returns: number }
       qr_menu: { Args: { _token: string }; Returns: Json }
       qr_request_bill: { Args: { _token: string }; Returns: boolean }
@@ -3571,14 +3799,36 @@ export type Database = {
         Returns: number
       }
       recompute_bill: { Args: { _bill_id: string }; Returns: undefined }
+      record_cash_movement: {
+        Args: {
+          _amount_cents: number
+          _category: Database["public"]["Enums"]["cash_movement_category"]
+          _kind: Database["public"]["Enums"]["cash_movement_kind"]
+          _note: string
+          _tenant: string
+        }
+        Returns: string
+      }
       record_payment: {
         Args: {
           _amount_cents: number
           _bill_id: string
           _idempotency_key?: string
           _method: Database["public"]["Enums"]["payment_method"]
+          _reference?: string
         }
         Returns: Database["public"]["Enums"]["bill_status"]
+      }
+      record_supplier_payment: {
+        Args: {
+          _amount_cents: number
+          _method: Database["public"]["Enums"]["payment_method"]
+          _note?: string
+          _paid_at?: string
+          _po_id: string
+          _supplier_id: string
+        }
+        Returns: string
       }
       redeem_join_code: { Args: { _code: string }; Returns: Json }
       redeem_points_for_bill: {
@@ -3590,9 +3840,15 @@ export type Database = {
         Returns: undefined
       }
       refund_payment: {
-        Args: { _amount_cents: number; _bill_id: string; _reason: string }
+        Args: {
+          _amount_cents: number
+          _bill_id: string
+          _method?: Database["public"]["Enums"]["payment_method"]
+          _reason: string
+        }
         Returns: Database["public"]["Enums"]["bill_status"]
       }
+      reject_cash_movement: { Args: { _id: string }; Returns: undefined }
       remove_bill_charge: { Args: { _charge_id: string }; Returns: undefined }
       remove_bill_discount: { Args: { _bill_id: string }; Returns: number }
       remove_item_discount: {
@@ -3603,6 +3859,7 @@ export type Database = {
         Args: { _tenant: string; _user_id: string }
         Returns: undefined
       }
+      reopen_po: { Args: { _po_id: string }; Returns: undefined }
       report_by_branch: {
         Args: { _from: string; _tenant: string; _to: string }
         Returns: {
@@ -3760,6 +4017,7 @@ export type Database = {
         Returns: string
       }
       seed_system_roles: { Args: { _tenant: string }; Returns: undefined }
+      send_po: { Args: { _po_id: string }; Returns: undefined }
       set_bill_complimentary: {
         Args: { _bill_id: string; _reason: string }
         Returns: number
@@ -3772,6 +4030,13 @@ export type Database = {
           _tip_cents: number
         }
         Returns: number
+      }
+      set_cash_movement_status: {
+        Args: {
+          _id: string
+          _to: Database["public"]["Enums"]["cash_movement_status"]
+        }
+        Returns: undefined
       }
       set_item_86: {
         Args: { _is_86: boolean; _item_id: string }
@@ -3793,6 +4058,10 @@ export type Database = {
       }
       set_member_role: {
         Args: { _role_id: string; _tenant: string; _user_id: string }
+        Returns: undefined
+      }
+      set_po_supplier: {
+        Args: { _po_id: string; _supplier_id: string }
         Returns: undefined
       }
       set_printer_usb_path: {
@@ -3825,6 +4094,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      set_variant_recipe_scale: {
+        Args: { _scale: number; _variant_id: string }
+        Returns: undefined
+      }
       split_order_items: {
         Args: { _item_ids: string[]; _order_id: string; _to_table: string }
         Returns: string
@@ -3838,6 +4111,17 @@ export type Database = {
       subscribe_tenant: {
         Args: { _interval?: string; _plan_code: string; _tenant: string }
         Returns: string
+      }
+      supplier_balances: {
+        Args: never
+        Returns: {
+          archived_at: string
+          outstanding_cents: number
+          paid_cents: number
+          received_cents: number
+          supplier_id: string
+          supplier_name: string
+        }[]
       }
       sync_order_status_from_kots: {
         Args: { _order_id: string }
@@ -3867,8 +4151,20 @@ export type Database = {
           suspended: number
         }[]
       }
+      update_po_line: {
+        Args: { _line_id: string; _qty: number; _unit_cost_cents: number }
+        Returns: undefined
+      }
+      update_variant: {
+        Args: { _name: string; _price_delta_cents: number; _variant_id: string }
+        Returns: undefined
+      }
       void_order_item: {
         Args: { _order_item_id: string; _reason: string }
+        Returns: undefined
+      }
+      void_supplier_payment: {
+        Args: { _payment_id: string; _reason: string }
         Returns: undefined
       }
     }
@@ -3882,6 +4178,15 @@ export type Database = {
         | "kitchen"
         | "inventory"
       bill_status: "open" | "partial" | "paid" | "void"
+      cash_movement_category:
+        | "supplier"
+        | "supplies"
+        | "utilities"
+        | "staff_advance"
+        | "transport"
+        | "other"
+      cash_movement_kind: "payout" | "paid_in"
+      cash_movement_status: "pending" | "approved" | "rejected"
       cash_session_status: "open" | "closed"
       discount_type: "percent" | "flat"
       kot_status: "new" | "preparing" | "ready" | "served" | "recalled"
@@ -3897,7 +4202,16 @@ export type Database = {
         | "closed"
         | "cancelled"
       order_type: "dine_in" | "delivery" | "pickup" | "qr"
-      payment_method: "cash" | "card" | "online" | "wallet" | "points"
+      payment_method:
+        | "cash"
+        | "card"
+        | "online"
+        | "wallet"
+        | "points"
+        | "esewa"
+        | "fonepay"
+        | "bank"
+        | "other"
       payment_status: "pending" | "completed" | "failed" | "refunded"
       po_status: "draft" | "sent" | "partial" | "received" | "cancelled"
       print_doc: "kot" | "bot" | "full_kot" | "order_slip" | "bill" | "test"
@@ -4069,6 +4383,16 @@ export const Constants = {
         "inventory",
       ],
       bill_status: ["open", "partial", "paid", "void"],
+      cash_movement_category: [
+        "supplier",
+        "supplies",
+        "utilities",
+        "staff_advance",
+        "transport",
+        "other",
+      ],
+      cash_movement_kind: ["payout", "paid_in"],
+      cash_movement_status: ["pending", "approved", "rejected"],
       cash_session_status: ["open", "closed"],
       discount_type: ["percent", "flat"],
       kot_status: ["new", "preparing", "ready", "served", "recalled"],
@@ -4085,7 +4409,17 @@ export const Constants = {
         "cancelled",
       ],
       order_type: ["dine_in", "delivery", "pickup", "qr"],
-      payment_method: ["cash", "card", "online", "wallet", "points"],
+      payment_method: [
+        "cash",
+        "card",
+        "online",
+        "wallet",
+        "points",
+        "esewa",
+        "fonepay",
+        "bank",
+        "other",
+      ],
       payment_status: ["pending", "completed", "failed", "refunded"],
       po_status: ["draft", "sent", "partial", "received", "cancelled"],
       print_doc: ["kot", "bot", "full_kot", "order_slip", "bill", "test"],

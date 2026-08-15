@@ -110,6 +110,24 @@ export function formatDateTime(iso: string, timeZone = "UTC"): string {
   }
 }
 
+/**
+ * "Just now" / "12m ago" / "3h ago" / "2d ago". `now` comes from the caller
+ * (see `lib/clock.ts`) rather than `Date.now()` so the value is stable across a
+ * render pass; pass `null` on the server and get an absolute time back instead.
+ */
+export function relativeTime(iso: string, now: number | null, timeZone = "UTC"): string {
+  if (now === null) return formatDateTime(iso, timeZone)
+  const diff = now - new Date(iso).getTime()
+  if (diff < 60_000) return "Just now"
+  const mins = Math.floor(diff / 60_000)
+  if (mins < 60) return `${mins}m ago`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  if (days < 7) return `${days}d ago`
+  return formatDateTime(iso, timeZone)
+}
+
 /** Displacement (ms) of `date` when rendered in `timeZone` vs UTC. */
 export function tzOffsetMs(date: Date, timeZone: string): number {
   const p = Object.fromEntries(

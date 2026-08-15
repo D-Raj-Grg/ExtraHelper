@@ -2,7 +2,9 @@
 
 import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
-import { requireRole } from "@/lib/supabase/guards"
+import { requireRole, requireTenant } from "@/lib/supabase/guards"
+import { loadComposerData } from "@/app/(app)/pos/data"
+import type { PosComposerData } from "@/components/pos/types"
 
 export type PosState = { error: string } | { ok: true } | undefined
 
@@ -456,6 +458,23 @@ export async function searchCustomers(
     .order("name")
     .limit(20)
   return data ?? []
+}
+
+/**
+ * The menu, tables and people a composer needs, for the sidebar's New order
+ * dialog — which opens on screens that never ran loadPosData.
+ *
+ * Soft-denies rather than calling requireRole: that redirects, and a background
+ * fetch behind an open dialog is the wrong place to navigate someone. The order
+ * itself is still hard-gated by requireRole inside placeStaffOrder, and by RLS
+ * under that, so nothing here is load-bearing for security.
+ */
+export async function fetchComposerData(): Promise<PosComposerData | { error: string }> {
+  const tenant = await requireTenant()
+  if (!ORDER_ROLES.includes(tenant.role as (typeof ORDER_ROLES)[number])) {
+    return { error: "Your role can't take orders." }
+  }
+  return loadComposerData(tenant.tenantId)
 }
 
 /** KOT ids for an order, so the card can reprint its kitchen slips. */

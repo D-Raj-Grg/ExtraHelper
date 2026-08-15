@@ -53,3 +53,80 @@ export async function closeSession(
   revalidatePath("/cash")
   return { ok: true }
 }
+
+const MOVEMENT_KINDS = ["payout", "paid_in"] as const
+const MOVEMENT_CATEGORIES = [
+  "supplier",
+  "supplies",
+  "utilities",
+  "staff_advance",
+  "transport",
+  "other",
+] as const
+
+type MovementKind = (typeof MOVEMENT_KINDS)[number]
+type MovementCategory = (typeof MOVEMENT_CATEGORIES)[number]
+
+/**
+ * Record cash leaving or entering the drawer, against the caller's open session.
+ * Lands as `pending` — a manager reviews it, and the close auto-approves
+ * whatever is still outstanding so nobody is stranded at the end of a shift.
+ */
+export async function recordMovement(
+  _prev: CashState,
+  formData: FormData,
+): Promise<CashState> {
+  const tenant = await requireRole(...CASH_ROLES)
+  const kind = String(formData.get("kind") ?? "")
+  const category = String(formData.get("category") ?? "")
+  const note = String(formData.get("note") ?? "").trim()
+  const amountCents = Math.round(Number(formData.get("amount") ?? 0) * 100)
+
+  if (!MOVEMENT_KINDS.includes(kind as MovementKind))
+    return { error: "Pick cash out or cash in." }
+  if (!MOVEMENT_CATEGORIES.includes(category as MovementCategory))
+    return { error: "Pick a category." }
+  if (!note) return { error: "Say what this was for." }
+  if (!Number.isFinite(amountCents) || amountCents <= 0)
+    return { error: "Amount must be more than zero." }
+
+  const supabase = await createClient()
+  const { error } = await supabase.rpc("record_cash_movement", {
+    // Passed explicitly: a user in two tenants can hold two open drawers, and
+    // letting the RPC guess picks whichever was opened last.
+    _tenant: tenant.tenantId,
+    _kind: kind as MovementKind,
+    _category: category as MovementCategory,
+    _amount_cents: amountCents,
+    _note: note,
+  })
+  if (error) return { error: error.message }
+
+  revalidatePath("/cash")
+  return { ok: true }
+}
+
+/** Approve and reject are the same transition; only the RPC differs. */
+async function setMovementStatus(
+  formData: FormData,
+  rpc: "approve_cash_movement" | "reject_cash_movement",
+): Promise<CashState> {
+  await requireRole("owner", "manager")
+  const id = String(formData.get("movementId") ?? "")
+  if (!id) return { error: "No movement selected." }
+
+  const supabase = await createClient()
+  const { error } = await supabase.rpc(rpc, { _id: id })
+  if (error) return { error: error.message }
+
+  revalidatePath("/cash")
+  return { ok: true }
+}
+
+export async function approveMovement(_prev: CashState, formData: FormData): Promise<CashState> {
+  return setMovementStatus(formData, "approve_cash_movement")
+}
+
+export async function rejectMovement(_prev: CashState, formData: FormData): Promise<CashState> {
+  return setMovementStatus(formData, "reject_cash_movement")
+}

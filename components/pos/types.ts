@@ -141,3 +141,17 @@ export type PosData = {
   /** Holds checkout.view ⇒ may open a bill and reprint its receipt. UX gating only. */
   canCheckout: boolean
 }
+
+/**
+ * What it takes to *compose* an order, as opposed to run the board. The sidebar's
+ * New order dialog opens on any screen, so it must be able to ask for this much
+ * and no more — orders/kots/completed are the board's business.
+ *
+ * A `Pick` rather than a hand-written twin, and `PosData` satisfies it
+ * structurally, so /pos keeps passing its full payload down unchanged.
+ */
+export type PosComposerData = Pick<
+  PosData,
+  "menu" | "tables" | "floors" | "categories" | "customers" | "staff"
+>
+

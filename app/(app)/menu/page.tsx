@@ -57,7 +57,7 @@ export default async function MenuPage() {
   return (
     <PageShell>
       <PageHeader
-        title={<>{tenant.name} · Menu</>}
+        title="Menu"
         description={<>Manage what you sell — organized into tabs so you can find things fast.</>}
       />
       <MenuManager

@@ -44,6 +44,7 @@ async function replay(entry: QueueEntry): Promise<ReplayResult> {
         entry.payload.method,
         entry.payload.amountCents,
         entry.key,
+        entry.payload.reference,
       )
       return res && "error" in res ? "reject" : "ok"
     }

@@ -27,7 +27,7 @@ export default async function ReservationsPage() {
   return (
     <PageShell>
       <PageHeader
-        title={<>{tenant.name} · Reservations</>}
+        title="Reservations"
         description="Host board — book, confirm, seat, or cancel."
       />
       <ReservationsManager

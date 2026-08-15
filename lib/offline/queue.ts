@@ -1,11 +1,13 @@
 import localforage from "localforage"
 
 import type { OrderMeta, PlaceLine } from "@/app/(app)/pos/actions"
+import type { PaymentMethod } from "@/lib/payment-constants"
 
 // IndexedDB-backed FIFO queue for writes captured while offline. Each entry
 // carries a stable idempotency key so replay on reconnect can't double-apply.
 
-export type PaymentMethod = "cash" | "card" | "online" | "wallet" | "points"
+// Re-exported because the queue's consumers have always imported it from here.
+export type { PaymentMethod }
 
 export type QueueEntry =
   | {
@@ -30,7 +32,16 @@ export type QueueEntry =
       key: string
       createdAt: number
       attempts: number
-      payload: { billId: string; method: PaymentMethod; amountCents: number; label: string }
+      // `reference` arrived with the wallet methods. Entries queued by an older
+      // build simply don't carry it, which is why it stays optional — don't
+      // require it without draining the queue first.
+      payload: {
+        billId: string
+        method: PaymentMethod
+        amountCents: number
+        label: string
+        reference?: string
+      }
     }
 
 /** Give up on a stuck entry after this many failed replays. */

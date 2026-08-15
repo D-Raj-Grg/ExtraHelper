@@ -25,6 +25,7 @@ import {
 } from "@/app/(app)/bill/actions"
 import { money } from "@/lib/format"
 import { billStatusLabel, orderStatusLabel, BILL_STATUS_STYLE, ORDER_STATUS_STYLE } from "@/lib/order-constants"
+import { paymentMethodTakesReference } from "@/lib/payment-constants"
 import { cn } from "@/lib/utils"
 import { useOffline } from "@/components/offline-sync-provider"
 import { usePrint } from "@/components/print/use-print"
@@ -109,6 +110,8 @@ export function CheckoutView({
 
   const [mode, setMode] = useState<PayMode>("paid")
   const [method, setMethod] = useState<PayMethod>("cash")
+  /** Guest-side transaction id for a wallet / bank payment. Blank means none. */
+  const [reference, setReference] = useState("")
   const [unit, setUnit] = useState<DiscountUnit>("flat")
   const [amount, setAmount] = useState((due / 100).toFixed(2))
   const [note, setNote] = useState(bill.note ?? "")
@@ -181,11 +184,15 @@ export function CheckoutView({
       return res ?? { ok: true }
     }
 
+    // A reference only belongs to the methods that offer the field; switching
+    // from eSewa to cash must not carry the wallet's txn id onto the payment.
+    const ref = paymentMethodTakesReference(method) ? reference.trim() : ""
     const payload = {
       billId: bill.id,
       method,
       amountCents: cents,
       label: destination,
+      reference: ref || undefined,
     }
     // Decide from live connectivity — the `online` state can lag the event.
     const offlineNow = typeof navigator !== "undefined" ? !navigator.onLine : !online
@@ -196,7 +203,7 @@ export function CheckoutView({
       return "queued"
     }
     try {
-      const res = await takePayment(bill.id, method, cents, key)
+      const res = await takePayment(bill.id, method, cents, key, ref || undefined)
       if (res && "error" in res) return res
       payKey.current = null
       return { ok: true }
@@ -426,6 +433,8 @@ export function CheckoutView({
                   onModeChange={setMode}
                   method={method}
                   onMethodChange={setMethod}
+                  reference={reference}
+                  onReferenceChange={setReference}
                   items={items}
                   customer={customer}
                   pointsValueCents={pointsValueCents}
