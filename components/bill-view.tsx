@@ -4,10 +4,7 @@ import { useRef, useState, useTransition } from "react"
 import Link from "next/link"
 import {
   ArrowLeftIcon,
-  BanknoteIcon,
   CheckCircle2Icon,
-  CreditCardIcon,
-  GlobeIcon,
   ReceiptIcon,
   WifiOffIcon,
 } from "lucide-react"
@@ -22,6 +19,13 @@ import {
   voidLine,
 } from "@/app/(app)/bill/actions"
 import { money } from "@/lib/format"
+import {
+  PAYMENT_METHODS,
+  PAYMENT_REFERENCE_MAX,
+  paymentMethodLabel,
+  paymentMethodTakesReference,
+} from "@/lib/payment-constants"
+import type { PayMethod } from "@/components/checkout/types"
 import {
   billStatusLabel,
   orderStatusLabel,
@@ -138,6 +142,8 @@ export function BillView({
   }
   const due = Math.max(0, bill.total_cents - paidCents)
   const [amount, setAmount] = useState<string>((due / 100).toFixed(2))
+  /** Guest-side transaction id, applied only to the methods that take one. */
+  const [reference, setReference] = useState("")
   // Re-sync the payment amount when the due changes (e.g. after a discount).
   const [lastDue, setLastDue] = useState(due)
   if (due !== lastDue) {
@@ -239,7 +245,7 @@ export function BillView({
     })
   }
 
-  function pay(method: "cash" | "card") {
+  function pay(method: PayMethod) {
     const cents = Math.round(Number(amount) * 100)
     if (!Number.isFinite(cents) || cents <= 0) {
       setError("Enter a valid amount.")
@@ -249,7 +255,16 @@ export function BillView({
     const label = bill.restaurant_tables?.label
       ? `Table ${bill.restaurant_tables.label}`
       : "Takeaway"
-    const payload = { billId: bill.id, method, amountCents: cents, label }
+    // Only the wallet/bank methods carry a txn id; cash must never inherit one
+    // left in the field from a previous tap.
+    const ref = paymentMethodTakesReference(method) ? reference.trim() : ""
+    const payload = {
+      billId: bill.id,
+      method,
+      amountCents: cents,
+      label,
+      reference: ref || undefined,
+    }
 
     // Offline → queue (idempotency key travels with it, replays on reconnect).
     const offlineNow = typeof navigator !== "undefined" ? !navigator.onLine : !online
@@ -260,7 +275,7 @@ export function BillView({
     const key = keyFor(cents)
     startTransition(async () => {
       try {
-        const res = await takePayment(bill.id, method, cents, key)
+        const res = await takePayment(bill.id, method, cents, key, ref || undefined)
         if (res && "error" in res) setError(res.error)
         else payKey.current = null
       } catch {
@@ -441,7 +456,7 @@ export function BillView({
         <div className="mt-4 flex flex-col gap-1 text-sm">
           {payments.map((p) => (
             <div key={p.id} className="flex justify-between gap-4">
-              <span className="capitalize text-muted-foreground">{p.method}</span>
+              <span className="text-muted-foreground">{paymentMethodLabel(p.method)}</span>
               <span className="tabular-nums">{money(p.amount_cents, currency)}</span>
             </div>
           ))}
@@ -574,36 +589,47 @@ export function BillView({
                 className="h-12 text-lg font-semibold tabular-nums"
               />
             </Field>
+            <Field className="mb-3">
+              <FieldLabel htmlFor="pay-reference">Reference (optional)</FieldLabel>
+              <Input
+                id="pay-reference"
+                value={reference}
+                maxLength={PAYMENT_REFERENCE_MAX}
+                onChange={(e) => setReference(e.target.value)}
+                placeholder="Transaction id — saved on wallet, bank and card payments"
+                className="h-11"
+              />
+            </Field>
             <div className="grid gap-2 sm:grid-cols-3">
-              <Button className="h-12 text-base" disabled={pending} onClick={() => pay("cash")}>
-                <BanknoteIcon className="size-4" />
-                {pending ? "Taking…" : "Cash"}
-              </Button>
-              <Button
-                className="h-12 text-base"
-                variant="secondary"
-                disabled={pending}
-                onClick={() => pay("card")}
-              >
-                <CreditCardIcon className="size-4" />
-                {pending ? "Taking…" : "Card"}
-              </Button>
-              <Button
-                className="h-12 text-base"
-                variant="outline"
-                disabled={pending || !online}
-                onClick={payOnline}
-                title={online ? undefined : "Card (online) needs a connection"}
-              >
-                <GlobeIcon className="size-4" />
-                {pending ? "Taking…" : "Card (online)"}
-              </Button>
+              {PAYMENT_METHODS.map((spec) => {
+                const Icon = spec.icon
+                const unavailable = spec.needsOnline && !online
+                return (
+                  <Button
+                    key={spec.value}
+                    className="h-12 text-base"
+                    variant={
+                      spec.value === "cash"
+                        ? "default"
+                        : spec.needsOnline
+                          ? "outline"
+                          : "secondary"
+                    }
+                    disabled={pending || unavailable}
+                    onClick={() => (spec.needsOnline ? payOnline() : pay(spec.value as PayMethod))}
+                    title={unavailable ? `${spec.label} needs a connection` : undefined}
+                  >
+                    <Icon className="size-4" />
+                    {pending ? "Taking…" : spec.label}
+                  </Button>
+                )
+              })}
             </div>
             {!online ? (
               <p className="mt-2 flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400">
                 <WifiOffIcon className="size-3.5 shrink-0" />
-                Offline — cash and card queue and sync on reconnect. Card (online) needs a
-                connection.
+                Offline — cash, card, eSewa, FonePay, bank and wallet all queue and sync on
+                reconnect. Card (online) needs a connection.
               </p>
             ) : null}
             {error ? (

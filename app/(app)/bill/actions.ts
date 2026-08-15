@@ -6,6 +6,7 @@ import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { requirePermission } from "@/lib/supabase/guards"
 import { getGateway } from "@/lib/integrations"
+import { PAYMENT_REFERENCE_MAX, type PaymentMethod } from "@/lib/payment-constants"
 
 export type BillState = { error: string } | { ok: true } | undefined
 
@@ -273,6 +274,14 @@ export async function payByCard(billId: string, amountCents: number): Promise<Bi
     _method: "online",
     _amount_cents: amountCents,
     _idempotency_key: result.reference,
+    // The gateway's own charge id. It doubles as the idempotency key above, but
+    // that column is a dedup mechanism — the reference column is what a manager
+    // reconciling against the gateway's statement actually reads.
+    //
+    // Truncated, never validated: the card is ALREADY charged by this point, so
+    // a reference the RPC refuses (22001) would fail the recording of money we
+    // have taken. A clipped reference is recoverable; a missing payment is not.
+    _reference: result.reference.slice(0, PAYMENT_REFERENCE_MAX),
   })
   if (error) return { error: error.message }
 
@@ -318,13 +327,18 @@ export async function redeemPoints(billId: string, points: number): Promise<Bill
 /** Record a payment (trusted SQL flips bill → partial/paid, closes order). */
 export async function takePayment(
   billId: string,
-  method: "cash" | "card" | "online" | "wallet" | "points",
+  method: PaymentMethod,
   amountCents: number,
   idempotencyKey?: string,
+  /** Guest-side transaction id for a wallet / bank payment. */
+  reference?: string,
 ): Promise<BillState> {
   await requirePermission("payment.take")
   if (!Number.isInteger(amountCents) || amountCents <= 0)
     return { error: "Amount must be a positive number." }
+  const ref = (reference ?? "").trim()
+  if (ref.length > PAYMENT_REFERENCE_MAX)
+    return { error: `Reference must be ${PAYMENT_REFERENCE_MAX} characters or fewer.` }
 
   const supabase = await createClient()
   // Client-supplied key when present (offline queue replay → dedup via
@@ -334,6 +348,7 @@ export async function takePayment(
     _method: method,
     _amount_cents: amountCents,
     _idempotency_key: idempotencyKey || randomUUID(),
+    _reference: ref || undefined,
   })
   if (error) return { error: error.message }
 

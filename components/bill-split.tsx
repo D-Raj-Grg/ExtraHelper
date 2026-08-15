@@ -3,13 +3,18 @@
 import { useRef, useState, useTransition } from "react"
 import { takePayment } from "@/app/(app)/bill/actions"
 import { money } from "@/lib/format"
+import { PAYMENT_METHODS } from "@/lib/payment-constants"
+import type { PayMethod } from "@/components/checkout/types"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 type SplitItem = { id: string; description: string; qty: number; total_cents: number }
-type TenderMethod = "cash" | "card" | "online" | "wallet"
+// Every method the checkout offers can also be a tender in a split. No
+// reference field here on purpose: a split is composed under time pressure and
+// the txn ids belong on the single-payment path, where there's room to type one.
+type TenderMethod = PayMethod
 
 /** Distribute `total` cents into `n` parts that sum back to `total` exactly. */
 function distribute(total: number, n: number): number[] {
@@ -292,10 +297,11 @@ export function BillSplit({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="cash">Cash</SelectItem>
-                <SelectItem value="card">Card</SelectItem>
-                <SelectItem value="online">Card (online)</SelectItem>
-                <SelectItem value="wallet">Wallet</SelectItem>
+                {PAYMENT_METHODS.map((spec) => (
+                  <SelectItem key={spec.value} value={spec.value}>
+                    {spec.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <Input

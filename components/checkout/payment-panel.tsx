@@ -1,16 +1,14 @@
 "use client"
 
 import { useState } from "react"
-import {
-  BanknoteIcon,
-  CoinsIcon,
-  CreditCardIcon,
-  GlobeIcon,
-  SplitIcon,
-  WifiOffIcon,
-} from "lucide-react"
+import { CoinsIcon, SplitIcon, WifiOffIcon } from "lucide-react"
 
 import { money } from "@/lib/format"
+import {
+  PAYMENT_METHODS,
+  PAYMENT_REFERENCE_MAX,
+  paymentMethodTakesReference,
+} from "@/lib/payment-constants"
 import { cn } from "@/lib/utils"
 import { BillLoyalty } from "@/components/bill-loyalty"
 import { BillSplit } from "@/components/bill-split"
@@ -51,6 +49,8 @@ export function CheckoutPaymentPanel({
   onModeChange,
   method,
   onMethodChange,
+  reference,
+  onReferenceChange,
   items,
   customer,
   pointsValueCents,
@@ -67,6 +67,8 @@ export function CheckoutPaymentPanel({
   onModeChange: (m: PayMode) => void
   method: PayMethod
   onMethodChange: (m: PayMethod) => void
+  reference: string
+  onReferenceChange: (v: string) => void
   items: CheckoutItem[]
   customer: CheckoutCustomer | null
   pointsValueCents: number
@@ -117,43 +119,41 @@ export function CheckoutPaymentPanel({
           <fieldset>
             <legend className="mb-2 text-sm font-semibold">Method</legend>
             <div className="flex flex-wrap gap-2">
-              <ChoiceChip
-                name="pay-method"
-                checked={method === "cash"}
-                onSelect={() => onMethodChange("cash")}
-                label={
-                  <span className="flex items-center gap-1.5">
-                    <BanknoteIcon className="size-4" aria-hidden />
-                    Cash
-                  </span>
-                }
-              />
-              <ChoiceChip
-                name="pay-method"
-                checked={method === "card"}
-                onSelect={() => onMethodChange("card")}
-                label={
-                  <span className="flex items-center gap-1.5">
-                    <CreditCardIcon className="size-4" aria-hidden />
-                    Card
-                  </span>
-                }
-              />
-              <ChoiceChip
-                name="pay-method"
-                checked={method === "online"}
-                onSelect={() => onMethodChange("online")}
-                disabled={!online}
-                label={
-                  <span className="flex items-center gap-1.5">
-                    <GlobeIcon className="size-4" aria-hidden />
-                    Card (online)
-                  </span>
-                }
-                detail={online ? undefined : "needs a connection"}
-              />
+              {PAYMENT_METHODS.map((spec) => {
+                const Icon = spec.icon
+                const unavailable = spec.needsOnline && !online
+                return (
+                  <ChoiceChip
+                    key={spec.value}
+                    name="pay-method"
+                    checked={method === spec.value}
+                    onSelect={() => onMethodChange(spec.value as PayMethod)}
+                    disabled={unavailable}
+                    leading={<Icon className="size-4 shrink-0" aria-hidden />}
+                    label={spec.label}
+                    detail={unavailable ? "needs a connection" : undefined}
+                  />
+                )
+              })}
             </div>
           </fieldset>
+
+          {paymentMethodTakesReference(method) ? (
+            <Field>
+              <FieldLabel htmlFor="pay-reference">Reference (optional)</FieldLabel>
+              <Input
+                id="pay-reference"
+                value={reference}
+                maxLength={PAYMENT_REFERENCE_MAX}
+                onChange={(e) => onReferenceChange(e.target.value)}
+                placeholder="Transaction id from the guest's confirmation"
+                className="h-11"
+              />
+              <p className="text-xs text-muted-foreground">
+                Saved on the payment so it reconciles against the provider&apos;s statement.
+              </p>
+            </Field>
+          ) : null}
 
           <div className="grid gap-3 sm:grid-cols-2">
             <Field>
@@ -268,8 +268,8 @@ export function CheckoutPaymentPanel({
           {!online ? (
             <p className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400">
               <WifiOffIcon className="size-3.5 shrink-0" aria-hidden />
-              Offline — cash and card queue and sync on reconnect. Card (online) needs a
-              connection.
+              Offline — cash, card, eSewa, FonePay, bank and wallet all queue and sync on
+              reconnect. Card (online) needs a connection.
             </p>
           ) : null}
         </>

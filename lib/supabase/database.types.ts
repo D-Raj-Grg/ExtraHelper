@@ -3577,6 +3577,7 @@ export type Database = {
           _bill_id: string
           _idempotency_key?: string
           _method: Database["public"]["Enums"]["payment_method"]
+          _reference?: string
         }
         Returns: Database["public"]["Enums"]["bill_status"]
       }
@@ -3917,7 +3918,15 @@ export type Database = {
         | "closed"
         | "cancelled"
       order_type: "dine_in" | "delivery" | "pickup" | "qr"
-      payment_method: "cash" | "card" | "online" | "wallet" | "points"
+      payment_method:
+        | "cash"
+        | "card"
+        | "online"
+        | "wallet"
+        | "points"
+        | "esewa"
+        | "fonepay"
+        | "bank"
       payment_status: "pending" | "completed" | "failed" | "refunded"
       po_status: "draft" | "sent" | "partial" | "received" | "cancelled"
       print_doc: "kot" | "bot" | "full_kot" | "order_slip" | "bill" | "test"
@@ -4105,7 +4114,16 @@ export const Constants = {
         "cancelled",
       ],
       order_type: ["dine_in", "delivery", "pickup", "qr"],
-      payment_method: ["cash", "card", "online", "wallet", "points"],
+      payment_method: [
+        "cash",
+        "card",
+        "online",
+        "wallet",
+        "points",
+        "esewa",
+        "fonepay",
+        "bank",
+      ],
       payment_status: ["pending", "completed", "failed", "refunded"],
       po_status: ["draft", "sent", "partial", "received", "cancelled"],
       print_doc: ["kot", "bot", "full_kot", "order_slip", "bill", "test"],

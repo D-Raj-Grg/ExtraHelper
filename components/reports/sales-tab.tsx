@@ -1,5 +1,6 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { money } from "@/lib/format"
+import { paymentMethodLabel } from "@/lib/payment-constants"
 import { delta } from "@/lib/report-range"
 import { BreakdownTable, ReportSection } from "./report-section"
 import { StatTiles } from "./stat-tiles"
@@ -107,7 +108,10 @@ export async function SalesTab({
 
         <ReportSection
           title="By payment method"
-          rows={payments.map((p) => ({ method: p.method, amount: money(p.amount_cents, cur) }))}
+          rows={payments.map((p) => ({
+            method: paymentMethodLabel(p.method),
+            amount: money(p.amount_cents, cur),
+          }))}
           columns={[
             { key: "method", label: "Method" },
             { key: "amount", label: "Amount" },
@@ -125,7 +129,7 @@ export async function SalesTab({
             <TableBody>
               {payments.map((p) => (
                 <TableRow key={p.method}>
-                  <TableCell className="px-3 py-2 capitalize">{p.method}</TableCell>
+                  <TableCell className="px-3 py-2">{paymentMethodLabel(p.method)}</TableCell>
                   <TableCell className="px-3 py-2 text-right tabular-nums">
                     {money(p.amount_cents, cur)}
                   </TableCell>

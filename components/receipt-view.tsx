@@ -4,6 +4,7 @@ import { useState, useTransition } from "react"
 import { CheckCircle2Icon, MailIcon, PrinterIcon } from "lucide-react"
 import { emailReceipt, type ReceiptState } from "@/app/receipt/actions"
 import { amountInWords, formatDateTime, money } from "@/lib/format"
+import { paymentMethodLabel } from "@/lib/payment-constants"
 import { groupParticulars, hasBillAdjustments } from "@/lib/print/docs"
 import { Button } from "@/components/ui/button"
 import { Field, FieldLabel } from "@/components/ui/field"
@@ -199,7 +200,7 @@ export function ReceiptView({
           <div className="mt-2 space-y-0.5 border-t border-dashed border-neutral-300 pt-2">
             {payments.map((p) => (
               <div key={p.id} className="flex justify-between">
-                <span className="capitalize">Paid - {p.method}</span>
+                <span>Paid - {paymentMethodLabel(p.method)}</span>
                 <span className="tabular-nums">{money(p.amount_cents, currency)}</span>
               </div>
             ))}

@@ -6,6 +6,53 @@
 
 ---
 
+## Digital payment methods — eSewa, FonePay, bank (2026-08-14, both clients)
+
+Nepal restaurants settle most non-cash bills through a wallet or bank QR the guest scans. Added
+`esewa`, `fonepay`, `bank` to the `payment_method` enum
+(`20260814180000_digital_payment_methods.sql`) alongside the `wallet` and `points` that already
+existed.
+
+**These are record-only.** Nothing is charged: the guest scans, shows the confirmation, the cashier
+records what arrived — the same trust as a card on a terminal. That is what makes them safe on the
+phone (unlike `online`, which charges through the gateway adapter and has no RPC behind it) and what
+lets them **queue offline exactly like cash**. `online` is still the only connection-gated method.
+
+`record_payment` gained `_reference text default null` → `payments.reference`, the guest-side
+transaction id that makes a digital payment reconcilable against the provider's statement. The
+column had existed since the billing migration and was never written. Arity changed, so the function
+was **dropped and recreated**, with `revoke`/`grant` re-issued naming the full 5-arg signature. The
+4-arg named call still resolves via the default, which is what keeps an offline replay queued by an
+older build working.
+
+- [x] Migration: enum values + `record_payment` with `_reference` (trimmed, `''` → null, 120 cap).
+      The migration drops **both** the 4-arg and the 5-arg signature before creating: dropping only
+      the old one leaves the new one standing on an already-migrated database and `create` fails
+      with "function already exists" — i.e. the next `db push` breaks. Proven re-runnable in a
+      rolled-back transaction.
+- [x] `payByCard` stores the gateway's charge id in `reference` too. It is **truncated, not
+      validated**: the card is already charged by then, so a reference the RPC refuses (22001)
+      would fail the recording of money already taken.
+- [x] `lib/payment-constants.ts` — one catalogue (label, icon, `needsOnline`, `takesReference`).
+      Also fixes an existing rule violation: reports printed the raw enum through `capitalize`, so
+      `online` read as "Online" and `esewa` would have read as "Esewa".
+- [x] Web: checkout panel, bill view, split tenders, offline queue payload, reports, receipt,
+      invoice preview and the printed bill doc all go through the catalogue.
+- [x] Flutter: `paymentMethods` list, labels, reference field on the payment sheet, `PaymentIntent`
+      carries it, `bill_repository.recordPayment` passes `_reference`.
+- [x] `supabase/tests/payment_methods.sh` — 18 assertions. **Needs credentials + a scratch OPEN
+      bill (`OPEN_BILL`, `FOREIGN_BILL`) to run; not yet run against a live project.**
+- [x] Verified directly in rolled-back transactions against the demo tenant: all four new methods
+      record; reference stored trimmed; blank stored as null; replay under the same key does not
+      double-charge; over-long reference `22001`; unknown enum `22P02`; foreign tenant `42501`.
+
+**Not built** (deliberate): real eSewa/FonePay gateway APIs — the adapter registry in
+`lib/integrations/payments.ts` is where those land, under their own keys, without touching billing
+code. No per-tenant toggle of which methods show. `cash_sessions` untouched, so digital correctly
+stays out of the drawer count.
+
+---
+
 ## Manager ops moved into Postgres (2026-07-27, mobile Milestone G)
 
 `set_item_86(_item_id, _is_86)` and `set_table_state(_table_id, _state)` — migration
