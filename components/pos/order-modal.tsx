@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { AmendFlow } from "@/components/pos/amend-flow"
 import { CreateFlow } from "@/components/pos/create-flow"
 import { useOrderDetail } from "@/components/pos/use-order-detail"
-import type { PosData, PosOrderDetail } from "@/components/pos/types"
+import type { PosComposerData, PosData, PosOrderDetail } from "@/components/pos/types"
 
 /** What the modal has open. Null ⇒ closed. `tableId` preselects the destination. */
 export type PosModalState =
@@ -38,17 +38,12 @@ export function OrderModal({
     <Dialog open={state !== null} onOpenChange={(open) => !open && onClose()}>
       <DialogContent size="full">
         {state?.mode === "create" ? (
-          <>
-            <DialogHeader>
-              <DialogTitle>New order</DialogTitle>
-            </DialogHeader>
-            <CreateFlow
-              data={data}
-              currency={currency}
-              onClose={onClose}
-              initialTableId={state.tableId}
-            />
-          </>
+          <NewOrderPane
+            data={data}
+            currency={currency}
+            onClose={onClose}
+            initialTableId={state.tableId}
+          />
         ) : state?.mode === "amend" ? (
           <AmendPane
             // Keyed by order id so opening a different order remounts rather
@@ -64,6 +59,38 @@ export function OrderModal({
         ) : null}
       </DialogContent>
     </Dialog>
+  )
+}
+
+/**
+ * The create composer's dialog body. Exported because the sidebar's New order
+ * dialog (`new-order-provider.tsx`) renders the same thing over an arbitrary
+ * screen — one definition of what composing an order looks like, rather than
+ * two that drift.
+ */
+export function NewOrderPane({
+  data,
+  currency,
+  onClose,
+  initialTableId,
+}: {
+  data: PosComposerData
+  currency: string
+  onClose: () => void
+  initialTableId?: string
+}) {
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle>New order</DialogTitle>
+      </DialogHeader>
+      <CreateFlow
+        data={data}
+        currency={currency}
+        onClose={onClose}
+        initialTableId={initialTableId}
+      />
+    </>
   )
 }
 

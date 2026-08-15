@@ -11,6 +11,7 @@ import { OfflineSyncProvider } from "@/components/offline-sync-provider"
 import { PrintProvider } from "@/components/print/print-provider"
 import { AutoPrintWorker } from "@/components/print/auto-print-worker"
 import { RealtimeAuth } from "@/components/realtime-auth"
+import { NewOrderProvider } from "@/components/pos/new-order-provider"
 import { createClient } from "@/lib/supabase/server"
 import { getActiveTenant, getTenantMemberships } from "@/lib/supabase/tenant"
 import { getUserPreferences } from "@/lib/supabase/preferences"
@@ -72,6 +73,9 @@ export default async function AppLayout({
       <PrintProvider>
       <AutoPrintWorker tenantId={tenant.tenantId} branchId={null} mode={printingMode} />
       <RealtimeAuth />
+      {/* Above the sidebar, so the New order button can reach it — and outside
+          SidebarInset, so the composer isn't nested in the page it opens over. */}
+      <NewOrderProvider>
       <SidebarProvider
         style={
           {
@@ -101,6 +105,7 @@ export default async function AppLayout({
         </SidebarInset>
         <Toaster />
       </SidebarProvider>
+      </NewOrderProvider>
       </PrintProvider>
       </OfflineSyncProvider>
       </PermissionProvider>
