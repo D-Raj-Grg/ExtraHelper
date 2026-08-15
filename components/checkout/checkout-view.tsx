@@ -97,7 +97,7 @@ export function CheckoutView({
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const { online, enqueuePayment } = useOffline()
-  const { printBill } = usePrint()
+  const { printBill, printReceipt } = usePrint()
 
   const settled = bill.status === "paid"
   const due = Math.max(0, bill.total_cents - paidCents)
@@ -230,8 +230,7 @@ export function CheckoutView({
    * rather than trusting the local copy.
    *
    * A reprint carries no idempotency key on purpose: asking for a second copy
-   * is the entire point, and the key the settled receipt uses is the same
-   * `bill:<id>:<printer>` string, so deduping here would eat that receipt.
+   * is the entire point.
    */
   function presentBill() {
     run(async () => {
@@ -242,7 +241,14 @@ export function CheckoutView({
     })
   }
 
-  /** Finish: settle (or leave on credit), then leave the screen. */
+  /**
+   * Finish: settle (or leave on credit), then leave the screen.
+   *
+   * `alsoPrint` sends the *receipt*, not the bill — a different document with
+   * its own printer assignment, so a till that has the receipt switched off
+   * produces no paper here even when the cashier asks for it. The bill above is
+   * the estimate, and the two are settled separately in printer settings.
+   */
   function confirm(alsoPrint: boolean) {
     if (mode === "credit") {
       if (!customer) {
@@ -250,14 +256,14 @@ export function CheckoutView({
         return
       }
       toast.success(`${destination} left unpaid on ${customer.name ?? "the customer"}'s tab.`)
-      if (alsoPrint) void printBill(bill.id)
+      if (alsoPrint) void printReceipt(bill.id)
       router.push("/pos")
       return
     }
 
     if (settled) {
       run(async () => {
-        if (alsoPrint) await printBill(bill.id)
+        if (alsoPrint) await printReceipt(bill.id)
         router.push("/pos")
         return { ok: true }
       })
@@ -273,7 +279,7 @@ export function CheckoutView({
       if (res === "queued") {
         toast.success(`${destination} payment queued — it'll send when you're back online.`)
       }
-      if (alsoPrint) await printBill(bill.id)
+      if (alsoPrint) await printReceipt(bill.id)
       // A part payment leaves work on this bill, so the cashier stays put.
       if (cents >= due) router.push("/pos")
       return { ok: true }

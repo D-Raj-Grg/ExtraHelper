@@ -88,7 +88,12 @@ const DOC_GROUPS: { title: string; blurb: string; docs: PrintDoc[] }[] = [
     blurb: "Kitchen and bar tickets. A station's own printer is used first if it has one.",
     docs: ["full_kot", "kot", "bot"],
   },
-  { title: "Bills & receipts", blurb: "Printed when a bill is settled.", docs: ["bill"] },
+  {
+    title: "Bills & receipts",
+    blurb:
+      "Two switches, because they are two moments: the bill goes out before the guest pays, the receipt after. Turn the receipt off if the counter doesn't hand one over.",
+    docs: ["bill", "receipt"],
+  },
   { title: "Order slip", blurb: "The guest's or waiter's copy of what was ordered.", docs: ["order_slip"] },
 ]
 

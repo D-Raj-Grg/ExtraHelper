@@ -191,7 +191,10 @@ async function buildForJob(
       return job.order_id
         ? buildOrderSlipDoc(supabase, job.order_id, tenant)
         : { error: "That order no longer exists." }
+    // Same paper either way — `buildBill` decides "tax invoice" from the bill's
+    // own status, not from which document asked for it.
     case "bill":
+    case "receipt":
       return job.bill_id
         ? buildBillDoc(supabase, job.bill_id, tenant)
         : { error: "That bill no longer exists." }
