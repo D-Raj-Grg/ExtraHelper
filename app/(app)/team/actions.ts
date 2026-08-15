@@ -56,7 +56,11 @@ export async function createRole(input: RoleInput): Promise<TeamState> {
   return { ok: true }
 }
 
-/** Update a custom role (system roles are read-only). */
+/**
+ * Update a role. A default role keeps its identity — name, colour and base role
+ * are what the seeded RLS floor and the rest of the app key off — but its
+ * permission set is the tenant's to tune, which is the whole point of the screen.
+ */
 export async function updateRole(roleId: string, input: RoleInput): Promise<TeamState> {
   const tenant = await requirePermission("staff.edit")
   const name = input.name.trim()
@@ -66,30 +70,37 @@ export async function updateRole(roleId: string, input: RoleInput): Promise<Team
   const supabase = await createClient()
   const { data: existing } = await supabase
     .from("roles")
-    .select("is_system")
+    .select("is_system, base_role")
     .eq("id", roleId)
     .eq("tenant_id", tenant.tenantId)
     .maybeSingle()
   if (!existing) return { error: "Role not found." }
-  if (existing.is_system) return { error: "Default roles can't be edited." }
 
-  const { error } = await supabase
-    .from("roles")
-    .update({
-      name,
-      description: input.description.trim() || null,
-      color: input.color || "#64748b",
-      base_role: input.baseRole,
-    })
-    .eq("id", roleId)
-    .eq("tenant_id", tenant.tenantId)
-  if (error) return { error: error.message }
+  if (!existing.is_system) {
+    const { error } = await supabase
+      .from("roles")
+      .update({
+        name,
+        description: input.description.trim() || null,
+        color: input.color || "#64748b",
+        base_role: input.baseRole,
+      })
+      .eq("id", roleId)
+      .eq("tenant_id", tenant.tenantId)
+    if (error) return { error: error.message }
+  }
+
+  // An owner-based role that loses staff.edit locks every owner out of this
+  // screen permanently — the only door back in is SQL. Keep it pinned on.
+  const baseRole = existing.is_system ? existing.base_role : input.baseRole
+  const keys = new Set(input.permissions)
+  if (baseRole === "owner") keys.add("staff.edit")
 
   await supabase.from("role_permissions").delete().eq("role_id", roleId)
-  if (input.permissions.length) {
+  if (keys.size) {
     const { error: pErr } = await supabase
       .from("role_permissions")
-      .insert(input.permissions.map((k) => ({ role_id: roleId, permission_key: k })))
+      .insert([...keys].map((k) => ({ role_id: roleId, permission_key: k })))
     if (pErr) return { error: pErr.message }
   }
   await writeAudit({

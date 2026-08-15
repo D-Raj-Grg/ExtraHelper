@@ -42,16 +42,18 @@ export function RoleEditorSheet({
   role: EditableRole | null // null = create
   permissions: Permission[]
 }) {
-  const readOnly = role?.is_system ?? false
+  // Default roles keep their identity (name, colour, base role) — those are what
+  // the seeded RLS floor keys off — but their permissions stay editable.
+  const identityLocked = role?.is_system ?? false
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent size="md" className="w-full gap-0 overflow-y-auto">
         <SheetHeader>
-          <SheetTitle>{role ? (readOnly ? role.name : "Edit role") : "Create role"}</SheetTitle>
+          <SheetTitle>{role ? `Edit ${role.name}` : "Create role"}</SheetTitle>
           <SheetDescription>
-            {readOnly
-              ? "A default role. Its permissions are fixed — copy it into a custom role to change anything."
+            {identityLocked
+              ? "A default role. Its name and base role are fixed, but you can change what it can reach."
               : "Name the role, pick what it can reach, and save."}
           </SheetDescription>
         </SheetHeader>
@@ -60,7 +62,7 @@ export function RoleEditorSheet({
           key={role?.id ?? "new"}
           role={role}
           permissions={permissions}
-          readOnly={readOnly}
+          identityLocked={identityLocked}
           onDone={() => onOpenChange(false)}
         />
       </SheetContent>
@@ -71,12 +73,12 @@ export function RoleEditorSheet({
 function RoleForm({
   role,
   permissions,
-  readOnly,
+  identityLocked,
   onDone,
 }: {
   role: EditableRole | null
   permissions: Permission[]
-  readOnly: boolean
+  identityLocked: boolean
   onDone: () => void
 }) {
   const [name, setName] = useState(role?.name ?? "")
@@ -107,12 +109,15 @@ function RoleForm({
   const toggleGroup = (items: Permission[], on: boolean) =>
     setSelected((s) => {
       const n = new Set(s)
-      items.forEach((i) => (on ? n.add(i.key) : n.delete(i.key)))
+      items.forEach((i) => (on || isPinned(i.key) ? n.add(i.key) : n.delete(i.key)))
       return n
     })
 
+  // An owner-based role without staff.edit locks every owner out of this screen
+  // for good, so that one box stays pinned on (the server pins it too).
+  const isPinned = (key: string) => baseRole === "owner" && key === "staff.edit"
+
   function save() {
-    if (readOnly) return
     const input = { name, description, color, baseRole, permissions: [...selected] }
     startTransition(async () => {
       const res = role ? await updateRole(role.id, input) : await createRole(input)
@@ -133,7 +138,7 @@ function RoleForm({
             id="role-name"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            disabled={readOnly}
+            disabled={identityLocked}
             placeholder="e.g. Shift Lead"
           />
         </Field>
@@ -144,7 +149,7 @@ function RoleForm({
             id="role-description"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            disabled={readOnly}
+            disabled={identityLocked}
             placeholder="What this role is for"
           />
         </Field>
@@ -154,7 +159,7 @@ function RoleForm({
           <Select
             value={baseRole}
             onValueChange={(v) => v && setBaseRole(String(v))}
-            disabled={readOnly}
+            disabled={identityLocked}
           >
             <SelectTrigger id="role-base" className="w-full capitalize">
               <SelectValue />
@@ -180,7 +185,7 @@ function RoleForm({
               <button
                 key={c.hex}
                 type="button"
-                disabled={readOnly}
+                disabled={identityLocked}
                 onClick={() => setColor(c.hex)}
                 aria-label={c.name}
                 aria-pressed={color === c.hex}
@@ -214,17 +219,15 @@ function RoleForm({
                   <span className="text-xs font-semibold uppercase text-muted-foreground">
                     {g.grp}
                   </span>
-                  {!readOnly ? (
-                    <Button
-                      variant="link"
-                      size="sm"
-                      className="h-auto p-0 text-xs"
-                      onClick={() => toggleGroup(g.items, !allOn)}
-                    >
-                      {allOn ? "Clear" : "Select all"}
-                      <span className="sr-only"> in {g.grp}</span>
-                    </Button>
-                  ) : null}
+                  <Button
+                    variant="link"
+                    size="sm"
+                    className="h-auto p-0 text-xs"
+                    onClick={() => toggleGroup(g.items, !allOn)}
+                  >
+                    {allOn ? "Clear" : "Select all"}
+                    <span className="sr-only"> in {g.grp}</span>
+                  </Button>
                 </div>
                 <ul>
                   {g.items.map((p) => (
@@ -235,14 +238,23 @@ function RoleForm({
                         htmlFor={`perm-${p.key}`}
                         className={cn(
                           "flex items-center justify-between gap-3 px-3 py-2 text-sm",
-                          !readOnly && "cursor-pointer hover:bg-muted/40",
+                          isPinned(p.key)
+                            ? "text-muted-foreground"
+                            : "cursor-pointer hover:bg-muted/40",
                         )}
                       >
-                        <span>{p.label}</span>
+                        <span>
+                          {p.label}
+                          {isPinned(p.key) ? (
+                            <span className="ml-2 text-xs text-muted-foreground">
+                              always on for owners
+                            </span>
+                          ) : null}
+                        </span>
                         <Checkbox
                           id={`perm-${p.key}`}
-                          checked={selected.has(p.key)}
-                          disabled={readOnly}
+                          checked={isPinned(p.key) || selected.has(p.key)}
+                          disabled={isPinned(p.key)}
                           onCheckedChange={() => toggle(p.key)}
                         />
                       </label>
@@ -255,16 +267,14 @@ function RoleForm({
         </div>
       </div>
 
-      {!readOnly ? (
-        <SheetFooter className="sticky bottom-0 -mx-4 flex-row gap-2 border-t bg-background px-4">
-          <Button className="flex-1" disabled={pending || !name.trim()} onClick={save}>
-            {pending ? "Saving…" : role ? "Save changes" : "Create role"}
-          </Button>
-          <Button variant="outline" onClick={onDone}>
-            Cancel
-          </Button>
-        </SheetFooter>
-      ) : null}
+      <SheetFooter className="sticky bottom-0 -mx-4 flex-row gap-2 border-t bg-background px-4">
+        <Button className="flex-1" disabled={pending || !name.trim()} onClick={save}>
+          {pending ? "Saving…" : role ? "Save changes" : "Create role"}
+        </Button>
+        <Button variant="outline" onClick={onDone}>
+          Cancel
+        </Button>
+      </SheetFooter>
     </div>
   )
 }

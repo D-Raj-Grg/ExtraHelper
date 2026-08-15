@@ -38,7 +38,7 @@ export function RolesTab({
     <div className="flex flex-col gap-6">
       <RoleGrid
         title="Default roles"
-        description="Built in and read-only. Open one to see exactly what it can reach."
+        description="Built in — the name and base role are fixed, but you can change what each one reaches."
         roles={systemRoles}
         pending={pending}
         onOpen={onOpen}
