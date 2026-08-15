@@ -21,6 +21,7 @@ export function MenuTile({
   disabled = false,
   optionCount = 0,
   expanded = false,
+  hidden = false,
 }: {
   item: PosMenuItem
   qty: number
@@ -28,6 +29,13 @@ export function MenuTile({
   onAdd: () => void
   /** The order is fired/billed — the menu is visible but no longer addable. */
   disabled?: boolean
+  /**
+   * Filtered out by the current category/search. Hidden rather than unmounted:
+   * `hidden` is display:none, so it leaves layout, tab order and the a11y tree
+   * exactly as an unmount would — but the loaded <img> survives, and switching
+   * categories stops re-fetching and re-decoding every photo.
+   */
+  hidden?: boolean
   /**
    * How many variants + add-ons this dish has. Above zero, tapping opens the
    * picker instead of adding straight away, and the count is shown — "3 options"
@@ -51,6 +59,7 @@ export function MenuTile({
   return (
     <button
       type="button"
+      hidden={hidden}
       disabled={off}
       onClick={onAdd}
       aria-expanded={hasOptions ? expanded : undefined}
@@ -65,6 +74,10 @@ export function MenuTile({
         off
           ? "cursor-not-allowed opacity-60"
           : "hover:border-ring/60 active:scale-[0.98] motion-reduce:active:scale-100",
+        // Last, so tailwind-merge drops the `flex` above: the `hidden`
+        // attribute alone loses to it — a UA `[hidden]` rule and an author
+        // `.flex` rule tie on specificity, and the author sheet wins.
+        hidden && "hidden",
       )}
     >
       <span className="relative block aspect-[4/3] w-full overflow-hidden bg-muted">
