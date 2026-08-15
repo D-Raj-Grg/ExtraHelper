@@ -3021,6 +3021,9 @@ export type Database = {
           po_id: string | null
           supplier_id: string
           tenant_id: string
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
         }
         Insert: {
           amount_cents: number
@@ -3034,6 +3037,9 @@ export type Database = {
           po_id?: string | null
           supplier_id: string
           tenant_id: string
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
         }
         Update: {
           amount_cents?: number
@@ -3047,6 +3053,9 @@ export type Database = {
           po_id?: string | null
           supplier_id?: string
           tenant_id?: string
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
         }
         Relationships: [
           {
@@ -3081,6 +3090,7 @@ export type Database = {
       }
       suppliers: {
         Row: {
+          archived_at: string | null
           contact: string | null
           created_at: string
           email: string | null
@@ -3090,6 +3100,7 @@ export type Database = {
           tenant_id: string
         }
         Insert: {
+          archived_at?: string | null
           contact?: string | null
           created_at?: string
           email?: string | null
@@ -3099,6 +3110,7 @@ export type Database = {
           tenant_id: string
         }
         Update: {
+          archived_at?: string | null
           contact?: string | null
           created_at?: string
           email?: string | null
@@ -3436,6 +3448,15 @@ export type Database = {
         Args: { _bill_id: string; _order_id: string }
         Returns: string
       }
+      add_po_line: {
+        Args: {
+          _inventory_item_id: string
+          _po_id: string
+          _qty: number
+          _unit_cost_cents: number
+        }
+        Returns: string
+      }
       add_variant: {
         Args: { _item_id: string; _name: string; _price_delta_cents: number }
         Returns: string
@@ -3502,7 +3523,15 @@ export type Database = {
         Args: { _tenant: string; _user_id: string }
         Returns: undefined
       }
+      assert_may_delete_purchasing: {
+        Args: { _tenant: string }
+        Returns: undefined
+      }
       assert_may_edit_menu: { Args: { _tenant: string }; Returns: undefined }
+      assert_may_edit_purchasing: {
+        Args: { _tenant: string }
+        Returns: undefined
+      }
       attach_bill_customer: {
         Args: { _bill_id: string; _name: string; _phone: string }
         Returns: string
@@ -3517,6 +3546,10 @@ export type Database = {
       }
       cancel_order: {
         Args: { _order_id: string; _reason: string }
+        Returns: undefined
+      }
+      cancel_po: {
+        Args: { _po_id: string; _reason?: string }
         Returns: undefined
       }
       cancel_tenant_deletion: { Args: { _tenant: string }; Returns: undefined }
@@ -3572,6 +3605,15 @@ export type Database = {
         }
         Returns: undefined
       }
+      correct_po_receipt: {
+        Args: {
+          _line_id: string
+          _new_qty_received: number
+          _new_unit_cost_cents: number
+          _reason: string
+        }
+        Returns: undefined
+      }
       create_bill_for_order: { Args: { _order_id: string }; Returns: string }
       create_draft_po_from_reorder: {
         Args: { _branch?: string; _tenant: string }
@@ -3579,6 +3621,10 @@ export type Database = {
       }
       create_join_code: {
         Args: { _role_id?: string; _tenant: string }
+        Returns: string
+      }
+      create_po: {
+        Args: { _supplier_id?: string; _tenant: string }
         Returns: string
       }
       create_public_reservation: {
@@ -3601,7 +3647,10 @@ export type Database = {
         Args: { _base: Database["public"]["Enums"]["app_role"] }
         Returns: string[]
       }
+      delete_po: { Args: { _po_id: string }; Returns: undefined }
+      delete_po_line: { Args: { _line_id: string }; Returns: undefined }
       delete_printer: { Args: { _printer_id: string }; Returns: undefined }
+      delete_supplier: { Args: { _supplier_id: string }; Returns: undefined }
       delete_variant: { Args: { _variant_id: string }; Returns: undefined }
       enqueue_print_job: {
         Args: {
@@ -3729,6 +3778,17 @@ export type Database = {
         Args: { _order_id: string; _reference: string }
         Returns: Json
       }
+      purchasing_summary: {
+        Args: { _tenant: string }
+        Returns: {
+          awaiting_delivery: number
+          month_spend_cents: number
+          month_start: string
+          open_pos: number
+          owed_cents: number
+          owed_suppliers: number
+        }[]
+      }
       purge_scheduled_tenants: { Args: never; Returns: number }
       qr_menu: { Args: { _token: string }; Returns: Json }
       qr_request_bill: { Args: { _token: string }; Returns: boolean }
@@ -3799,6 +3859,7 @@ export type Database = {
         Args: { _tenant: string; _user_id: string }
         Returns: undefined
       }
+      reopen_po: { Args: { _po_id: string }; Returns: undefined }
       report_by_branch: {
         Args: { _from: string; _tenant: string; _to: string }
         Returns: {
@@ -3956,6 +4017,7 @@ export type Database = {
         Returns: string
       }
       seed_system_roles: { Args: { _tenant: string }; Returns: undefined }
+      send_po: { Args: { _po_id: string }; Returns: undefined }
       set_bill_complimentary: {
         Args: { _bill_id: string; _reason: string }
         Returns: number
@@ -3996,6 +4058,10 @@ export type Database = {
       }
       set_member_role: {
         Args: { _role_id: string; _tenant: string; _user_id: string }
+        Returns: undefined
+      }
+      set_po_supplier: {
+        Args: { _po_id: string; _supplier_id: string }
         Returns: undefined
       }
       set_printer_usb_path: {
@@ -4049,6 +4115,7 @@ export type Database = {
       supplier_balances: {
         Args: never
         Returns: {
+          archived_at: string
           outstanding_cents: number
           paid_cents: number
           received_cents: number
@@ -4084,12 +4151,20 @@ export type Database = {
           suspended: number
         }[]
       }
+      update_po_line: {
+        Args: { _line_id: string; _qty: number; _unit_cost_cents: number }
+        Returns: undefined
+      }
       update_variant: {
         Args: { _name: string; _price_delta_cents: number; _variant_id: string }
         Returns: undefined
       }
       void_order_item: {
         Args: { _order_item_id: string; _reason: string }
+        Returns: undefined
+      }
+      void_supplier_payment: {
+        Args: { _payment_id: string; _reason: string }
         Returns: undefined
       }
     }

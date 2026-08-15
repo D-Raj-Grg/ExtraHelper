@@ -6,6 +6,105 @@
 
 ---
 
+## Purchasing rebuild + write guards (2026-08-15, web + DB)
+
+The screen could create and receive, and nothing else: suppliers were read-only chips, no record
+could be edited or removed anywhere, and every order rendered fully expanded forever in one flat
+stack. Auditing it turned up something worse than the missing buttons.
+
+### The hole
+
+`suppliers`, `purchase_orders`, `po_items`, `inventory_items` and `stock_movements` each carried
+one policy — `tenant_all`, `for all to authenticated`, predicated on tenant membership alone, with
+no role or permission test. Any active member could `DELETE /purchase_orders?id=eq.X` or invent a
+500kg flour delivery straight through PostgREST. Same hole `20260814170000_menu_write_guards.sql`
+closed on the menu tables, from the same generic applier (`20260710095505_rls_helper.sql`), never
+narrowed here.
+
+- [x] `stock_movements` read-only to clients (`20260815041554`). Shipped **alone and first** — every
+      writer is already a definer RPC, so it was the one change that could not break a screen.
+- [x] `suppliers.archived_at`, `supplier_payments.voided_at/by/reason`, `purchasing.delete`
+      permission, unique index on `po_items(po_id, inventory_item_id)` (`20260815041725`).
+- [x] PO lifecycle + line RPCs (`20260815041915`): `create_po`, `send_po`, `reopen_po`, `cancel_po`,
+      `delete_po`, `add_po_line` (upsert), `update_po_line`, `delete_po_line`,
+      `correct_po_receipt`, and the `assert_may_edit/delete_purchasing` gates.
+- [x] `delete_supplier`, `void_supplier_payment`, `supplier_balances` v2, `purchasing_summary`
+      (`20260815042232`).
+- [x] Write guards (`20260815043411`) — applied **last**, with the rewritten actions, because
+      creating a supplier and adding a line were direct writes until then.
+- [x] Rebuilt `/purchasing` as Orders / Suppliers / Payments over a summary strip.
+
+### Decisions worth not relitigating
+
+**Three refusals are deliberate**, and each explains itself instead of failing with a database error:
+
+- Cancelling an order that has received stock. `supplier_balances` excludes cancelled orders, so
+  the money owed would vanish while the goods stayed on the shelf.
+- Deleting one. `stock_movements.reference` is plain text, not an FK, so the movements would
+  survive as orphans pointing at a dead id while `current_qty` kept the stock forever.
+- Voiding a cash payment whose shift is already closed. That shift's expected and variance are
+  frozen by design; the message points at a correcting cash-in instead.
+
+**Corrections are corrections, not undos.** `correct_po_receipt` writes a compensating `adjustment`
+movement carrying the delta, referenced `po-correct:<id>`, and leaves the original receipt in
+place. It does **not** restore `cost_cents` — receiving overwrote it and the prior value was never
+stored, so reconstructing it would be a guess presented as a fact.
+
+**`purchasing.delete` is withheld from the inventory role.** `default_role_permissions` hardcodes
+that role's list, so a new key never reaches it — which is what we want: the store keeper who
+raises orders must not be able to erase a supplier the books reference or reverse a receipt.
+
+**Archiving hides a supplier from pickers, never from a debt.** `supplier_balances` still returns
+archived suppliers, and the summary strip still counts what they are owed.
+
+**`sent` and `cancelled` were dead rendered statuses** that nothing could set. Kept and made
+reachable rather than removed: `sent` is already load-bearing in `create_draft_po_from_reorder`,
+which treats draft/sent/partial as "open", and it is the honest boundary that freezes lines.
+
+### How a refusal shows up — read this before writing a guard test
+
+Where a table keeps a write policy, RLS **filters rows**: an unauthorised UPDATE or DELETE affects
+0 rows and raises nothing. Where the grant itself is revoked, the caller gets `42501`. Both are
+refusals; only the second is loud. A test that asserts only on exceptions will report a false
+failure — as one did during this work. **Assert row counts too.**
+
+### Verification (2026-08-15, live tenant, JWT impersonation)
+
+- 5/5 `stock_movements` lockdown: kitchen and owner both refused write, reads open.
+- 12/12 lifecycle: duplicate line merges, sent freezes lines, cancel and delete both refused once
+  stock is received, correction moves stock by exactly the delta while the original movement
+  survives, correction without a reason refused, correction requires `purchasing.delete`.
+- 10/10 supplier and void: delete-before-archive refused, archived-and-unused deletes, supplier
+  with payments refused by name, archived supplier still shows its debt, double void refused.
+- 14/14 write guards: kitchen refused on every write to all five tables; owner still edits
+  suppliers, creates ingredients and raises orders via RPC; reads open on all five; data intact.
+- `tsc --noEmit`, `eslint` clean on touched files, `npm run build` compiles.
+
+### Also fixed along the way
+
+- `create_po` never set `branch_id`, so every UI-created order had none — and
+  `record_supplier_payment` reads its branch from the order, so every cash payout was stamped with
+  no branch. Fixed in the RPC and backfilled.
+- Purchasing actions used `requireRole` (base role) while the page used `requirePermission`. A
+  custom role built on `inventory` with `purchasing.edit` revoked still passed. All on the
+  permission now.
+- The orders query fetched every order with every nested line, unbounded. Paged at 25, defaulting
+  to open, with line detail fetched when a row opens.
+
+### Open follow-ups
+
+- [ ] **`inventory_items.current_qty` is still client-writable**, narrowed only to `inventory.edit`.
+      A store keeper can set a quantity with no `stock_movements` row behind it. Closing it needs a
+      trigger that can distinguish a definer caller, and would break `createInventoryItem`'s
+      opening-stock insert. Its own task.
+- [ ] Supplier "Local Purchase" is a placeholder for the non-Mata 14 Aug goods; rename if they came
+      from a named shop. Supplier "14 Aug" and its empty draft order are an earlier manual attempt,
+      left alone deliberately.
+- [ ] No unique constraint on supplier name — the live tenant has near-duplicate junk rows, and a
+      migration-time failure would be worse. A soft warning in the create form is the right level.
+
+---
+
 ## Cash movements & supplier payments (2026-08-15, web + DB)
 
 The first real shift at The Sekuwa Station exposed a hole: `close_cash_session` only ever *added*
@@ -887,6 +986,8 @@ and one of which could kill printing on a device until it was restarted. They ar
 - [x] **A role check in a server action was the only thing stopping a waiter repricing the menu** (2026-08-14). Every menu table carried the stock `tenant_all` policy — one `for all` rule whose only test is tenant membership — so `requireRole("owner","manager")` in `app/(app)/menu/actions.ts` guarded the button and nothing else: a waiter's own token could `PATCH /rest/v1/item_variants` and halve a price, or `DELETE` a size, straight through PostgREST. Verified against the live DB before the fix. Policies split (`20260814170000`): **read stays open to every member** — the POS, the KDS and the phone's offline cache all depend on it — and insert/update/delete on `menu_categories, menu_items, item_variants, item_modifiers, item_availability, item_station_routes, modifiers, combos, kitchen_stations, menus, menu_schedules, menu_item_prices` now require `has_permission(tenant,'menu.edit')`. `recipes` + `modifier_ingredients` got the same treatment keyed on `inventory.edit`. Three explicit `for insert/update/delete` policies rather than one `for all`, because a single `for all` write policy would have re-narrowed **reads** to menu.edit holders and blanked the till for every waiter. The four variant operations moved into `security definer` RPCs — `add_variant`, `update_variant`, `move_variant`, `delete_variant` — which the web actions now call instead of writing tables, so the renumbering logic exists once and the phone (which cannot call a Server Action) can reach it at all. **The trap this surfaced:** `item_variants.recipe_scale` is the *store keeper's* field, and the `inventory` role does not hold `menu.edit` — tightening the table would have broken stock counts silently. It gets `set_variant_recipe_scale`, gated on `inventory.edit` + owner/manager/inventory, and `updateVariantScale` now calls it. All six functions revoked from `public` **and** `anon` before granting to `authenticated` (the project's default privileges hand `anon` its own grant); `assert_may_edit_menu` is revoked from `authenticated` too, since only the definer functions call it. **Verified** by simulating both roles against real RLS in Postgres (`request.jwt.claims` + `set local role authenticated`), on a throwaway item deleted afterwards: a waiter reads 2 variants but their direct UPDATE changes 0 rows, their DELETE removes 0 rows, their INSERT is `42501`, and the RPC answers `42501 menu changes require a manager`; the owner's RPC update lands, `move_variant` returns the new position and returns the same position (no error) at the edge; a member switched to the tenant's **Inventory** role sets `recipe_scale` fine and still cannot rename a variant. Note for the next probe: flipping `user_tenants.role` alone proves nothing — `has_permission` reads `role_id` when it is set, and every seeded member has one. Advisors clean of ERRORs and the new RPCs are absent from the anon-executable list. `supabase/tests/menu_write_guards.sh` — **18 assertions, all passing** over real PostgREST as the roles that actually make these calls: the owner adds, renames, reprices, appends at the bottom, reorders and gets the same position back at the edge; the waiter is refused on all four RPCs (`42501`) and, more to the point, their **direct** PATCH changes 0 rows, their INSERT is refused and their DELETE removes nothing, on `item_variants` *and* `menu_items`; an anonymous call gets `permission denied`; a waiter still reads the menu; deleting a variant twice is not an error. Run against a **throwaway tenant and two throwaway users created for the run and deleted afterwards** — never the demo accounts. tsc + build clean.
 
 - [x] **The phone can edit the menu** (2026-08-14). Mobile had no menu surface at all — every size, price and dish lived behind the web app, which is the wrong place to be when the owner is standing in the restaurant and a size is wrong. New `features/menu` module (Flutter): a searchable dish list quoting the buyable **price range** (a dish with sizes has no buyable base price), and a per-dish sizes screen with add / edit / move up / move down / remove. Deliberately narrower than the web editor — photo, add-ons, kitchen routing and availability stay there. Writes go through the RPCs above, never table writes, so both clients enforce one rule set; the drawer entry is gated on `menu.view` and the controls on `menu.edit`, so a viewer gets a read-only screen rather than a door that refuses everything. Delete confirms and names the real consequence (past orders stop showing which size was sold — a rename does not). 9 new tests (permission gating both ways, dead move buttons at both ends, the confirm dialog, the empty state, the sheet's Less→negative-delta arithmetic and its disabled save, and both variant-ordering fallbacks). Flutter suite green (265), `flutter analyze` clean. **On-device pass done** on an iOS simulator against the real backend (`integration_test/menu_edit_device_test.dart`): a real signed-in build walks drawer → Menu → dish → move down, then reads the till's own query (`PosRepository.menu()`) on the same session and gets the new order back; the reorder was confirmed in the database afterwards (`250 gm, 1 Jir, 1 Kg` → `1 Jir, 250 gm, 1 Kg`), so it is the RPC landing rather than a local rebuild.
+
+- [x] **The bell took you off the screen you were on** (2026-08-15). Tapping the header bell navigated to `/notifications`, so a cashier mid-order glancing at "is that badge a new order?" lost the till. It now opens a **quick view** instead — the six most recent orders, each row a link to `/pos/{id}`, with **View all notifications** in the footer for the full page (which keeps history and the owner/manager activity tab). Desktop gets a popover, phones a bottom sheet via `useIsMobile` — a 352px popover anchored to a header icon is unreachable one-handed. New `components/ui/popover.tsx` (base-ui `Popover`, mirroring `dropdown-menu.tsx`'s positioner/popup split; width is a plain `w-*` here, no variant-prefixed base class to lose to, unlike `SheetContent`). Rows use `orderStatusLabel` / `orderTypeLabel` + `ORDER_STATUS_STYLE` rather than the `.replace("_"," ")` the old page did, and the unread marker is a dot that only *reinforces* the "Placed" badge and bold title — colour never carries it alone. Relative times come from new `lib/clock.ts` (`subscribeMinute` / `minuteNow`, the `useSyncExternalStore` pattern already used by reservations) + `relativeTime()` in `lib/format.ts`, which returns an absolute time on the server snapshot so nothing hydration-mismatches. **Trap paid for:** `react-hooks/set-state-in-effect` flags the initial `void refetch()` even folded into the subscription effect — routing it through the existing debounced `ping()` is what actually satisfies it, since the state then lands from a timer callback rather than the effect body. The realtime subscription, toast and 45s safety poll are unchanged; the count query is now issued alongside the preview fetch. **Verified** in the browser against the live tenant: the popover opens over `/pos` with six rows, correct labels, relative times and the footer link. tsc + eslint clean. **Not verified in a browser**: the mobile sheet path — `resize_window` did not take effect on this machine, so that branch rests on `useIsMobile` + `Sheet` behaving as they do elsewhere.
 
 ## Blocked — Open Questions (PRD §9)
 - [!] Launch payment gateway(s): Stripe global vs regional e-wallet?
