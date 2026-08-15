@@ -15,7 +15,8 @@ import {
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { formatDateTime, money } from "@/lib/format"
-import type { OpenSession } from "./types"
+import { MovementsPanel } from "./movements-panel"
+import type { CashMovement, OpenSession } from "./types"
 
 function FormError({ state }: { state: CashState }) {
   if (state && "error" in state)
@@ -31,13 +32,23 @@ export function SessionCard({
   currency,
   timezone,
   openSessionRow,
+  movements,
+  canApprove,
 }: {
   currency: string
   timezone: string
   openSessionRow: OpenSession | null
+  movements: CashMovement[]
+  canApprove: boolean
 }) {
   return openSessionRow ? (
-    <CloseCard currency={currency} timezone={timezone} session={openSessionRow} />
+    <CloseCard
+      currency={currency}
+      timezone={timezone}
+      session={openSessionRow}
+      movements={movements}
+      canApprove={canApprove}
+    />
   ) : (
     <OpenCard currency={currency} />
   )
@@ -86,12 +97,17 @@ function CloseCard({
   currency,
   timezone,
   session,
+  movements,
+  canApprove,
 }: {
   currency: string
   timezone: string
   session: OpenSession
+  movements: CashMovement[]
+  canApprove: boolean
 }) {
   const [state, action, pending] = useActionState<CashState, FormData>(closeSession, undefined)
+  const pendingCount = movements.filter((m) => m.status === "pending").length
 
   return (
     <Card>
@@ -105,7 +121,9 @@ function CloseCard({
           <Badge variant="secondary">Open</Badge>
         </CardAction>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex flex-col gap-6">
+        <MovementsPanel movements={movements} currency={currency} canApprove={canApprove} />
+
         <form action={action} className="flex flex-col gap-4">
           <input type="hidden" name="sessionId" value={session.id} />
           <Field>
@@ -125,6 +143,12 @@ function CloseCard({
               you submit, so the count stays honest.
             </FieldDescription>
           </Field>
+          {pendingCount > 0 ? (
+            <p className="text-sm text-amber-700 dark:text-amber-400" role="status">
+              {pendingCount} {pendingCount === 1 ? "entry is" : "entries are"} still awaiting
+              approval and will be approved automatically when you close.
+            </p>
+          ) : null}
           <FormError state={state} />
           <Button type="submit" disabled={pending} className="w-full">
             {pending ? "Closing…" : "Close & reconcile"}
