@@ -22,14 +22,28 @@ const NewOrderPane = dynamic(
   { ssr: false },
 )
 
+const AmendPane = dynamic(
+  () => import("@/components/pos/order-modal").then((m) => m.AmendPane),
+  { ssr: false },
+)
+
 type NewOrderApi = {
   /** Open the composer over whatever is on screen. `tableId` preselects a table. */
   openNewOrder: (tableId?: string) => void
+  /**
+   * Add to an order that already exists, over whatever is on screen.
+   *
+   * The checkout screen's case: the guest asks for one more water while the
+   * cashier is holding the bill. Navigating to /pos to add it costs the bill —
+   * and closing the composer there used to land on the board, nowhere near the
+   * screen the work started from.
+   */
+  openAmendOrder: (orderId: string) => void
 }
 
 const Ctx = createContext<NewOrderApi | null>(null)
 
-/** Open the order composer from anywhere in the app shell. */
+/** Open the order composer — new or amend — from anywhere in the app shell. */
 export function useNewOrder(): NewOrderApi {
   const api = useContext(Ctx)
   if (!api) throw new Error("useNewOrder must be used inside NewOrderProvider")
@@ -53,6 +67,8 @@ export function NewOrderProvider({ children }: { children: React.ReactNode }) {
 
   const [open, setOpen] = useState(false)
   const [tableId, setTableId] = useState<string | undefined>(undefined)
+  /** Set ⇒ amending that order; unset ⇒ composing a new one. */
+  const [amendOrderId, setAmendOrderId] = useState<string | null>(null)
   const [data, setData] = useState<PosComposerData | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -68,10 +84,16 @@ export function NewOrderProvider({ children }: { children: React.ReactNode }) {
     setData(next)
   }, [])
 
-  const openNewOrder = useCallback(
-    (preselect?: string) => {
+  /**
+   * Open the dialog and get the menu in front of it, whichever mode we're in.
+   *
+   * Both openers need the identical payload — amending needs the dish grid
+   * exactly as much as creating does — so the fetch, the warm start and the
+   * staleness guard live here once.
+   */
+  const beginOpen = useCallback(
+    () => {
       const seq = ++openSeq.current
-      setTableId(preselect)
       setError(null)
       setOpen(true)
 
@@ -129,20 +151,58 @@ export function NewOrderProvider({ children }: { children: React.ReactNode }) {
     [put],
   )
 
+  const openNewOrder = useCallback(
+    (preselect?: string) => {
+      setAmendOrderId(null)
+      setTableId(preselect)
+      beginOpen()
+    },
+    [beginOpen],
+  )
+
+  const openAmendOrder = useCallback(
+    (orderId: string) => {
+      setTableId(undefined)
+      setAmendOrderId(orderId)
+      beginOpen()
+    },
+    [beginOpen],
+  )
+
   const close = useCallback(() => {
     setOpen(false)
     setTableId(undefined)
-    // The screen behind this may well be the POS board. Cheap everywhere else:
-    // /pos is force-dynamic and placeStaffOrder already revalidates it.
+    setAmendOrderId(null)
+    // The screen behind this may well be the POS board — or a bill whose total
+    // just moved, which is why this refresh isn't optional. Cheap everywhere
+    // else: /pos is force-dynamic and the add actions already revalidate both.
     router.refresh()
   }, [router])
 
   return (
-    <Ctx.Provider value={{ openNewOrder }}>
+    <Ctx.Provider value={{ openNewOrder, openAmendOrder }}>
       {children}
       <Dialog open={open} onOpenChange={(o) => !o && close()}>
         <DialogContent size="full">
-          {data ? (
+          {/* Gated on `open`, not just on `data`. The dialog stays mounted
+              through its 200ms exit animation, and `close()` clears
+              `amendOrderId` in the same batch — without this the amend pane
+              would swap to the New order composer, table picker and all, for
+              the length of every close. `data` is deliberately never cleared
+              (it's the warm menu), so it can't do the gating on its own. */}
+          {!open ? null : data && amendOrderId ? (
+            <AmendPane
+              // Keyed by order id so opening a different order remounts rather
+              // than carrying the previous one's state across — same reason
+              // OrderModal keys it.
+              key={amendOrderId}
+              orderId={amendOrderId}
+              tenantId={tenant.tenantId}
+              data={data}
+              currency={tenant.currency}
+              onClose={close}
+            />
+          ) : data ? (
             <NewOrderPane
               data={data}
               currency={tenant.currency}
@@ -155,7 +215,13 @@ export function NewOrderProvider({ children }: { children: React.ReactNode }) {
             // the other needs the user to go online once.
             <>
               <DialogHeader>
-                <DialogTitle>{error ? "Can't take an order here" : "New order"}</DialogTitle>
+                <DialogTitle>
+                  {error
+                    ? "Can't take an order here"
+                    : amendOrderId
+                      ? "Add items"
+                      : "New order"}
+                </DialogTitle>
               </DialogHeader>
               <div className="flex flex-1 items-center justify-center p-6">
                 <p className="max-w-sm text-center text-sm text-muted-foreground">

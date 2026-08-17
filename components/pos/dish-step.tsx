@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { ArmchairIcon, SearchIcon, ShoppingBagIcon } from "lucide-react"
+import { ArmchairIcon, InfoIcon, SearchIcon, ShoppingBagIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -29,6 +29,7 @@ export function DishStep({
   staff,
   showGuests,
   addDisabled = false,
+  addNotice,
   footer,
 }: {
   menu: PosMenuItem[]
@@ -44,6 +45,12 @@ export function DishStep({
   staff: PosStaff[]
   showGuests: boolean
   addDisabled?: boolean
+  /**
+   * Why the grid is dead, in words. A wall of greyed tiles with no caption is
+   * the one thing the design system forbids outright — if adding is off, say so
+   * and say what to do instead.
+   */
+  addNotice?: React.ReactNode
   footer: React.ReactNode
 }) {
   const [search, setSearch] = useState("")
@@ -120,6 +127,15 @@ export function DishStep({
         ) : null}
 
         <div className="min-h-0 flex-1 overflow-y-auto p-3">
+          {addNotice ? (
+            <p
+              role="status"
+              className="mb-3 flex items-start gap-2 rounded-md border bg-muted/50 p-2.5 text-sm text-muted-foreground"
+            >
+              <InfoIcon className="mt-0.5 size-4 shrink-0" aria-hidden />
+              {addNotice}
+            </p>
+          ) : null}
           <DishGrid
             menu={menu}
             categories={categories}
@@ -146,6 +162,7 @@ export function DishStep({
           customers={customers}
           staff={staff}
           showGuests={showGuests}
+          addDisabled={addDisabled}
         />
         {footer}
       </div>

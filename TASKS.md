@@ -6,6 +6,247 @@
 
 ---
 
+## Adding items after the bill is up (2026-08-16, web + DB)
+
+A table asks for the bill, then orders one more water. There was no way to add it — the line got
+dropped or the bill was rebuilt by hand. Two separate blocks, and the first was the bigger one.
+
+### Block 1 — the web POS refused to add to any *fired* order
+
+`components/pos/amend-flow.tsx` gated adding on `EDITABLE = ["draft","placed"]`, which flowed into
+`addDisabled` → `dish-step` → `menu-tile`, rendering **every dish tile disabled and greyed with no
+explanation**. Stricter than the database (which only ever refused `billed|closed|cancelled`) and
+stricter than Flutter, which has shipped "Send new items" on a served order all along. So a waiter
+on the phone could add a round; the same person on the web till could not, and the UI said nothing.
+
+### Block 2 — `billed` was terminal
+
+`amend_order_add_item` / `amend_order_add_custom_item` refused `billed` outright, on the reasoning
+that a billed order is settled. It isn't: `create_bill_for_order` sets `orders.status = 'billed'`
+and `bills.status = 'open'`. **Billed means a bill was generated, not that anyone paid.** No
+`reopen_bill` / `void_bill` existed anywhere — `reopen_po` is the only reopen in the schema.
+
+- [x] `20260816090000_amend_billed_unpaid_order.sql` — the guard moves off the order status and onto
+      the bill, where the money actually is. `closed`/`cancelled` still refuse; `billed` passes only
+      while the bill is `open` **and** has no `completed` payment (belt and braces: the status is the
+      declared state, the `payments` probe catches a bill left `open` after a payment row landed).
+      On success: `recompute_bill` in the same transaction, plus a `billed_order_amended` audit row.
+      Permission gates untouched. Verified on prod: one row per function (no overload from
+      `create or replace`), `security definer` intact, `authenticated` yes / `anon` no.
+- [x] `ORDER_DETAIL_SELECT` carries `bills!orders_bill_id_fkey(id, status)` — the client could not
+      tell unpaid from settled without it, so it had to refuse every add.
+- [x] `amend-flow` splits the two questions it used to conflate: `unfired` picks which footer button
+      shows, `addable` mirrors the DB rule. A "Send N new items" button re-fires (safe — `fire_order`
+      only tickets lines with no `kot_item`, and only bumps status from `draft|placed`), and a
+      blocked grid now says why instead of sitting there dead.
+- [x] Entry points: "Add items" on the checkout Items card (`!settled`) deep-linking to
+      `/pos/{orderId}`, and on the Completed tab for `billed` + bill `open`.
+- [x] `addItem`/`addCustomItem` also revalidate `/bill/{id}` — the cashier who asked for the line is
+      usually standing on it. The "already taken a payment" error passes through verbatim, because
+      "start a new order for the table" is more use than a generic "this order is closed".
+
+### Decisions worth not relitigating
+
+**No reopen ceremony.** Adding straight to the billed order beats a Reopen → add → re-bill dance
+mid-rush. The stale-print warning (`bill_printed_total_cents <> total_cents`) already existed for
+exactly this case and now fires on its own — checkout has always said *"Nothing is locked by
+printing — a table that orders another round after asking for the bill is normal."*
+
+**Money is the lock, not the printout.** Once any payment lands, the answer is a new order; the
+existing `add_order_to_bill` merge path covers combining it back onto one total.
+
+### The money bug this opened, and the fix
+
+Caught on review, before anyone used it. Adding goes through the RPC, which recomputes — but the new
+line lands `status = 'draft'`, and that re-opened two plain table writes that could never previously
+run against an order with a bill:
+
+| action | filter | recompute? | result on a billed order |
+|---|---|---|---|
+| `setLineQty` | `status in (draft, placed)` | no | step the water 1 → 2, guest charged for 1 — **undercharge** |
+| `removeItem` | **none at all** | no | delete a mistyped line, charge stays — **overcharge** |
+
+Silent both ways: `bill_items` and `bills.total_cents` keep describing an order that no longer exists.
+
+- [x] `20260816103000_open_bill_follows_its_lines.sql` — `trg_order_item_sync_bill`, an
+      `after insert or update or delete` row trigger on `order_items` that recomputes the parent bill
+      **while it is `open`**. Fixing the two callers instead would have left the same hole for Flutter,
+      for the offline queue replaying a stale edit, and for anything hitting PostgREST directly. The
+      invariant is "an open bill equals the sum of its lines", so it belongs on the table, not in two
+      server actions. `security definer` is required — `recompute_bill` has EXECUTE revoked from
+      `authenticated`. Verified on prod: trigger live, not executable by `authenticated`, and zero
+      drift across every existing open bill.
+- Deliberately narrow: an order with no `bill_id` costs one indexed lookup and returns. A `partial`,
+  `paid` or `void` bill is money already counted and is never rewritten from here — the RPCs allowed
+  to touch a settled bill (`void_order_item`, `refund_payment`) still do their own recompute.
+
+### The composer opens *over* the bill, it does not replace it
+
+First cut deep-linked "Add items" to `/pos/{orderId}`. Wrong: it threw away the bill the cashier was
+mid-settle on, and closing the composer there ran `router.replace("/pos")` — landing on the board,
+nowhere near where the work started. Changing screens to add one water bottle is not a POS.
+
+- [x] `new-order-provider.tsx` already mounted the create composer as a dialog over *any* page (it
+      exists so "New order" works from the cash drawer or a report). Taught it amend as well:
+      `openAmendOrder(orderId)` beside `openNewOrder(tableId?)`, sharing one `beginOpen()` for the
+      lazy composer fetch, warm cache start and stale-response guard.
+- [x] `AmendPane` exported from `order-modal.tsx`, and `AmendFlow`/`AmendPane` widened from `PosData`
+      to `PosComposerData` — amending needs the menu and the pickers, not the board's orders, so it
+      no longer depends on /pos having loaded. `PosData` satisfies it structurally, so /pos is
+      unchanged.
+- [x] Checkout's button calls the hook instead of rendering a `Link`. The provider's `close()`
+      already does `router.refresh()`, which is what brings the recomputed total back to the bill.
+- [x] "Finish the bill" in the composer footer now closes the dialog as well as navigating — the pane
+      renders in two places now, and over the bill it would have changed the route underneath an
+      open dialog.
+
+### Charged before it was fired — and sometimes never fired
+
+The sharpest bug of the lot, found by reviewing the finished work. `recompute_bill` sums every line
+that isn't void; **status doesn't come into it**. A line added by the amend RPCs lands `draft`, and
+firing is a *separate* tap. So on a billed order the bill rose the instant a waiter tapped a dish —
+and if they backed out, got distracted, or the app died, the guest was charged for something with no
+KOT at all. No ticket existed to be missing, so nothing downstream could catch it. The KDS fix below
+does not cover this: it is about tickets, and a draft line has none.
+
+- [x] `20260817090000_billed_amend_fires_and_split_syncs.sql` — when the order is already `billed`,
+      both amend RPCs now `fire_order_kots` in the same transaction that charges. Re-fire is safe by
+      construction: only lines with no `kot_items` are ticketed, and the status promotions are scoped
+      to `('draft','placed')`, so the order stays `billed` and nothing cooking reprints. Composing a
+      *fresh* order still batches — that is what a cart is for, and nothing is charged yet.
+- [x] Same migration: `trg_sync_open_bill` only ever resolved the bill from `new.order_id`, so
+      `split_order_items` — which moves a line onto a brand-new order with a null `bill_id` — made it
+      return early and **left the source bill charging for a line that had moved to another tab**.
+      An UPDATE now syncs both sides.
+- [x] `amend-flow.tsx` — "Generate bill" is disabled, with a reason, while unfired lines exist. The
+      widened add rule made it possible to add to a `ready`/`served` order, which put "Send N new
+      items" and "Generate bill" side by side; `_build_bill_for_order` snapshots draft lines too, so
+      billing first charged for food the kitchen had never been told about.
+- [x] Flutter `checkout_screen.dart` — `_busy` now spans the push **and** the awaited refresh.
+      `BillSnapshotNotifier.refresh()` deliberately keeps the old data on screen while re-reading, so
+      clearing busy early left "Take payment" live over the pre-amend total, with the payment sheet
+      seeded from the stale `dueCents` — one quick tap and the bill settles short. Cleared in a
+      `finally` so a failed refresh can't strand the screen.
+- [x] Flutter — `_addItems` re-checks `PosOrder.isAmendable` on the freshly-read row before pushing
+      (it was dead code; the snapshot can predate a payment taken on another terminal).
+
+### A ticket on a billed order is work in hand, not history
+
+Found by the Flutter test pass, and it is the sharpest edge of the whole change: **food charged and
+never cooked.**
+
+Both clients decided a KOT was finished partly from its *order's* status, treating `billed` as done.
+That was written when `billed` was terminal, and its own comment gave the game away — *"a `ready`
+ticket on a **paid** bill is history"*. `closed` is the status that means paid. Now that a billed
+order can take a new round, firing it makes a real ticket on an order that stays `billed`.
+
+- [x] `lib/pos-constants.ts` — new `KOT_HISTORY_ORDER_STATUSES = ["closed", "cancelled"]`;
+      `isKotCompleted` uses it instead of `ORDER_DONE_STATUSES`. Fixes the POS KOT tab and its badge.
+- [x] `extrahelper_flutter/lib/data/supabase/kds_repository.dart` — same fix on `isCompleted`, and
+      this one was the dangerous instance: Flutter's KDS filters on the order's status, so the new
+      round was **hidden from the kitchen board entirely**. Tests updated (`kds_test.dart`), plus a
+      new case pinning "a new ticket on a billed order is work in hand, not history".
+- The **web** KDS was never affected — `app/(app)/kds/page.tsx` filters on `kots.status` alone.
+
+### Caught on adversarial review, fixed same pass
+
+- [x] **"Send new items" wasn't gated on `addable`.** `fire_order` checks tenant membership and
+      nothing else, so on a paid-and-closed order still carrying a draft line somebody added and
+      never sent, the button rendered *under* a "this bill is paid" notice and cooked an item no
+      bill would ever charge for. Now `addable && newItemCount > 0`.
+- [x] **Merged bills sent the round to the wrong table.** The bill page's order query is
+      `.order("created_at").limit(1)`, so "Add items" always deep-linked to the *oldest* order.
+      Tables 5 and 6 merged onto one bill, table 6 orders another round → line lands on table 5's
+      order → KOT prints **Table 5** → runner delivers to the wrong table. The button now renders
+      only when the bill has exactly one order behind it; a merged bill sends the cashier to /pos to
+      pick the tab deliberately.
+- [x] **Checkout button gated on `!settled`**, which is `status !== 'paid'` — so it also showed on
+      `partial` and `void` bills and dead-ended in a greyed composer. Now gated on `open`, matching
+      the RPC.
+- [x] **The blocked-grid notice said "This bill is paid"** for part-paid bills, voided bills, and
+      closed orders with no bill at all. A caption that lies is worse than none — it now names the
+      actual state.
+- [x] **Custom item ignored the gate.** The dish grid greyed out under a "start a new order" notice
+      while the Custom item button beside it stayed live and round-tripped to the server for its
+      refusal. `addDisabled` now threads through to `CartRail`.
+- [x] Completed tab no longer shows a stale count/total for the row just amended (realtime caught up
+      a beat later; `close()` now closes the visible gap).
+
+Also fixed incidentally: the old footer rendered **"Generate bill"** on a `cancelled` order.
+
+### Smaller review fixes
+
+- [x] `kot-tab.tsx` `canCancel` still tested `ORDER_DONE_STATUSES`, so a ticket that the new rule
+      correctly puts on the **live** pass had its cancel control greyed out. `void_order_item`
+      recomputes for any bill that isn't `paid`, so voiding there is fully supported — cooks were
+      looking at work with the one control that clears it disabled. Now uses the same history set.
+- [x] `new-order-provider.tsx` — the dialog stays mounted through its 200ms exit animation and
+      `close()` clears `amendOrderId` in the same batch, so every amend close repainted as the **New
+      order** composer, table picker and all, on the way out. Body gated on `open`.
+- [x] Flutter — the "More for this table" card is gated on eligibility, the button on readiness, so
+      it stops appearing and disappearing (shifting the layout) during a print. `repo.order()` gained
+      the same 6s cap every other tap on that screen has.
+- [x] Stale comment in `kds_providers.dart` still describing the old billed-is-history rule.
+
+### Known and accepted
+
+- **A `ready` ticket on a billed-but-never-paid order now stays on the pass.** That is the
+  pathological case only — paying sets the order `closed`, which clears it. The residency window is
+  "bill printed, table walked", which is exactly when staff *should* still see it. `set_bill_complimentary`
+  zeroes a total while leaving the bill `open`, so that one lingers too. If it ever bites, the fix is
+  a day floor on the live KOT query, not putting `billed` back.
+- **Migration filenames don't match the applied versions.** The live
+  `supabase_migrations.schema_migrations` rows are `20260816033337_amend_billed_unpaid_order` and
+  `20260816034449_open_bill_follows_its_lines`; the repo files carry later timestamps. All are
+  idempotent (`create or replace`, `drop trigger if exists`) and relative order is preserved, so a
+  re-apply is harmless — just don't expect the numbers to line up.
+- **The explicit `recompute_bill` in the amend RPCs is now redundant** with the trigger (the insert
+  fires it first). Kept as belt and braces; it costs one extra rebuild per add.
+
+### Fallout / follow-ups
+
+- [x] **Flutter parity — shipped 2026-08-16**, same day. See `../extrahelper_flutter/TASKS.md`. The
+      block turned out to be *navigational*, not a flag: nothing on Flutter's add path ever consulted
+      `isClosed` (`cart_controller.dart:32` — "the server has the final say"), so the work was the
+      checkout entry point, not a getter. Original checklist kept below for the record:
+      1. `pos_repository.dart:143-148` — add `bills!orders_bill_id_fkey(id, status)` to `_orderSelect`
+         (covers `activeOrders()`:158 and `order()`:226). `_completedSelect`:194 already has it.
+      2. `models.dart:345,397` — `PosOrder.billStatus`, parsed from the embed (copy `PosCompletedOrder`:269).
+      3. `models.dart:379` — keep the three-status getter as `isSettled`, add `isAmendable`.
+      4. `order_composer.dart:423` — point the **Cancel order** gate at `isSettled`. Do **not** relax
+         it: `cancel_order` still refuses a billed order.
+      5. `pos_repository.dart:719` — `_friendly` needs an `'already taken a payment'` branch; today
+         the raw lowercase Postgres string is shown.
+      6. `bill_repository.dart:100-109` already fetches the primary order and throws the `id` away —
+         carry it onto `BillSnapshot` and add `canAddItems => bill.isSettleable && payments.isEmpty`.
+      7. `checkout_screen.dart:~620` — "Add items" above the existing `MergeCard`, gated on
+         `live && canAddItems && order.create`; refresh `billSnapshotProvider` on return.
+      8. `pos_screen.dart:140-157` — on the `bill_requested` fall-through (offline / 6s timeout) the
+         tap still seeds a *second* order on a table mid-payment. Prefer `activeOrderIdForTable`
+         (`pos_repository.dart:496`), which already finds billed orders on purpose.
+      9. Tests: `cart_test.dart:252` and `order_actions_test.dart:59` encode the old rule and must
+         split; add cases to `checkout_screen_test.dart` and `outbox_test.dart`.
+- [ ] **Live behaviour change in Flutter today, app unmodified.** Nothing on its add path ever
+      consulted `isClosed` (`cart_controller.dart:32` — "the server has the final say"), and
+      `repo.order()` has no status filter. So if another device bills a table while a waiter has the
+      composer open, adds that the server used to bounce now succeed and reprice the bill — with no
+      warning band and no bill refresh. Not data-corrupting (the trigger above keeps the total
+      honest), but the waiter isn't told. Worth the warning band early.
+- [ ] `updateLine` still has no status filter — notes/course/seat only, so no money moves, but it
+      can edit a fired line's row on a billed order. Left alone deliberately.
+- [ ] `menu_tile.dart:54` has a `disabled` param documented as "the order is fired/billed — no
+      longer addable" that is **never passed**. Dead API; delete or wire, don't leave it ambiguous.
+- [ ] `components/bill-view.tsx` (~400 lines) has **zero importers** — a dead second checkout surface
+      that will silently drift from `CheckoutView`. Delete it.
+- [ ] Flutter `_openTable` has no re-entrancy guard (unlike `_billOrder`'s `_billing` flag) and now
+      chains up to four 6s-capped hops on one tap. A waiter who taps again mid-wait gets two composers
+      pushed on the same order. Add the guard and a progress indication.
+- [ ] A line added to a billed order is inserted `status = 'draft'`, so it still needs firing. The
+      "Send new items" button is the only thing standing between that and charging a guest for
+      something the kitchen never saw — worth an auto-fire or a louder nag if it bites anyone.
+
+---
+
 ## Purchasing rebuild + write guards (2026-08-15, web + DB)
 
 The screen could create and receive, and nothing else: suppliers were read-only chips, no record

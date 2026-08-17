@@ -5,6 +5,7 @@ import Link from "next/link"
 import {
   ArmchairIcon,
   ClipboardListIcon,
+  PlusIcon,
   PrinterIcon,
   ReceiptIcon,
   ReceiptTextIcon,
@@ -55,6 +56,18 @@ function lineCount(o: PosCompletedOrder): number {
   return (o.order_items ?? []).filter((l) => !l.is_void).reduce((sum, l) => sum + l.qty, 0)
 }
 
+/**
+ * Can this row still take another line?
+ *
+ * Billed, with its bill still open — i.e. presented but not yet tendered. The
+ * database enforces the same rule; this only decides whether to offer the
+ * control. A `closed` order, or an open bill that has taken a part payment
+ * (`partial`), is done.
+ */
+function canAmend(o: PosCompletedOrder): boolean {
+  return o.status === "billed" && o.bills?.status === "open"
+}
+
 function destination(o: PosCompletedOrder): string {
   return o.restaurant_tables?.label ? `Table ${o.restaurant_tables.label}` : orderTypeLabel(o.order_type)
 }
@@ -62,10 +75,10 @@ function destination(o: PosCompletedOrder): string {
 /**
  * Today's finished orders — the answer to "where did the one I just closed go?".
  *
- * A table, not the card grid: every affordance an OrderCard carries (pin, clear,
- * checkout, open-to-amend) is meaningless once an order is billed, and amend
- * mode refuses anything past `placed` anyway. What's left is a row you read and
- * occasionally reprint, which is what a table is for.
+ * A table, not the card grid: most affordances an OrderCard carries (pin, clear,
+ * checkout) are meaningless once an order is billed. What's left is a row you
+ * read, occasionally reprint, and — while the bill is still open — add to, which
+ * is what a table with a couple of row actions is for.
  */
 export function CompletedTab({
   orders,
@@ -73,6 +86,7 @@ export function CompletedTab({
   timeZone,
   canCheckout,
   onGoToOrders,
+  onAmend,
 }: {
   orders: PosCompletedOrder[]
   currency: string
@@ -80,6 +94,8 @@ export function CompletedTab({
   /** Holds checkout.view. The bill page and the print RPC enforce it server-side too. */
   canCheckout: boolean
   onGoToOrders: () => void
+  /** Reopen the composer on a billed order whose bill hasn't been paid yet. */
+  onAmend: (orderId: string) => void
 }) {
   const [filter, setFilter] = useState<string>(ALL)
   const [pending, startTransition] = useTransition()
@@ -245,32 +261,48 @@ export function CompletedTab({
                   )}
                 </TableCell>
                 <TableCell className="text-right">
-                  {/* No permission, no bill ⇒ nothing rather than a disabled
-                      control: a waiter can't act on it and an unexplained
-                      greyed-out button is just noise on a busy screen. */}
-                  {canCheckout && o.bill_id ? (
-                    <span className="flex items-center justify-end gap-2">
+                  <span className="flex flex-wrap items-center justify-end gap-2">
+                    {/* One more water bottle after the bill went out. Allowed
+                        only while nothing has been tendered — once the bill is
+                        paid the RPC refuses, and the answer is a new order. */}
+                    {canAmend(o) ? (
                       <Button
                         variant="outline"
-                        nativeButton={false}
-                        render={<Link href={`/bill/${o.bill_id}`} />}
                         className="min-h-11"
+                        onClick={() => onAmend(o.id)}
                       >
-                        <ReceiptIcon />
-                        View bill
+                        <PlusIcon />
+                        Add items
+                        <span className="sr-only"> to {destination(o)}</span>
                       </Button>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="size-11"
-                        disabled={pending}
-                        aria-label={`Reprint receipt for ${destination(o)}`}
-                        onClick={() => reprint(o.bill_id as string)}
-                      >
-                        <PrinterIcon />
-                      </Button>
-                    </span>
-                  ) : null}
+                    ) : null}
+                    {/* No permission, no bill ⇒ nothing rather than a disabled
+                        control: a waiter can't act on it and an unexplained
+                        greyed-out button is just noise on a busy screen. */}
+                    {canCheckout && o.bill_id ? (
+                      <>
+                        <Button
+                          variant="outline"
+                          nativeButton={false}
+                          render={<Link href={`/bill/${o.bill_id}`} />}
+                          className="min-h-11"
+                        >
+                          <ReceiptIcon />
+                          View bill
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="size-11"
+                          disabled={pending}
+                          aria-label={`Reprint receipt for ${destination(o)}`}
+                          onClick={() => reprint(o.bill_id as string)}
+                        >
+                          <PrinterIcon />
+                        </Button>
+                      </>
+                    ) : null}
+                  </span>
                 </TableCell>
               </TableRow>
             )

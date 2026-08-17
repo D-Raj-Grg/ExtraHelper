@@ -78,8 +78,13 @@ export default async function BillPage({
 
   // Modifiers and per-line discounts hang off the ORDER item, not the bill
   // line — the checkout table shows both against the line they belong to.
-  const [{ data: modifiers }, { data: lineDiscounts }, { data: people }, { data: staffDiscount }] =
-    await Promise.all([
+  const [
+    { data: modifiers },
+    { data: lineDiscounts },
+    { data: people },
+    { data: staffDiscount },
+    { data: billOrders },
+  ] = await Promise.all([
       orderItemIds.length
         ? supabase
             .from("order_item_modifiers")
@@ -115,6 +120,15 @@ export default async function BillPage({
         .is("order_item_id", null)
         .is("coupon_code", null)
         .limit(1),
+      // Every order on this bill, not just the first. A merged bill spans two
+      // tables, and "Add items" has to know that: deep-linking to the oldest
+      // order would put table 6's round on table 5's ticket, and the runner
+      // would carry it to the wrong table.
+      supabase
+        .from("orders")
+        .select("id")
+        .eq("bill_id", billId)
+        .eq("tenant_id", tenant.tenantId),
     ])
 
   // Orders that could be merged onto this open bill (fired, not yet billed).
@@ -213,6 +227,12 @@ export default async function BillPage({
         customer={customer}
         pointsValueCents={settings?.points_value_cents ?? 1}
         mergeableOrders={(mergeable ?? []) as never}
+        // What "Add items" reopens in the composer — and only when this bill
+        // has exactly one order behind it. On a merged bill there is no right
+        // answer to "which tab did the guest mean", and guessing puts the round
+        // on the wrong table's ticket, so the control hides and the cashier
+        // picks the tab from /pos deliberately.
+        orderId={(billOrders ?? []).length === 1 ? ((billOrders![0].id as string) ?? null) : null}
         meta={{
           tenantName: tenant.name,
           timezone: tenant.timezone,

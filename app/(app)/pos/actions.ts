@@ -19,6 +19,29 @@ function revalidatePos(orderId: string) {
   revalidatePath(`/pos/${orderId}`)
 }
 
+/**
+ * …and the checkout screen, when there is one behind this order.
+ *
+ * A billed order can still take a line while its bill is unpaid, and the cashier
+ * who asked for that line is usually standing on `/bill/{id}` — so the totals
+ * there have to move too. The bill id isn't in the caller's hands, so it costs
+ * one indexed lookup; only the two *add* actions pay it, because they're the
+ * only ones reachable from checkout. Every other edit keeps the plain
+ * `revalidatePos` and its zero round trips.
+ */
+async function revalidatePosAndBill(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  orderId: string,
+) {
+  revalidatePos(orderId)
+  const { data } = await supabase
+    .from("orders")
+    .select("bill_id")
+    .eq("id", orderId)
+    .maybeSingle()
+  if (data?.bill_id) revalidatePath(`/bill/${data.bill_id}`)
+}
+
 export type AddItemOpts = {
   variantId?: string | null
   modifierIds?: string[]
@@ -65,7 +88,7 @@ export async function addItem(
   })
   if (error) return { error: friendlyAddItemError(error.message) }
 
-  revalidatePos(orderId)
+  await revalidatePosAndBill(supabase, orderId)
   return { ok: true }
 }
 
@@ -79,6 +102,12 @@ function friendlyAddItemError(message: string): string {
   }
   if (message.includes("variant not found")) return "Variant not found."
   if (message.includes("item not found")) return "Item not found."
+  // A presented bill is amendable until money lands on it; past that the RPC
+  // says what to do instead ("start a new order for the table"), which is more
+  // use to the cashier than anything this map could substitute. So it passes
+  // through untouched, and only genuinely closed/cancelled orders get the
+  // generic line below.
+  if (message.includes("already taken a payment")) return message
   if (message.includes("cannot be amended")) {
     return "This order is closed — it can't be changed."
   }
@@ -290,9 +319,9 @@ export async function addCustomItem(
     _course: fields.course ?? null,
     _seat: fields.seat ?? null,
   })
-  if (error) return { error: error.message }
+  if (error) return { error: friendlyAddItemError(error.message) }
 
-  revalidatePos(orderId)
+  await revalidatePosAndBill(supabase, orderId)
   return { ok: true }
 }
 

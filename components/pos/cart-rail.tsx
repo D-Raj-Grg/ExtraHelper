@@ -25,6 +25,7 @@ export function CartRail({
   customers,
   staff,
   showGuests,
+  addDisabled = false,
 }: {
   cart: CartController
   currency: string
@@ -33,6 +34,13 @@ export function CartRail({
   customers: PosCustomer[]
   staff: PosStaff[]
   showGuests: boolean
+  /**
+   * Same gate the dish grid gets. An off-menu line is still a line: if the
+   * order can't take one, this button can't either — otherwise the grid greys
+   * out under a "start a new order" notice while the control right above it
+   * stays live and round-trips to the server for its refusal.
+   */
+  addDisabled?: boolean
 }) {
   const [customOpen, setCustomOpen] = useState(false)
 
@@ -40,7 +48,12 @@ export function CartRail({
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex shrink-0 items-center justify-between gap-2 border-b p-3">
         <h2 className="text-sm font-semibold">Cart items</h2>
-        <Button variant="outline" size="sm" onClick={() => setCustomOpen(true)} disabled={cart.busy}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setCustomOpen(true)}
+          disabled={cart.busy || addDisabled}
+        >
           <PlusIcon />
           Custom item
         </Button>
