@@ -94,7 +94,12 @@ export function NewOrderPane({
   )
 }
 
-function AmendPane({
+/**
+ * The amend composer's dialog body. Exported for the same reason NewOrderPane
+ * is: checkout opens it over a bill (`new-order-provider.tsx`), because a table
+ * that orders one more round shouldn't cost the cashier the screen they're on.
+ */
+export function AmendPane({
   orderId,
   tenantId,
   data,
@@ -104,7 +109,7 @@ function AmendPane({
 }: {
   orderId: string
   tenantId: string
-  data: PosData
+  data: PosComposerData
   currency: string
   initialDetail?: PosOrderDetail | null
   onClose: () => void

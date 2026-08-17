@@ -123,6 +123,12 @@ export type PosOrderDetail = {
   customer_id: string | null
   bill_id: string | null
   restaurant_tables: { label: string } | null
+  /**
+   * The bill this order was put on, if any. Null until it's billed — and the
+   * status is what says whether more items may still go on it: an `open` bill
+   * is still being settled, a `paid` one is closed for business.
+   */
+  bills: { id: string; status: string } | null
   order_items: PosDetailLine[]
 }
 

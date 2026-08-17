@@ -7,7 +7,7 @@ import { toast } from "sonner"
 import { bumpKot } from "@/app/(app)/kds/actions"
 import { voidLine } from "@/app/(app)/pos/actions"
 import { createClient } from "@/lib/supabase/client"
-import { isKotCompleted, kotTabQuery, ORDER_DONE_STATUSES } from "@/lib/pos-constants"
+import { isKotCompleted, kotTabQuery, KOT_HISTORY_ORDER_STATUSES } from "@/lib/pos-constants"
 import { KOT_FLOW } from "@/lib/kds-constants"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -112,8 +112,10 @@ export function KotTab({
   }, [tenantId, refetch])
 
   // Partitioned on isKotCompleted, not on the ticket's own status: a `ready`
-  // ticket whose order has since been billed is history, and filtering on
+  // ticket whose order has since been settled is history, and filtering on
   // KOT_ACTIVE_STATUSES alone left it sitting on the active pass forever.
+  // `billed` is not settled, though — a round ordered after the bill went out
+  // fires a real ticket onto a `billed` order, and it belongs on the live pass.
   const done = kots.filter(isKotCompleted)
   const live = kots.filter((k) => !isKotCompleted(k))
   const visible = view === "completed" ? done : live
@@ -123,9 +125,13 @@ export function KotTab({
       tableLabel: k.orders?.restaurant_tables?.label ?? null,
       orderType: k.orders?.order_type ?? "dine_in",
       staffName: (k.orders?.waiter_id && staffName.get(k.orders.waiter_id)) || "Staff",
-      // Once an order is billed/closed/cancelled a line void can't recompute a
-      // paid bill — cancel is withdrawn rather than corrupting the total.
-      canCancel: !ORDER_DONE_STATUSES.includes(k.orders?.status ?? ""),
+      // Same rule that decides whether the ticket is live at all. It used to
+      // withdraw cancel for `billed` too, on the reasoning that a void can't
+      // recompute a paid bill — but `void_order_item` recomputes for any bill
+      // that isn't `paid` (20260712100000), and a billed-but-unpaid order now
+      // carries live tickets. Refusing there left cooks looking at work on the
+      // pass with the one control that clears it greyed out.
+      canCancel: !KOT_HISTORY_ORDER_STATUSES.includes(k.orders?.status ?? ""),
     })
 
     if (splitByType) {

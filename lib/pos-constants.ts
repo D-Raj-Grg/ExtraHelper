@@ -39,9 +39,17 @@ export const KOT_CARD_SELECT =
 /** KOT statuses the POS tab pulls — active plus served (served hidden until the toggle). */
 export const KOT_TAB_STATUSES = [...KOT_ACTIVE_STATUSES, "served"]
 
+/**
+ * The amend screen's shape. Carries the bill's own status, not just bill_id:
+ * a billed order whose bill is still open can take more items (the database
+ * says so), and without the status the client can't tell unpaid from settled
+ * and has to refuse every add. FK hint spelled out for the same reason
+ * COMPLETED_ORDER_SELECT spells it out.
+ */
 export const ORDER_DETAIL_SELECT =
   "id, status, order_type, table_id, guests, waiter_id, customer_id, bill_id, " +
   "restaurant_tables!orders_table_id_fkey(label), " +
+  "bills!orders_bill_id_fkey(id, status), " +
   "order_items(id, item_id, variant_id, name_snapshot, qty, unit_price_cents, status, " +
   "is_void, is_held, notes, course, seat, " +
   "order_item_modifiers(modifier_id, name_snapshot, price_cents))"
@@ -87,15 +95,30 @@ export const COMPLETED_ORDER_LIMIT = 300
 export const KOT_TAB_LIMIT = 400
 
 /**
- * A ticket is done when the kitchen bumped it OR its order has been billed,
- * closed or cancelled. The order half matters: a `ready` ticket on a paid bill
- * is history, and without this it sat on the active board forever.
+ * Orders whose tickets are history: the money is in, or the order was
+ * abandoned. Nothing more will be cooked for either.
+ *
+ * Deliberately NOT `ORDER_DONE_STATUSES` — that includes `billed`, and `billed`
+ * no longer means anyone paid. A table can ask for the bill and then order one
+ * more round; that fires a fresh ticket onto an order sitting at `billed`, and
+ * counting it as history hides live work from the people who have to cook it.
+ * `closed` is the status that means paid, and it is the one that belongs here.
+ */
+export const KOT_HISTORY_ORDER_STATUSES = ["closed", "cancelled"]
+
+/**
+ * A ticket is done when the kitchen bumped it, or its order is closed or
+ * cancelled. The order half still matters: a `ready` ticket on a settled bill
+ * is history, and without it that ticket sat on the active board forever.
  */
 export function isKotCompleted(kot: {
   status: string
   orders: { status: string } | null
 }): boolean {
-  return kot.status === "served" || ORDER_DONE_STATUSES.includes(kot.orders?.status ?? "")
+  return (
+    kot.status === "served" ||
+    KOT_HISTORY_ORDER_STATUSES.includes(kot.orders?.status ?? "")
+  )
 }
 
 /**

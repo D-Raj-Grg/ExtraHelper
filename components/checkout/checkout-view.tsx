@@ -4,7 +4,7 @@ import { useRef, useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { ArrowLeftIcon, ReceiptIcon } from "lucide-react"
+import { ArrowLeftIcon, PlusIcon, ReceiptIcon } from "lucide-react"
 
 import {
   addCharge,
@@ -29,6 +29,7 @@ import { paymentMethodTakesReference } from "@/lib/payment-constants"
 import { cn } from "@/lib/utils"
 import { useOffline } from "@/components/offline-sync-provider"
 import { usePrint } from "@/components/print/use-print"
+import { useNewOrder } from "@/components/pos/new-order-provider"
 import { PageHeader } from "@/components/page-header"
 import { CheckoutCustomerPanel } from "@/components/checkout/customer-panel"
 import { CheckoutInvoicePreview } from "@/components/checkout/invoice-preview"
@@ -49,7 +50,7 @@ import type {
 } from "@/components/checkout/types"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
 /** Fresh idempotency key. Module scope — reads Date.now/Math.random. */
 function newKey(): string {
@@ -79,6 +80,7 @@ export function CheckoutView({
   customer = null,
   pointsValueCents = 1,
   mergeableOrders = [],
+  orderId = null,
 }: {
   currency: string
   bill: CheckoutBill
@@ -92,12 +94,22 @@ export function CheckoutView({
   customer?: CheckoutCustomer | null
   pointsValueCents?: number
   mergeableOrders?: MergeableOrder[]
+  /**
+   * The order behind this bill, when there is one. Only used to deep-link back
+   * into the composer — a bill with no order (or a merged one) simply hides the
+   * Add items control rather than guessing which tab the guest meant.
+   */
+  orderId?: string | null
 }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const { online, enqueuePayment } = useOffline()
   const { printBill, printReceipt } = usePrint()
+  // The composer lives in the app shell, so it can open over this bill instead
+  // of replacing it. Closing it refreshes this route, which is how the new
+  // line's effect on the total gets here.
+  const { openAmendOrder } = useNewOrder()
 
   const settled = bill.status === "paid"
   const due = Math.max(0, bill.total_cents - paidCents)
@@ -341,6 +353,28 @@ export function CheckoutView({
           <Card>
             <CardHeader>
               <CardTitle>Items</CardTitle>
+              {/* One more round mid-checkout is normal service. The composer
+                  opens *over* this page rather than navigating to it: the
+                  cashier is mid-settle, and sending them to /pos costs the bill
+                  they're holding — closing it there landed on the board, not
+                  back here. Ordering is still one surface; the same pane the
+                  board uses is mounted in the app shell.
+
+                  Gated on `open`, not on `!settled`: a part-paid bill isn't
+                  "settled" but money has landed on it, and the RPC refuses. The
+                  wider test offered a button that dead-ends in the composer. */}
+              {bill.status === "open" && orderId ? (
+                <CardAction>
+                  <Button
+                    variant="outline"
+                    className="min-h-11"
+                    onClick={() => openAmendOrder(orderId)}
+                  >
+                    <PlusIcon />
+                    Add items
+                  </Button>
+                </CardAction>
+              ) : null}
             </CardHeader>
             <CardContent className="px-0">
               <CheckoutItemsTable

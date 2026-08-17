@@ -199,8 +199,15 @@ export function PosScreen({
     // /pos/[id] (or a ?new=1 that reopens on refresh) behind. The grid is
     // already underneath, so there's no flash.
     if (openOrderId || startNew) router.replace("/pos")
-    else void refetchOrders()
-  }, [openOrderId, startNew, router, refetchOrders])
+    else {
+      void refetchOrders()
+      // The modal can now amend a *billed* order, which lives on the Completed
+      // tab, not the board — so refetching only the active orders leaves the
+      // row the cashier just changed showing its old count and total. Realtime
+      // catches up a beat later; this closes the gap it's visible for.
+      if (tab === "completed") void refetchCompleted()
+    }
+  }, [openOrderId, startNew, router, refetchOrders, tab, refetchCompleted])
 
   const posData: PosData = { ...data, menu, tables, categories, floors, orders, completed }
 
@@ -270,6 +277,7 @@ export function PosScreen({
           timeZone={timeZone}
           canCheckout={data.canCheckout}
           onGoToOrders={() => selectTab("orders")}
+          onAmend={(orderId) => setModal({ mode: "amend", orderId })}
         />
       ) : null}
 
