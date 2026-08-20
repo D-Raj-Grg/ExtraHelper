@@ -10,6 +10,7 @@ import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import type { CheckoutCustomer } from "@/components/checkout/types"
+import { CustomerPicker } from "@/components/customer-picker"
 
 /**
  * Who the bill is for, and what gets printed under the lines.
@@ -25,6 +26,7 @@ export function CheckoutCustomerPanel({
   onNoteChange,
   onNoteCommit,
   onAttach,
+  onPick,
   servedBy,
   settled,
   disabled,
@@ -36,6 +38,8 @@ export function CheckoutCustomerPanel({
   onNoteChange: (v: string) => void
   onNoteCommit: () => void
   onAttach: (name: string, phone: string) => void
+  /** Attach someone already in the book, by id — keeps their points with them. */
+  onPick: (customerId: string) => void
   servedBy: string | null
   settled: boolean
   disabled: boolean
@@ -63,40 +67,50 @@ export function CheckoutCustomerPanel({
         ) : settled ? (
           <p className="text-sm text-muted-foreground">Walk-in — no customer attached.</p>
         ) : (
-          <div className="flex flex-wrap items-end gap-2">
-            <Field className="min-w-32 flex-1">
-              <FieldLabel htmlFor="cust-name">Name</FieldLabel>
-              <Input
-                id="cust-name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Optional"
-              />
-            </Field>
-            <Field className="w-36">
-              <FieldLabel htmlFor="cust-phone">Phone</FieldLabel>
-              <Input
-                id="cust-phone"
-                type="tel"
-                inputMode="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="Optional"
-                className="tabular-nums"
-              />
-            </Field>
-            <Button
-              variant="secondary"
-              disabled={disabled || (!name.trim() && !phone.trim())}
-              onClick={() => {
-                onAttach(name, phone)
-                setName("")
-                setPhone("")
-              }}
-            >
-              <UserPlusIcon className="size-4" />
-              Attach
-            </Button>
+          <div className="space-y-3">
+            <CustomerPicker
+              id="cust-search"
+              currency={currency}
+              pointsValueCents={pointsValueCents}
+              disabled={disabled}
+              onPick={onPick}
+            />
+            <p className="text-xs font-medium text-muted-foreground">Or someone new</p>
+            <div className="flex flex-wrap items-end gap-2">
+              <Field className="min-w-32 flex-1">
+                <FieldLabel htmlFor="cust-name">Name</FieldLabel>
+                <Input
+                  id="cust-name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Optional"
+                />
+              </Field>
+              <Field className="w-36">
+                <FieldLabel htmlFor="cust-phone">Phone</FieldLabel>
+                <Input
+                  id="cust-phone"
+                  type="tel"
+                  inputMode="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="Optional"
+                  className="tabular-nums"
+                />
+              </Field>
+              <Button
+                variant="secondary"
+                disabled={disabled || (!name.trim() && !phone.trim())}
+                onClick={() => {
+                  onAttach(name, phone)
+                  setName("")
+                  setPhone("")
+                }}
+              >
+                <UserPlusIcon className="size-4" />
+                Attach
+              </Button>
+            </div>
           </div>
         )}
       </div>

@@ -181,14 +181,17 @@ export function PosScreen({
     // nobody is looking at. Billing an order is an `orders` UPDATE, so the
     // existing channel already covers this; a *payment* writes bills/payments
     // instead, and the Bill badge catches up on the hook's 45s safety tick.
-    if (tabRef.current === "completed") void refetchCompleted()
+    if (tabRef.current === "completed" || tabRef.current === "table") void refetchCompleted()
   })
 
   // Opening the tab pulls fresh: the seed is as old as the last server render.
   // Scheduled rather than awaited inline, the same way KotTab does its
   // mount refetch — a bare call reads to the lint rule as setState-in-effect.
   useEffect(() => {
-    if (tab !== "completed") return
+    // The Table board reads the same set for its unpaid-bill links, so it pulls
+    // too — a table showing "Bill unpaid" against a bill settled on another
+    // till is worse than a round trip.
+    if (tab !== "completed" && tab !== "table") return
     const t = setTimeout(() => void refetchCompleted(), 0)
     return () => clearTimeout(t)
   }, [tab, refetchCompleted])
@@ -205,7 +208,7 @@ export function PosScreen({
       // tab, not the board — so refetching only the active orders leaves the
       // row the cashier just changed showing its old count and total. Realtime
       // catches up a beat later; this closes the gap it's visible for.
-      if (tab === "completed") void refetchCompleted()
+      if (tab === "completed" || tab === "table") void refetchCompleted()
     }
   }, [openOrderId, startNew, router, refetchOrders, tab, refetchCompleted])
 
@@ -256,6 +259,7 @@ export function PosScreen({
           tables={tables}
           floors={floors}
           orders={orders}
+          billed={completed}
           onOpenOrder={(orderId) => setModal({ mode: "amend", orderId })}
           onNewForTable={(tableId) => setModal({ mode: "create", tableId })}
         />

@@ -6,7 +6,12 @@ import { cn } from "@/lib/utils"
 import { tableStateLabel } from "@/lib/table-constants"
 import { Card } from "@/components/ui/card"
 import { TableGlyph } from "@/components/pos/table-glyph"
-import type { PosFloor, PosOrderCard, PosTable } from "@/components/pos/types"
+import type {
+  PosCompletedOrder,
+  PosFloor,
+  PosOrderCard,
+  PosTable,
+} from "@/components/pos/types"
 
 const NO_FLOOR = "__none__"
 
@@ -58,17 +63,25 @@ function floorLabel(floors: PosFloor[], id: string): string {
  * A floor board. Tapping a table opens its live order (amend) if one is open,
  * or starts a new order seeded to that table. The parent decides which by
  * looking up an active order for the table id.
+ *
+ * `billed` carries the other half of that lookup: an order whose bill went out
+ * and hasn't been paid has left the board, but its table is still occupied and
+ * still owes money. Without it a tap on such a table started a *second* order
+ * on top of the unsettled one, and the bill was reachable from nowhere.
  */
 export function TableTab({
   tables,
   floors,
   orders,
+  billed,
   onOpenOrder,
   onNewForTable,
 }: {
   tables: PosTable[]
   floors: PosFloor[]
   orders: PosOrderCard[]
+  /** Billed-but-unpaid orders, from the Completed tab's set. */
+  billed: PosCompletedOrder[]
   onOpenOrder: (orderId: string) => void
   onNewForTable: (tableId: string) => void
 }) {
@@ -89,6 +102,22 @@ export function TableTab({
   const orderByTable = new Map<string, PosOrderCard>()
   for (const o of orders) {
     if (o.table_id && !orderByTable.has(o.table_id)) orderByTable.set(o.table_id, o)
+  }
+
+  // Unpaid bills, second in line: a live order beats one already presented, so
+  // this only fills tables the loop above left empty.
+  //
+  // A table already back to `free` is skipped: that's the credit checkout —
+  // the guest left, the debt moved to their tab, and the floor is seatable.
+  // The bill is still owed, and still on the Completed tab; it just isn't the
+  // table's problem any more.
+  const freeTables = new Set(tables.filter((t) => t.state === "free").map((t) => t.id))
+  const unpaidByTable = new Map<string, string>()
+  for (const o of billed) {
+    if (!o.table_id || o.status !== "billed" || o.bills?.status !== "open") continue
+    if (freeTables.has(o.table_id)) continue
+    if (orderByTable.has(o.table_id) || unpaidByTable.has(o.table_id)) continue
+    unpaidByTable.set(o.table_id, o.id)
   }
 
   const groups = new Map<string, PosTable[]>()
@@ -113,9 +142,19 @@ export function TableTab({
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
             {(groups.get(floorId) ?? []).map((t) => {
               const order = orderByTable.get(t.id)
-              const occupied = Boolean(order) || t.state === "occupied"
-              const style = STATE_STYLE[t.state] ?? STATE_STYLE.cleaning
-              const stateWord = order ? "Occupied" : tableStateLabel(t.state)
+              const unpaidOrderId = order ? undefined : unpaidByTable.get(t.id)
+              const openId = order?.id ?? unpaidOrderId
+              const occupied = Boolean(openId) || t.state === "occupied"
+              // An unpaid table keeps its own word — "Occupied" would hide the
+              // one thing the cashier has to act on.
+              const style = unpaidOrderId
+                ? STATE_STYLE.bill_requested
+                : (STATE_STYLE[t.state] ?? STATE_STYLE.cleaning)
+              const stateWord = unpaidOrderId
+                ? "Bill unpaid"
+                : order
+                  ? "Occupied"
+                  : tableStateLabel(t.state)
               return (
                 <Card
                   key={t.id}
@@ -127,12 +166,10 @@ export function TableTab({
                 >
                   <button
                     type="button"
-                    onClick={() =>
-                      order ? onOpenOrder(order.id) : onNewForTable(t.id)
-                    }
+                    onClick={() => (openId ? onOpenOrder(openId) : onNewForTable(t.id))}
                     aria-label={
-                      order
-                        ? `Open order for table ${t.label} — occupied`
+                      openId
+                        ? `Open order for table ${t.label} — ${stateWord.toLowerCase()}`
                         : `Start an order for table ${t.label} — ${stateWord.toLowerCase()}`
                     }
                     className="flex min-h-28 w-full items-start gap-3 rounded-xl p-4 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"

@@ -133,6 +133,13 @@ export function isKotCompleted(kot: {
  * (idx_orders_tenant(tenant_id, created_at desc)) and orders has no closed_at.
  * Known consequence — an order opened 23:50 and billed 00:10 lists under the
  * previous day. Fixing that properly means a closed_at column and index.
+ *
+ * The one exception to the day bound is `billed`: that status means the bill
+ * went out and nobody has paid yet (`closed` is the paid one), and the board
+ * drops those orders. Day-bounding them too made an unpaid table that survived
+ * midnight unreachable in the whole app — the table sat on `bill_requested`
+ * with no way back to its bill. Unpaid money is never yesterday's problem, so
+ * those rows carry over regardless of date; the tab tags them as earlier.
  */
 export function completedOrdersQuery(
   supabase: SupabaseClient,
@@ -145,7 +152,7 @@ export function completedOrdersQuery(
     .select(COMPLETED_ORDER_SELECT)
     .eq("tenant_id", tenantId)
     .in("status", ORDER_DONE_STATUSES)
-    .gte("created_at", tzDayStart(now, timeZone).toISOString())
+    .or(`status.eq.billed,created_at.gte.${tzDayStart(now, timeZone).toISOString()}`)
     .order("created_at", { ascending: false })
     .order("created_at", { referencedTable: "order_items" })
     .limit(COMPLETED_ORDER_LIMIT)

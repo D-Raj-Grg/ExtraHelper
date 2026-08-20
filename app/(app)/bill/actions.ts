@@ -4,7 +4,7 @@ import { randomUUID } from "crypto"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
-import { requirePermission } from "@/lib/supabase/guards"
+import { requirePermission, requireTenant } from "@/lib/supabase/guards"
 import { getGateway } from "@/lib/integrations"
 import { PAYMENT_REFERENCE_MAX, type PaymentMethod } from "@/lib/payment-constants"
 
@@ -302,6 +302,94 @@ export async function attachCustomer(
     _bill_id: billId,
     _name: name || null,
     _phone: phone || null,
+  })
+  if (error) return { error: error.message }
+  revalidatePath(`/bill/${billId}`)
+  return { ok: true }
+}
+
+/**
+ * Leave the bill on the guest's tab — the "Unpaid (credit)" checkout.
+ *
+ * Not a no-op with a toast, which is what it used to be: nothing was written,
+ * so the bill stayed open, the order stayed billed, and **the table stayed
+ * occupied** with the guest long gone. `leave_bill_on_credit` keeps the status
+ * (nothing was collected, so inventing `paid` would fabricate takings) and
+ * releases every table on the bill. It refuses a bill with no customer on it —
+ * the same rule the screen checks, on the side that can't be bypassed.
+ */
+export async function leaveOnCredit(billId: string): Promise<BillState> {
+  await requirePermission("payment.take")
+  const supabase = await createClient()
+  const { error } = await supabase.rpc("leave_bill_on_credit", { _bill_id: billId })
+  if (error) return { error: error.message }
+  revalidatePath(`/bill/${billId}`)
+  // The floor is what changed: the tables this bill held are free again.
+  revalidatePath("/pos")
+  return { ok: true }
+}
+
+/** A guest already in the book, for the customer picker. */
+export type CustomerHit = {
+  id: string
+  name: string | null
+  phone: string | null
+  points: number
+}
+
+/**
+ * The tenant's guests, for the "someone who has been in before" picker.
+ *
+ * Capped like the till's own load — an unbounded select would ship the whole
+ * CRM down every time the panel opens. Typing narrows it server-side across
+ * both the name and the number.
+ */
+export async function searchCustomers(query: string): Promise<CustomerHit[]> {
+  // Deliberately not `requirePermission`: that redirects, and this runs from an
+  // effect the moment a panel mounts. A waiter who may open a bill but not take
+  // money would be bounced off the page by a search they never asked for. An
+  // empty book is the honest answer for them — RLS is the floor either way.
+  const tenant = await requireTenant()
+  const supabase = await createClient()
+  const { data: allowed } = await supabase.rpc("has_permission", {
+    _tenant: tenant.tenantId,
+    _key: "payment.take",
+  })
+  if (allowed !== true) return []
+  let q = supabase
+    .from("customers")
+    .select("id, name, phone, loyalty_accounts(points_balance)")
+    .eq("tenant_id", tenant.tenantId)
+  // The `or` filter is parsed as text, so anything that is punctuation *to that
+  // parser* is stripped before it gets there — commas and parens separate its
+  // terms, quotes and backslashes quote them.
+  const term = query.trim().replace(/[,()*"\\]/g, " ").trim()
+  if (term) q = q.or(`name.ilike.%${term}%,phone.ilike.%${term}%`)
+  const { data, error } = await q.order("name").limit(30)
+  if (error || !data) return []
+  return data.map((c) => ({
+    id: c.id,
+    name: c.name,
+    phone: c.phone,
+    // No loyalty row means they have never earned any — a zero, not a null.
+    points: c.loyalty_accounts?.[0]?.points_balance ?? 0,
+  }))
+}
+
+/**
+ * Attach a guest the cashier picked out of the book, by id.
+ *
+ * `attach_bill_customer` can only find someone again through their phone, so a
+ * guest saved with a name and no number would come back as a fresh duplicate
+ * on every visit — with their points left behind on the old row. The RPC
+ * re-checks the id against the tenant.
+ */
+export async function attachCustomerById(billId: string, customerId: string): Promise<BillState> {
+  await requirePermission("payment.take")
+  const supabase = await createClient()
+  const { error } = await supabase.rpc("attach_bill_customer_by_id", {
+    _bill_id: billId,
+    _customer_id: customerId,
   })
   if (error) return { error: error.message }
   revalidatePath(`/bill/${billId}`)
