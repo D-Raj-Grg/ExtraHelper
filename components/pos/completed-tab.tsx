@@ -12,7 +12,7 @@ import {
   ShoppingBagIcon,
 } from "lucide-react"
 
-import { money } from "@/lib/format"
+import { money, tzDayStart } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import {
   billStatusLabel,
@@ -97,6 +97,13 @@ export function CompletedTab({
   /** Reopen the composer on a billed order whose bill hasn't been paid yet. */
   onAmend: (orderId: string) => void
 }) {
+  // Carried over: billed, unpaid, and opened on an earlier business day. Those
+  // rows ignore the tab's day bound (see completedOrdersQuery) so the money
+  // stays reachable, which means they must be labelled — an "earlier" row
+  // counted into today's takings would misstate the day.
+  const dayStart = useMemo(() => tzDayStart(new Date(), timeZone).getTime(), [timeZone])
+  const isEarlier = (o: PosCompletedOrder) => new Date(o.created_at).getTime() < dayStart
+
   const [filter, setFilter] = useState<string>(ALL)
   const [pending, startTransition] = useTransition()
   const { printReceipt } = usePrint()
@@ -135,8 +142,13 @@ export function CompletedTab({
   const active = filter !== ALL && counts.has(filter) ? filter : ALL
   const shown = active === ALL ? orders : orders.filter((o) => o.status === active)
 
-  // Summed from the rows' own lines, so a merged bill can't be counted twice.
-  const takings = shown.reduce((sum, o) => (o.status === "cancelled" ? sum : sum + lineTotal(o)), 0)
+  // Summed from the rows' own lines, so a merged bill can't be counted twice —
+  // and only today's, so a carried-over unpaid table can't inflate the day.
+  const takings = shown.reduce(
+    (sum, o) => (o.status === "cancelled" || isEarlier(o) ? sum : sum + lineTotal(o)),
+    0,
+  )
+  const carried = shown.filter(isEarlier).length
 
   function reprint(billId: string) {
     startTransition(async () => {
@@ -148,7 +160,12 @@ export function CompletedTab({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="text-sm font-semibold text-muted-foreground">Completed today</h3>
+        <h3 className="text-sm font-semibold text-muted-foreground">
+          Completed today
+          {carried > 0 ? (
+            <span className="font-normal"> · {carried} unpaid carried over</span>
+          ) : null}
+        </h3>
         <p className="text-sm text-muted-foreground tabular-nums">
           {shown.length} {shown.length === 1 ? "order" : "orders"} · {money(takings, currency)}
         </p>
@@ -202,7 +219,17 @@ export function CompletedTab({
             return (
               <TableRow key={o.id}>
                 <TableCell className="text-muted-foreground">
-                  <RelativeTime iso={o.created_at} timeZone={timeZone} />
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    <RelativeTime iso={o.created_at} timeZone={timeZone} />
+                    {isEarlier(o) ? (
+                      <Badge
+                        variant="outline"
+                        className="border-orange-500/40 text-orange-700 dark:text-orange-400"
+                      >
+                        Earlier day
+                      </Badge>
+                    ) : null}
+                  </span>
                 </TableCell>
                 <TableCell className="font-mono text-xs tabular-nums">
                   #{o.id.slice(0, 8).toUpperCase()}

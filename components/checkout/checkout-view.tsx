@@ -15,6 +15,8 @@ import {
   removeItemDiscount,
   applyItemDiscount,
   attachCustomer,
+  attachCustomerById,
+  leaveOnCredit,
   payByCard,
   refundBill,
   removeCharge,
@@ -267,9 +269,16 @@ export function CheckoutView({
         setError("Attach a customer before leaving this bill unpaid.")
         return
       }
-      toast.success(`${destination} left unpaid on ${customer.name ?? "the customer"}'s tab.`)
-      if (alsoPrint) void printReceipt(bill.id)
-      router.push("/pos")
+      run(async () => {
+        // Awaited, not fire-and-forget: the table is only free once the RPC
+        // says so, and a failure here has to keep the cashier on the screen.
+        const res = await leaveOnCredit(bill.id)
+        if (res && "error" in res) return res
+        toast.success(`${destination} left unpaid on ${customer.name ?? "the customer"}'s tab.`)
+        if (alsoPrint) await printReceipt(bill.id)
+        router.push("/pos")
+        return { ok: true }
+      })
       return
     }
 
@@ -421,6 +430,7 @@ export function CheckoutView({
                     saveExtras(bill.tip_cents, bill.rounding_cents, note)
                   }}
                   onAttach={(name, phone) => run(() => attachCustomer(bill.id, name, phone))}
+                  onPick={(customerId) => run(() => attachCustomerById(bill.id, customerId))}
                   servedBy={meta.waiterName}
                   settled={settled}
                   disabled={pending}

@@ -3568,6 +3568,10 @@ export type Database = {
         Args: { _bill_id: string; _name: string; _phone: string }
         Returns: string
       }
+      attach_bill_customer_by_id: {
+        Args: { _bill_id: string; _customer_id: string }
+        Returns: string
+      }
       bill_discount_total: {
         Args: { _bill_id: string; _subtotal: number }
         Returns: number
@@ -3715,6 +3719,10 @@ export type Database = {
         Returns: boolean
       }
       is_platform_admin: { Args: never; Returns: boolean }
+      leave_bill_on_credit: {
+        Args: { _bill_id: string }
+        Returns: Database["public"]["Enums"]["bill_status"]
+      }
       list_order_staff: {
         Args: { _tenant: string }
         Returns: {

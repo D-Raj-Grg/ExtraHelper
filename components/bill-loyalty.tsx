@@ -1,10 +1,11 @@
 "use client"
 
 import { useRef, useState, useTransition } from "react"
-import { attachCustomer, redeemPoints } from "@/app/(app)/bill/actions"
+import { attachCustomer, attachCustomerById, redeemPoints } from "@/app/(app)/bill/actions"
 import { money } from "@/lib/format"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { CustomerPicker } from "@/components/customer-picker"
 
 type Customer = { id: string; name: string | null; phone: string | null; points: number }
 
@@ -52,6 +53,16 @@ export function BillLoyalty({
     return (
       <div className="mt-4 rounded-lg border border-dashed p-3">
         <p className="mb-2 text-sm font-medium">Loyalty — attach customer</p>
+        {/* By id first: a returning guest's points live on their existing row,
+            and attaching by name alone would open a second, empty one. */}
+        <CustomerPicker
+          id={`loyalty-search-${billId}`}
+          currency={currency}
+          pointsValueCents={pointsValueCents}
+          disabled={pending}
+          onPick={(customerId) => guard(() => attachCustomerById(billId, customerId))}
+        />
+        <p className="mb-2 mt-3 text-xs font-medium text-muted-foreground">Or someone new</p>
         <div className="flex flex-wrap items-center gap-2">
           <Input
             value={name}
