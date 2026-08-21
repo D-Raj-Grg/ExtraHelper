@@ -55,13 +55,15 @@ export default async function DayClosePage({
       .select(
         "id, order_type, status, created_at, guests, bill_id, " +
           "restaurant_tables!orders_table_id_fkey(label), " +
-          "order_items(qty, unit_price_cents, is_void), " +
-          "bills!orders_bill_id_fkey(status)",
+          // The lines ride along so the detail sheet opens with no round trip.
+          "order_items(id, name_snapshot, qty, unit_price_cents, is_void, notes), " +
+          "bills!orders_bill_id_fkey(status, total_cents)",
       )
       .eq("tenant_id", tenant.tenantId)
       .gte("created_at", report.from)
       .lt("created_at", report.to)
       .order("created_at", { ascending: false })
+      .order("created_at", { referencedTable: "order_items" })
       .limit(DAY_ORDER_LIMIT + 1)
 
     const all = (rows ?? []) as unknown as DayOrder[]
