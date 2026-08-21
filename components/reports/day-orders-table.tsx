@@ -27,37 +27,15 @@ import {
   ORDER_STATUS_STYLE,
   billStatusLabel,
   orderStatusLabel,
-  orderTypeLabel,
 } from "@/lib/order-constants"
 import { cn } from "@/lib/utils"
-import type { DayOrder } from "./day-orders"
-
-/**
- * An order's own non-void lines.
- *
- * Never `bills.total_cents` — `add_order_to_bill` merges tables, so one bill's
- * total appears on every order sharing it and summing the column would double
- * count. Same rule the POS Completed tab follows.
- */
-export function lineTotal(o: DayOrder): number {
-  return (o.order_items ?? [])
-    .filter((l) => !l.is_void)
-    .reduce((sum, l) => sum + l.unit_price_cents * l.qty, 0)
-}
-
-export function lineCount(o: DayOrder): number {
-  return (o.order_items ?? []).filter((l) => !l.is_void).reduce((sum, l) => sum + l.qty, 0)
-}
-
-export function destination(o: DayOrder): string {
-  return o.restaurant_tables?.label
-    ? `Table ${o.restaurant_tables.label}`
-    : orderTypeLabel(o.order_type)
-}
-
-function shortId(id: string): string {
-  return id.slice(0, 8).toUpperCase()
-}
+import {
+  destination,
+  lineCount,
+  lineTotal,
+  shortId,
+  type DayOrder,
+} from "./day-order-utils"
 
 /**
  * The day's orders, each row opening its own detail.
