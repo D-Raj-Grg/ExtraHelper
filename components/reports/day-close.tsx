@@ -16,7 +16,8 @@ import { paymentMethodLabel } from "@/lib/payment-constants"
 import { cn } from "@/lib/utils"
 import { ReportEmpty, ReportSection, TableFrame } from "./report-section"
 import { StatTiles } from "./stat-tiles"
-import { DayOrders, type DayOrder } from "./day-orders"
+import { DayOrders } from "./day-orders"
+import type { DayOrder } from "./day-order-utils"
 import { cutoffLabel, type DayReport } from "./day-report"
 
 function signedMoney(cents: number, currency: string) {

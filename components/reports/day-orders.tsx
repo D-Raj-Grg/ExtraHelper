@@ -1,30 +1,14 @@
 import { formatDateTime, money } from "@/lib/format"
 import { billStatusLabel, orderStatusLabel } from "@/lib/order-constants"
 import { ReportSection } from "./report-section"
-import { DayOrdersTable, destination, lineCount, lineTotal } from "./day-orders-table"
-
-/** The row shape `DayClosePage` selects. */
-export type DayOrder = {
-  id: string
-  order_type: string
-  status: string
-  created_at: string
-  guests: number | null
-  bill_id: string | null
-  restaurant_tables: { label: string } | null
-  order_items: {
-    id: string
-    name_snapshot: string
-    qty: number
-    unit_price_cents: number
-    is_void: boolean
-    notes: string | null
-  }[]
-  bills: { status: string; total_cents: number } | null
-}
-
-/** Cap on the listing. A day past this wants the CSV, not a longer page. */
-export const DAY_ORDER_LIMIT = 500
+import { DayOrdersTable } from "./day-orders-table"
+import {
+  DAY_ORDER_LIMIT,
+  destination,
+  lineCount,
+  lineTotal,
+  type DayOrder,
+} from "./day-order-utils"
 
 /**
  * Every order of the business day, under the totals it adds up to.
