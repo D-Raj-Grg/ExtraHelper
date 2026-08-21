@@ -11,12 +11,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { CARD_GRID, CURRENCIES, TIMEZONES } from "./types"
+import { CARD_GRID, CURRENCIES, DAY_CUTOFFS, TIMEZONES } from "./types"
 
 export function GeneralTab({
   restaurantName,
   currency,
   timezone,
+  dayCutoffMinutes,
   paymentGateway,
   blockNegativeStock,
   qrAutoFire,
@@ -24,6 +25,7 @@ export function GeneralTab({
   restaurantName: string
   currency: string
   timezone: string
+  dayCutoffMinutes: number
   paymentGateway: string
   blockNegativeStock: boolean
   qrAutoFire: boolean
@@ -79,6 +81,27 @@ export function GeneralTab({
                 </SelectContent>
               </Select>
               <FieldDescription>Report windows and shift times are cut on this clock.</FieldDescription>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="dayCutoffMinutes">Day starts at</FieldLabel>
+              <Select name="dayCutoffMinutes" defaultValue={String(dayCutoffMinutes)}>
+                <SelectTrigger id="dayCutoffMinutes" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {DAY_CUTOFFS.map((c) => (
+                    <SelectItem key={c.value} value={String(c.value)}>
+                      {c.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FieldDescription>
+                When the trading day turns over. Set it to 4:00 am and a sale at 1:30 am counts
+                towards the night before. Reports, the day-close sheet and the POS Completed tab
+                all follow it. Changing it re-buckets past days, so yesterday&apos;s figures can
+                move.
+              </FieldDescription>
             </Field>
           </FieldGroup>
         </CardContent>

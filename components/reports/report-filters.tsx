@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { CalendarCheckIcon } from "lucide-react"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
@@ -26,7 +27,7 @@ export function ReportFilters({
 
   return (
     <div className="mb-6 flex flex-col gap-4 print:hidden">
-      <nav aria-label="Report" className="flex flex-wrap gap-1 border-b">
+      <nav aria-label="Report" className="flex flex-wrap items-center gap-1 border-b">
         {REPORT_TABS.map((t) => (
           <Link
             key={t.key}
@@ -43,6 +44,15 @@ export function ReportFilters({
             {t.label}
           </Link>
         ))}
+        {/* A jump, not a fifth tab: the day-close sheet answers about one day,
+            so it takes no part in this page's range. */}
+        <Link
+          href="/reports/day"
+          className={cn(buttonVariants({ variant: "outline", size: "sm" }), "mb-1 ml-auto")}
+        >
+          <CalendarCheckIcon />
+          Day close
+        </Link>
       </nav>
 
       <div className="flex flex-wrap items-end justify-between gap-4">

@@ -92,6 +92,15 @@ export function usePrint() {
     [print],
   )
 
+  /**
+   * The day-close (Z) sheet. Always a reprint: a manager asking for a second
+   * copy at the end of a shift is the normal case, not a mistake.
+   */
+  const printDayReport = useCallback(
+    (day: string) => print({ doc: "day_report", day, reprint: true }),
+    [print],
+  )
+
   const printTest = useCallback(
     (printerId: string) => print({ doc: "test", printerId, reprint: true }),
     [print],
@@ -107,6 +116,7 @@ export function usePrint() {
     printReceipt,
     printOrderSlip,
     printFullKot,
+    printDayReport,
     printTest,
   }
 }

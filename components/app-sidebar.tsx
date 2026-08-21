@@ -49,6 +49,7 @@ const NAV_PERM: Record<string, string> = {
   Inventory: "inventory.view",
   Purchasing: "purchasing.view",
   Reports: "reports.view",
+  "Day close": "reports.view",
   Loyalty: "loyalty.view",
   Menu: "menu.view",
   "Floors & Tables": "tables.view",
@@ -95,6 +96,7 @@ const data = {
       label: "Insights",
       items: [
         { title: "Reports", url: "/reports", icon: <ChartBarIcon /> },
+        { title: "Day close", url: "/reports/day", icon: <CalendarCheckIcon /> },
         { title: "Loyalty", url: "/loyalty", icon: <GiftIcon /> },
       ],
     },

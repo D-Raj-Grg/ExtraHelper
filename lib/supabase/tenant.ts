@@ -11,6 +11,8 @@ export type ActiveTenant = {
   slug: string
   currency: string
   timezone: string
+  /** Minutes past local midnight at which the trading day turns over. 0 = midnight. */
+  dayCutoffMinutes: number
   paymentGateway: string
   /** Set while the tenant sits in its deletion grace window — drives the app-wide banner. */
   deletionScheduledAt: string | null
@@ -43,7 +45,7 @@ async function fetchMemberships(): Promise<Row[]> {
   const { data } = await supabase
     .from("user_tenants")
     .select(
-      "role, tenant_id, tenants(name, slug, deletion_scheduled_at, tenant_settings(currency, timezone, payment_gateway))",
+      "role, tenant_id, tenants(name, slug, deletion_scheduled_at, tenant_settings(currency, timezone, payment_gateway, day_cutoff_minutes))",
     )
     .eq("user_id", user.id)
     .eq("status", "active") // pending (unapproved) memberships don't grant access
@@ -73,12 +75,12 @@ export async function getActiveTenant(): Promise<ActiveTenant | null> {
     if (isAdmin) {
       const { data: t } = await supabase
         .from("tenants")
-        .select("name, slug, deletion_scheduled_at, tenant_settings(currency, timezone, payment_gateway)")
+        .select("name, slug, deletion_scheduled_at, tenant_settings(currency, timezone, payment_gateway, day_cutoff_minutes)")
         .eq("id", imp)
         .maybeSingle()
       if (t) {
         const s = (Array.isArray(t.tenant_settings) ? t.tenant_settings[0] : t.tenant_settings) as
-          | { currency?: string; timezone?: string; payment_gateway?: string }
+          | { currency?: string; timezone?: string; payment_gateway?: string; day_cutoff_minutes?: number }
           | undefined
         return {
           tenantId: imp,
@@ -87,6 +89,7 @@ export async function getActiveTenant(): Promise<ActiveTenant | null> {
           slug: (t.slug as string) ?? "",
           currency: s?.currency ?? "USD",
           timezone: s?.timezone ?? "UTC",
+          dayCutoffMinutes: s?.day_cutoff_minutes ?? 0,
           paymentGateway: s?.payment_gateway ?? "sandbox",
           deletionScheduledAt: (t.deletion_scheduled_at as string | null) ?? null,
           impersonating: true,
@@ -104,7 +107,7 @@ export async function getActiveTenant(): Promise<ActiveTenant | null> {
   const tenant = tenantOf(row)
   const settingsRaw = (tenant as { tenant_settings?: unknown })?.tenant_settings
   const settings = (Array.isArray(settingsRaw) ? settingsRaw[0] : settingsRaw) as
-    | { currency?: string; timezone?: string; payment_gateway?: string }
+    | { currency?: string; timezone?: string; payment_gateway?: string; day_cutoff_minutes?: number }
     | undefined
 
   return {
@@ -114,6 +117,7 @@ export async function getActiveTenant(): Promise<ActiveTenant | null> {
     slug: tenant?.slug ?? "",
     currency: settings?.currency ?? "USD",
     timezone: settings?.timezone ?? "UTC",
+    dayCutoffMinutes: settings?.day_cutoff_minutes ?? 0,
     paymentGateway: settings?.payment_gateway ?? "sandbox",
     deletionScheduledAt: tenant?.deletion_scheduled_at ?? null,
   }

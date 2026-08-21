@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server"
 import { requireRole } from "@/lib/supabase/guards"
 import { writeAudit } from "@/lib/supabase/audit"
 import { RESET_DOMAIN_KEYS, RESET_EVERYTHING } from "@/lib/danger-constants"
+import { DAY_CUTOFFS } from "@/components/settings/types"
 import type { ReceiptTemplate } from "@/lib/print/branding"
 
 export type SettingsState = { error: string } | { ok: true } | undefined
@@ -61,12 +62,20 @@ export async function updateSettings(
   const paymentGateway = String(formData.get("paymentGateway") ?? "sandbox").trim()
   if (!GATEWAYS.includes(paymentGateway)) return { error: "Unknown payment gateway." }
 
+  // When the trading day turns over. Validated against the same list the Select
+  // offers, so an edited request can't smuggle in a cutoff the UI never showed
+  // (and the column's check constraint would reject anyway).
+  const dayCutoffMinutes = Number(formData.get("dayCutoffMinutes") ?? 0)
+  if (!DAY_CUTOFFS.some((c) => c.value === dayCutoffMinutes))
+    return { error: "Unknown day-start time." }
+
   const supabase = await createClient()
   const { error } = await supabase
     .from("tenant_settings")
     .update({
       currency,
       timezone,
+      day_cutoff_minutes: dayCutoffMinutes,
       service_charge: serviceCharge,
       packaging_fee: packagingFee,
       tax_rules: taxRules,

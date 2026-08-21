@@ -16,7 +16,7 @@ export default async function PosPage({
 }) {
   const tenant = await requirePermission("order.view")
   const [data, params] = await Promise.all([
-    loadPosData(tenant.tenantId, tenant.timezone),
+    loadPosData(tenant.tenantId, tenant.timezone, tenant.dayCutoffMinutes),
     searchParams,
   ])
   const initialTab: PosTab = TABS.includes(params.tab as PosTab) ? (params.tab as PosTab) : "orders"
@@ -34,6 +34,7 @@ export default async function PosPage({
         data={data}
         currency={tenant.currency}
         timeZone={tenant.timezone}
+        dayCutoffMinutes={tenant.dayCutoffMinutes}
         tenantId={tenant.tenantId}
         startNew={params.new === "1"}
         initialTab={initialTab}

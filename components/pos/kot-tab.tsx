@@ -53,11 +53,14 @@ export function KotTab({
   initialKots,
   staff,
   timeZone,
+  dayCutoffMinutes = 0,
   tenantId,
 }: {
   initialKots: PosKot[]
   staff: PosStaff[]
   timeZone: string
+  /** Must match the server's, or the finished tail is scoped to a different day. */
+  dayCutoffMinutes?: number
   tenantId: string
 }) {
   const [pending, startTransition] = useTransition()
@@ -81,9 +84,9 @@ export function KotTab({
   }, [staff])
 
   const refetch = useCallback(async () => {
-    const { data } = await kotTabQuery(createClient(), tenantId, timeZone)
+    const { data } = await kotTabQuery(createClient(), tenantId, timeZone, dayCutoffMinutes)
     if (data) setKots(data as unknown as PosKot[])
-  }, [tenantId, timeZone])
+  }, [tenantId, timeZone, dayCutoffMinutes])
 
   // Live: debounced refetch on any ticket / line / order change (joins mean a
   // row-level merge isn't enough — the same reason kds-board refetches).

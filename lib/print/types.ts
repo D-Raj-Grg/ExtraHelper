@@ -13,7 +13,15 @@ export type PrinterRenderMode = "text" | "image"
  * reads before paying and the slip that follows the money are separate
  * decisions — plenty of counters print the first and skip the second.
  */
-export type PrintDoc = "kot" | "bot" | "full_kot" | "order_slip" | "bill" | "receipt" | "test"
+export type PrintDoc =
+  | "kot"
+  | "bot"
+  | "full_kot"
+  | "order_slip"
+  | "bill"
+  | "receipt"
+  | "day_report"
+  | "test"
 export type PrintJobStatus = "queued" | "claimed" | "printed" | "failed" | "cancelled"
 
 /** Everything the agent needs to address one printer and lay a page out for it. */
@@ -84,6 +92,7 @@ export const ASSIGNABLE_DOCS = [
   "order_slip",
   "bill",
   "receipt",
+  "day_report",
 ] as const satisfies readonly PrintDoc[]
 
 export const DOC_LABELS: Record<PrintDoc, string> = {
@@ -93,6 +102,7 @@ export const DOC_LABELS: Record<PrintDoc, string> = {
   order_slip: "Order slip",
   bill: "Bill",
   receipt: "Receipt",
+  day_report: "Day close (Z)",
   test: "Test page",
 }
 
@@ -103,6 +113,7 @@ export const DOC_DESCRIPTIONS: Record<PrintDoc, string> = {
   order_slip: "Itemised slip with prices, for the guest or the waiter",
   bill: "The bill the guest checks, printed before they pay",
   receipt: "Proof of payment, printed on its own once the bill is settled",
+  day_report: "The day's totals, payment split and cash reconciliation — printed at close",
   test: "A width and cut test, printed on demand",
 }
 

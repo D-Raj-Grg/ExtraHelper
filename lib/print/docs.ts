@@ -546,3 +546,221 @@ export function buildTest(
   }
   return { label: printerName, blocks }
 }
+
+// ---------------------------------------------------------------------------
+// Day close (Z)
+// ---------------------------------------------------------------------------
+
+export type DayReportDoc = {
+  restaurant: string
+  timezone: string
+  currency: string
+  report: DayReportPayload
+  printedAt: string
+}
+
+/**
+ * The shape `daily_report` returns. Declared structurally rather than imported
+ * from components/, so this module keeps its no-server-imports promise and the
+ * renderer stays independent of the page that also displays it.
+ */
+export type DayReportPayload = {
+  day: string
+  day_label: string
+  cutoff_minutes: number
+  sales: {
+    revenue_cents: number
+    subtotal_cents: number
+    tax_cents: number
+    service_cents: number
+    discount_cents: number
+    tip_cents: number
+    rounding_cents: number
+    bills: number
+    tables_served: number
+    avg_cents: number
+  }
+  payments: { method: string; amount_cents: number; count: number }[]
+  payments_total_cents: number
+  carried_cents: number
+  refunds: { total_cents: number; cash_cents: number; count: number }
+  voids: { count: number; lines: number; value_cents: number }
+  cancellations: { count: number; value_cents: number }
+  void_bills: number
+  cash: {
+    open_count: number
+    sessions: {
+      cashier: string | null
+      opening_float_cents: number
+      expected_cents: number | null
+      counted_cents: number | null
+      variance_cents: number | null
+      payouts_cents: number
+      paid_in_cents: number
+    }[]
+    totals: { expected_cents: number; counted_cents: number; variance_cents: number }
+  }
+  top_items: { description: string; qty: number; revenue_cents: number }[]
+}
+
+/**
+ * The day-close (Z) report, on the counter's roll.
+ *
+ * Reads the same `daily_report` payload the screen does, so the paper and the
+ * page can never disagree — which is the whole point of a Z-report being
+ * signable. `wantsDrawer` stays false: closing the day must not pop the till.
+ */
+export function buildDayReport(d: DayReportDoc): PrintDocModel {
+  const cur = d.currency
+  const s = d.report.sales
+  const cash = d.report.cash
+  const blocks: DocBlock[] = [
+    { kind: "title", text: d.restaurant.toUpperCase() },
+    { kind: "subtitle", text: "DAY CLOSE (Z)" },
+    { kind: "line", text: d.report.day_label, align: "center" },
+  ]
+
+  if (d.report.cutoff_minutes) {
+    const h = Math.floor(d.report.cutoff_minutes / 60)
+    const m = d.report.cutoff_minutes % 60
+    const wall = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`
+    blocks.push({ kind: "line", text: `${wall} to ${wall} next day`, align: "center" })
+  }
+
+  if (cash.open_count > 0) {
+    blocks.push({ kind: "banner", text: "*** DRAWER STILL OPEN ***" })
+  }
+
+  blocks.push(
+    { kind: "divider", char: "=" },
+    { kind: "row", label: "Gross", value: money(s.subtotal_cents, cur) },
+    { kind: "row", label: "Discounts", value: money(-s.discount_cents, cur) },
+    { kind: "row", label: "Service", value: money(s.service_cents, cur) },
+    { kind: "row", label: "Tax", value: money(s.tax_cents, cur) },
+  )
+  if (s.tip_cents) blocks.push({ kind: "row", label: "Tips", value: money(s.tip_cents, cur) })
+  if (s.rounding_cents)
+    blocks.push({ kind: "row", label: "Rounding", value: money(s.rounding_cents, cur) })
+  blocks.push(
+    { kind: "divider" },
+    { kind: "row", label: "TOTAL", value: money(s.revenue_cents, cur), bold: true, large: true },
+    { kind: "divider" },
+    { kind: "line", text: "PAYMENTS", bold: true },
+  )
+
+  for (const p of d.report.payments) {
+    blocks.push({
+      kind: "row",
+      label: `${paymentMethodLabel(p.method)} (${p.count})`,
+      value: money(p.amount_cents, cur),
+    })
+  }
+  if (!d.report.payments.length) blocks.push({ kind: "line", text: "Nothing tendered" })
+  blocks.push({
+    kind: "row",
+    label: "Payments total",
+    value: money(d.report.payments_total_cents, cur),
+    bold: true,
+  })
+  // Revenue buckets on the bill date, payments on the payment date, so the two
+  // legitimately differ. Stating the gap is what stops it reading as an error.
+  if (d.report.carried_cents !== 0) {
+    blocks.push({
+      kind: "line",
+      text:
+        d.report.carried_cents > 0
+          ? `incl. ${money(d.report.carried_cents, cur)} for earlier bills`
+          : `${money(-d.report.carried_cents, cur)} of today unsettled`,
+    })
+  }
+
+  blocks.push(
+    { kind: "divider" },
+    { kind: "line", text: "COUNTS", bold: true },
+    { kind: "row", label: "Bills", value: String(s.bills) },
+    { kind: "row", label: "Tables served", value: String(s.tables_served) },
+    { kind: "row", label: "Avg ticket", value: money(s.avg_cents, cur) },
+    {
+      kind: "row",
+      label: `Voids (${d.report.voids.count})`,
+      value: money(d.report.voids.value_cents, cur),
+    },
+    {
+      kind: "row",
+      label: `Cancelled (${d.report.cancellations.count})`,
+      value: money(d.report.cancellations.value_cents, cur),
+    },
+    {
+      kind: "row",
+      label: `Refunds (${d.report.refunds.count})`,
+      value: money(d.report.refunds.total_cents, cur),
+    },
+  )
+  if (d.report.void_bills)
+    blocks.push({ kind: "row", label: "Voided bills", value: String(d.report.void_bills) })
+
+  blocks.push({ kind: "divider" }, { kind: "line", text: "CASH DRAWER", bold: true })
+  if (cash.sessions.length === 0) {
+    blocks.push({ kind: "line", text: "No drawer closed today" })
+  } else {
+    for (const x of cash.sessions) {
+      blocks.push(
+        { kind: "line", text: x.cashier ?? "Unknown cashier", bold: true },
+        { kind: "row", label: "Float", value: money(x.opening_float_cents, cur) },
+        { kind: "row", label: "Cash out", value: money(x.payouts_cents, cur) },
+        { kind: "row", label: "Paid in", value: money(x.paid_in_cents, cur) },
+        { kind: "row", label: "Expected", value: money(x.expected_cents ?? 0, cur) },
+        { kind: "row", label: "Counted", value: money(x.counted_cents ?? 0, cur) },
+        {
+          kind: "row",
+          label: "Variance",
+          value: signedCents(x.variance_cents ?? 0, cur),
+          bold: true,
+        },
+        { kind: "space" },
+      )
+    }
+    if (cash.sessions.length > 1) {
+      blocks.push({
+        kind: "row",
+        label: "Total variance",
+        value: signedCents(cash.totals.variance_cents, cur),
+        bold: true,
+      })
+    }
+  }
+
+  if (d.report.top_items.length) {
+    blocks.push(
+      { kind: "divider" },
+      { kind: "line", text: "TOP ITEMS", bold: true },
+      {
+        kind: "particulars",
+        rows: d.report.top_items.map((t) => ({
+          name: t.description,
+          rate: money(Math.round(t.revenue_cents / Math.max(1, Number(t.qty))), cur),
+          qty: Number(t.qty),
+          amount: money(t.revenue_cents, cur),
+        })),
+      },
+    )
+  }
+
+  blocks.push(
+    { kind: "divider", char: "=" },
+    { kind: "line", text: `Printed ${formatDateTime(d.printedAt, d.timezone)}`, align: "center" },
+    { kind: "space" },
+    { kind: "line", text: "Cashier _______  Manager _______", align: "center" },
+  )
+
+  return {
+    label: `Day close · ${d.report.day_label}`,
+    blocks,
+    // A Z-report must never pop the till.
+    wantsDrawer: false,
+  }
+}
+
+function signedCents(cents: number, currency: string): string {
+  return `${cents > 0 ? "+" : ""}${money(cents, currency)}`
+}

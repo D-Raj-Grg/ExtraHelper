@@ -112,6 +112,7 @@ Assigning a document to a printer *is* the auto-print switch:
 | **Full KOT** | the first ticket of an order — one consolidated ticket for the pass |
 | **Order slip** | on demand, from the order card. The guest's itemised copy, with prices |
 | **Bill & receipt** | the bill is settled |
+| **Day close (Z)** | on demand, from Reports → Day close. The day's totals, payment split and cash reconciliation |
 
 Several printers may carry the same document; all of them print it. A printer with **nothing** assigned still exists and can be chosen for a manual print — it just never fires on its own.
 
@@ -121,10 +122,13 @@ Kitchen and bar tickets check the station's own printer first (Menu → Stations
 
 ```
 KOT / BOT   station.printer_id  →  printers carrying kot/bot  →  nothing queued
+Day close   printers carrying day_report  →  the receipt/bill printer  →  nothing queued
 everything else                 →  printers carrying that document
 ```
 
-If nothing is queued, the UI offers the browser print view (`/kot/<id>`, `/receipt/<id>`) as an explicit click. It is never opened for you: a `window.open` after an `await` is a popup, and browsers eat it.
+A day close falls back to whichever printer already carries the receipt or the bill: it belongs on the counter's roll, and nobody sets up a new document assignment before their first close.
+
+If nothing is queued, the UI offers the browser print view (`/kot/<id>`, `/receipt/<id>`, `/reports/day?date=<ymd>`) as an explicit click. It is never opened for you: a `window.open` after an `await` is a popup, and browsers eat it.
 
 ## Troubleshooting
 
@@ -151,6 +155,7 @@ If nothing is queued, the UI offers the browser print view (`/kot/<id>`, `/recei
 |---|---|
 | Schema, RPCs, enqueue triggers | `supabase/migrations/20260731160000_printing_v2_enums.sql`, `20260731160100_printing_v2.sql`, `20260731170000_printing_v2_guards.sql`, `20260801090000_printing_bluetooth_enum.sql`, `20260801090100_printing_bluetooth.sql` |
 | Document model + builders | `lib/print/docs.ts` |
+| Day close (Z): enum, queue RPC, page | `supabase/migrations/20260821092000_print_doc_day_report_enum.sql`, `20260821092100_day_report_print.sql`, `app/(app)/reports/day/page.tsx` |
 | ESC/POS text renderer | `lib/print/escpos.ts`, `lib/print/escpos-render.ts` |
 | Payload choice | `lib/print/render.ts` |
 | Job → bytes | `lib/print/job-render.ts` (shared by the server action and the API route) |

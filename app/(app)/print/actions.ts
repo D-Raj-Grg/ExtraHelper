@@ -29,6 +29,8 @@ export type EnqueueInput = {
   kotId?: string
   billId?: string
   orderId?: string
+  /** day_report only: which business day, as "YYYY-MM-DD". */
+  day?: string
   /** Manual "print to this one". Otherwise routing decides. */
   printerId?: string
   /**
@@ -76,37 +78,46 @@ export async function enqueuePrint(input: EnqueueInput): Promise<EnqueueResult> 
     // second-guess it.
     const routed = kot?.kitchen_stations?.printer_id
     if (routed) targets = [{ printerId: routed, copies: 1 }]
-  } else {
+  } else if (doc !== "day_report") {
     branchId = await branchOf(supabase, tenant.tenantId, input)
   }
 
   if (input.printerId) {
     targets = [{ printerId: input.printerId, copies: 1 }]
   } else if (!targets.length) {
-    const { data } = await supabase
-      .from("printer_documents")
-      .select("printer_id, copies, printers!inner(is_active, branch_id)")
-      .eq("tenant_id", tenant.tenantId)
-      .eq("doc", doc)
-
-    targets = (
-      (data ?? []) as unknown as {
-        printer_id: string
-        copies: number
-        printers: { is_active: boolean; branch_id: string | null }
-      }[]
-    )
-      .filter(
-        (r) =>
-          r.printers?.is_active &&
-          // A printer tied to a branch only prints that branch's orders.
-          (branchId === null || r.printers.branch_id === null || r.printers.branch_id === branchId),
-      )
-      .map((r) => ({ printerId: r.printer_id, copies: r.copies }))
+    targets = await routeTo(supabase, tenant.tenantId, doc, branchId)
+    // A day close belongs on the counter's roll, and nobody sets up a new
+    // document assignment before their first one. Fall back to whichever
+    // printer already carries the paper a Z-report is read on — the same
+    // reasoning /receipt/[billId] uses to find the counter.
+    if (doc === "day_report" && !targets.length) {
+      targets = await routeTo(supabase, tenant.tenantId, "receipt", branchId)
+      if (!targets.length) targets = await routeTo(supabase, tenant.tenantId, "bill", branchId)
+      // One copy: the fallback printer's `receipt` copy count answers a
+      // different question ("two slips per sale"), not this one.
+      targets = targets.slice(0, 1).map((t) => ({ ...t, copies: 1 }))
+    }
   }
 
   if (!targets.length) {
     return { noPrinter: true, fallbackUrl: fallbackUrlFor(input) }
+  }
+
+  if (doc === "day_report") {
+    const jobIds: string[] = []
+    for (const target of targets) {
+      const { data, error } = await supabase.rpc("enqueue_day_report_job", {
+        _tenant: tenant.tenantId,
+        _printer_id: target.printerId,
+        _day: input.day ?? null,
+        _copies: target.copies,
+        _idem: input.reprint ? null : `day_report:${input.day ?? "today"}:${target.printerId}`,
+      })
+      if (error) return { error: error.message }
+      if (data) jobIds.push(data as string)
+    }
+    revalidatePath("/settings")
+    return { jobIds }
   }
 
   const jobIds: string[] = []
@@ -128,6 +139,35 @@ export async function enqueuePrint(input: EnqueueInput): Promise<EnqueueResult> 
 
   revalidatePath("/settings")
   return { jobIds }
+}
+
+/** Printers assigned this document, active, and not tied to a different branch. */
+async function routeTo(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  tenantId: string,
+  doc: PrintDoc,
+  branchId: string | null,
+): Promise<{ printerId: string; copies: number }[]> {
+  const { data } = await supabase
+    .from("printer_documents")
+    .select("printer_id, copies, printers!inner(is_active, branch_id)")
+    .eq("tenant_id", tenantId)
+    .eq("doc", doc)
+
+  return (
+    (data ?? []) as unknown as {
+      printer_id: string
+      copies: number
+      printers: { is_active: boolean; branch_id: string | null }
+    }[]
+  )
+    .filter(
+      (r) =>
+        r.printers?.is_active &&
+        // A printer tied to a branch only prints that branch's orders.
+        (branchId === null || r.printers.branch_id === null || r.printers.branch_id === branchId),
+    )
+    .map((r) => ({ printerId: r.printer_id, copies: r.copies }))
 }
 
 /** Which branch this document belongs to, so a printer tied to one is skipped. */
@@ -160,6 +200,9 @@ async function branchOf(
 function fallbackUrlFor(input: EnqueueInput): string | null {
   if (input.kotId) return `/kot/${input.kotId}`
   if (input.billId) return `/receipt/${input.billId}`
+  if (input.doc === "day_report") {
+    return input.day ? `/reports/day?date=${input.day}` : "/reports/day"
+  }
   return null
 }
 

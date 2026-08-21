@@ -1,10 +1,12 @@
+import Link from "next/link"
+
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { money } from "@/lib/format"
 import { paymentMethodLabel } from "@/lib/payment-constants"
 import { delta } from "@/lib/report-range"
 import { BreakdownTable, ReportSection } from "./report-section"
 import { StatTiles } from "./stat-tiles"
-import type { Breakdown, ReportCtx, Sales } from "./types"
+import type { Breakdown, DayRow, ReportCtx, Sales } from "./types"
 
 const ZERO: Sales = {
   revenue_cents: 0,
@@ -24,7 +26,8 @@ export async function SalesTab({
   tz,
   cur,
 }: ReportCtx & { PF: string; PT: string; tz: string }) {
-  const [c1, p1, byCat, byType, byHour, byTable, extras, top, pays, branches] = await Promise.all([
+  const [c1, p1, byCat, byType, byHour, byTable, extras, top, pays, branches, byDay] =
+    await Promise.all([
     supabase.rpc("report_sales", { _tenant: tenantId, _from: F, _to: T }),
     supabase.rpc("report_sales", { _tenant: tenantId, _from: PF, _to: PT }),
     supabase.rpc("report_sales_by_category", { _tenant: tenantId, _from: F, _to: T }),
@@ -41,6 +44,8 @@ export async function SalesTab({
     supabase.rpc("report_top_items", { _tenant: tenantId, _from: F, _to: T, _limit: 10, _offset: 0 }),
     supabase.rpc("report_payments", { _tenant: tenantId, _from: F, _to: T }),
     supabase.rpc("report_by_branch", { _tenant: tenantId, _from: F, _to: T }),
+    // The per-day series. Server-capped at 366 rows — see the note under the table.
+    supabase.rpc("report_sales_by_day", { _tenant: tenantId, _from: F, _to: T }),
   ])
 
   const topItems = (top.data ?? []) as { description: string; qty: number; revenue_cents: number }[]
@@ -57,6 +62,11 @@ export async function SalesTab({
     tables_served: 0,
     paid_orders: 0,
   }) as { voids: number; refunds_cents: number; tables_served: number; paid_orders: number }
+
+  const days = (byDay.data ?? []) as DayRow[]
+  // The RPC caps at 366 rows. Say so rather than letting an "All time" window
+  // quietly look like it covered everything.
+  const daysCapped = days.length >= 366
 
   const avg = c.orders > 0 ? Math.round(c.revenue_cents / c.orders) : 0
   const turnover = e.tables_served > 0 ? (e.paid_orders / e.tables_served).toFixed(1) : "—"
@@ -83,6 +93,60 @@ export async function SalesTab({
           { label: "Table turnover", value: turnover },
         ]}
       />
+
+      <ReportSection
+        title="By day"
+        rows={days.map((d) => ({
+          date: d.day_label,
+          orders: Number(d.orders),
+          revenue: money(d.revenue_cents, cur),
+          avg: money(d.avg_cents, cur),
+        }))}
+        columns={[
+          { key: "date", label: "Date" },
+          { key: "orders", label: "Orders" },
+          { key: "revenue", label: "Revenue" },
+          { key: "avg", label: "Avg ticket" },
+        ]}
+        filename="sales-by-day"
+        empty="No sales in this period."
+      >
+        <Table className="w-full text-sm">
+          <TableHeader className="bg-muted/50">
+            <TableRow>
+              <TableHead className="px-3 py-2 font-medium">Date</TableHead>
+              <TableHead className="px-3 py-2 text-right font-medium">Orders</TableHead>
+              <TableHead className="px-3 py-2 text-right font-medium">Revenue</TableHead>
+              <TableHead className="px-3 py-2 text-right font-medium">Avg ticket</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {days.map((d) => (
+              <TableRow key={d.day}>
+                <TableCell className="px-3 py-2 whitespace-nowrap">
+                  <Link href={`/reports/day?date=${d.day}`} className="hover:underline">
+                    {d.day_label}
+                  </Link>
+                </TableCell>
+                <TableCell className="px-3 py-2 text-right tabular-nums text-muted-foreground">
+                  {Number(d.orders)}
+                </TableCell>
+                <TableCell className="px-3 py-2 text-right tabular-nums">
+                  {money(d.revenue_cents, cur)}
+                </TableCell>
+                <TableCell className="px-3 py-2 text-right tabular-nums text-muted-foreground">
+                  {money(d.avg_cents, cur)}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+        {daysCapped ? (
+          <p className="px-3 py-2 text-xs text-muted-foreground">
+            Showing the most recent 366 days. Narrow the range to see earlier ones.
+          </p>
+        ) : null}
+      </ReportSection>
 
       <div className="grid gap-6 md:grid-cols-2">
         <BreakdownTable
