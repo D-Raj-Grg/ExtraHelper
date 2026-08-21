@@ -14,9 +14,11 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import {
   buildBill,
   buildFullKot,
+  buildDayReport,
   buildKot,
   buildOrderSlip,
   buildTest,
+  type DayReportPayload,
   type PrintDocModel,
 } from "./docs"
 import { renderForPrinter } from "./render"
@@ -85,6 +87,8 @@ type JobRow = {
   kot_id: string | null
   bill_id: string | null
   order_id: string | null
+  /** Only a day_report carries one; every other doc is addressed by a subject id. */
+  business_day: string | null
   copies: number
   attempts: number
 }
@@ -101,7 +105,7 @@ export async function renderJobWith(
 ): Promise<PreparedPrintJob | { error: string }> {
   const { data: jobRow } = await supabase
     .from("print_jobs")
-    .select("id, doc, printer_id, kot_id, bill_id, order_id, copies, attempts")
+    .select("id, doc, printer_id, kot_id, bill_id, order_id, business_day, copies, attempts")
     .eq("id", jobId)
     .eq("tenant_id", tenant.tenantId)
     .maybeSingle()
@@ -135,7 +139,9 @@ export async function renderJobWith(
       ? `/kot/${job.kot_id}`
       : job.bill_id
         ? `/receipt/${job.bill_id}`
-        : null,
+        : job.business_day
+          ? `/reports/day?date=${job.business_day}`
+          : null,
     label: built.doc.label,
     copies: job.copies,
   }
@@ -198,8 +204,46 @@ async function buildForJob(
       return job.bill_id
         ? buildBillDoc(supabase, job.bill_id, tenant)
         : { error: "That bill no longer exists." }
+    case "day_report":
+      return buildDayReportDoc(supabase, job.id, tenant)
     case "test":
       return buildTestDoc(supabase, job.printer_id, tenant)
+  }
+}
+
+// --- day close (Z) ----------------------------------------------------------
+
+/**
+ * The day-close sheet, from the same aggregation the page reads. Nothing is
+ * summed here: paper and screen must agree, and two implementations would
+ * eventually not.
+ *
+ * Addressed by the JOB, not by a date, and through `daily_report_for_print`
+ * rather than `daily_report`. The queue is drained by whichever staff member
+ * has the app open, or by the headless agent signed in as an ordinary user —
+ * and `daily_report` needs `reports.view`, which a cashier does not hold. Going
+ * through the page's own RPC meant a manager could queue the sheet and the till
+ * that owns the printer would fail to render it. The job's existence is the
+ * authorization: only a reports.view holder can enqueue one.
+ */
+async function buildDayReportDoc(
+  supabase: Db,
+  jobId: string,
+  tenant: TenantCtx,
+): Promise<{ doc: PrintDocModel } | { error: string }> {
+  const { data, error } = await supabase.rpc("daily_report_for_print", { _job_id: jobId })
+  if (error) return { error: error.message }
+  if (!data) return { error: "That day's report could not be built." }
+
+  const report = data as unknown as DayReportPayload
+  return {
+    doc: buildDayReport({
+      restaurant: tenant.name,
+      timezone: tenant.timezone,
+      currency: tenant.currency,
+      report,
+      printedAt: new Date().toISOString(),
+    }),
   }
 }
 

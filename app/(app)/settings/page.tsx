@@ -25,7 +25,7 @@ export default async function SettingsPage() {
     supabase
       .from("tenant_settings")
       .select(
-        "currency, timezone, service_charge, packaging_fee, tax_rules, receipt_template, block_negative_stock, payment_gateway, printing_mode, qr_auto_fire",
+        "currency, timezone, day_cutoff_minutes, service_charge, packaging_fee, tax_rules, receipt_template, block_negative_stock, payment_gateway, printing_mode, qr_auto_fire",
       )
       .eq("tenant_id", tenant.tenantId)
       .maybeSingle(),
@@ -143,6 +143,7 @@ export default async function SettingsPage() {
         restaurantName={tenant.name}
         currency={settings?.currency ?? "USD"}
         timezone={settings?.timezone ?? "UTC"}
+        dayCutoffMinutes={Number(settings?.day_cutoff_minutes ?? 0)}
         serviceCharge={Number(settings?.service_charge ?? 0)}
         packagingFee={Number(settings?.packaging_fee ?? 0)}
         taxRules={taxRules}

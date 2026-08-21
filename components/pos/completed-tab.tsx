@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/table"
 import { usePrint } from "@/components/print/use-print"
 import { ChoiceChip } from "@/components/pos/choice-chip"
+import { DaySummaryBar } from "@/components/pos/day-summary-bar"
 import { Frame } from "@/components/pos/pos-empty-state"
 import { RelativeTime } from "@/components/pos/relative-time"
 import type { PosCompletedOrder } from "@/components/pos/types"
@@ -84,6 +85,7 @@ export function CompletedTab({
   orders,
   currency,
   timeZone,
+  dayCutoffMinutes = 0,
   canCheckout,
   onGoToOrders,
   onAmend,
@@ -91,6 +93,8 @@ export function CompletedTab({
   orders: PosCompletedOrder[]
   currency: string
   timeZone: string
+  /** Minutes past local midnight the trading day turns over — must match the query's. */
+  dayCutoffMinutes?: number
   /** Holds checkout.view. The bill page and the print RPC enforce it server-side too. */
   canCheckout: boolean
   onGoToOrders: () => void
@@ -101,7 +105,10 @@ export function CompletedTab({
   // rows ignore the tab's day bound (see completedOrdersQuery) so the money
   // stays reachable, which means they must be labelled — an "earlier" row
   // counted into today's takings would misstate the day.
-  const dayStart = useMemo(() => tzDayStart(new Date(), timeZone).getTime(), [timeZone])
+  const dayStart = useMemo(
+    () => tzDayStart(new Date(), timeZone, dayCutoffMinutes).getTime(),
+    [timeZone, dayCutoffMinutes],
+  )
   const isEarlier = (o: PosCompletedOrder) => new Date(o.created_at).getTime() < dayStart
 
   const [filter, setFilter] = useState<string>(ALL)
@@ -142,14 +149,6 @@ export function CompletedTab({
   const active = filter !== ALL && counts.has(filter) ? filter : ALL
   const shown = active === ALL ? orders : orders.filter((o) => o.status === active)
 
-  // Summed from the rows' own lines, so a merged bill can't be counted twice —
-  // and only today's, so a carried-over unpaid table can't inflate the day.
-  const takings = shown.reduce(
-    (sum, o) => (o.status === "cancelled" || isEarlier(o) ? sum : sum + lineTotal(o)),
-    0,
-  )
-  const carried = shown.filter(isEarlier).length
-
   function reprint(billId: string) {
     startTransition(async () => {
       // These orders are done, so the paper wanted here is the receipt.
@@ -159,15 +158,20 @@ export function CompletedTab({
 
   return (
     <div className="space-y-4">
+      {/* Reads `orders`, not `shown`: the chips filter the table, not the day. */}
+      <DaySummaryBar
+        orders={orders}
+        currency={currency}
+        cutoffMinutes={dayCutoffMinutes}
+        dayStart={dayStart}
+        lineTotal={lineTotal}
+        counts={counts}
+      />
+
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="text-sm font-semibold text-muted-foreground">
-          Completed today
-          {carried > 0 ? (
-            <span className="font-normal"> · {carried} unpaid carried over</span>
-          ) : null}
-        </h3>
+        <h3 className="text-sm font-semibold text-muted-foreground">Completed orders</h3>
         <p className="text-sm text-muted-foreground tabular-nums">
-          {shown.length} {shown.length === 1 ? "order" : "orders"} · {money(takings, currency)}
+          Showing {shown.length} {shown.length === 1 ? "order" : "orders"}
         </p>
       </div>
 

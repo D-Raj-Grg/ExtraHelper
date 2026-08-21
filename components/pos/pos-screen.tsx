@@ -41,6 +41,7 @@ export function PosScreen({
   data,
   currency,
   timeZone,
+  dayCutoffMinutes = 0,
   tenantId,
   openOrderId = null,
   startNew = false,
@@ -50,6 +51,9 @@ export function PosScreen({
   data: PosData
   currency: string
   timeZone: string
+  /** Minutes past local midnight the trading day turns over. Must match the
+      server's `tenant_day_start`, or the refetch scopes a different day. */
+  dayCutoffMinutes?: number
   tenantId: string
   /** Set ⇒ we arrived by deep link and the modal opens on this order. */
   openOrderId?: string | null
@@ -163,9 +167,14 @@ export function PosScreen({
   // Unlike refetchOrders above, this one shares the *query* with the server
   // rather than the select string, so the two can't drift at all.
   const refetchCompleted = useCallback(async () => {
-    const { data: rows } = await completedOrdersQuery(createClient(), tenantId, timeZone)
+    const { data: rows } = await completedOrdersQuery(
+      createClient(),
+      tenantId,
+      timeZone,
+      dayCutoffMinutes,
+    )
     if (rows) setCompleted(rows as unknown as PosCompletedOrder[])
-  }, [tenantId, timeZone])
+  }, [tenantId, timeZone, dayCutoffMinutes])
 
   // Read through a ref so the Realtime callback doesn't need `tab` in its deps
   // (usePosRealtime holds the callback in a ref of its own precisely so the
@@ -270,6 +279,7 @@ export function PosScreen({
           initialKots={posData.kots}
           staff={data.staff}
           timeZone={timeZone}
+          dayCutoffMinutes={dayCutoffMinutes}
           tenantId={tenantId}
         />
       ) : null}
@@ -279,6 +289,7 @@ export function PosScreen({
           orders={completed}
           currency={currency}
           timeZone={timeZone}
+          dayCutoffMinutes={dayCutoffMinutes}
           canCheckout={data.canCheckout}
           onGoToOrders={() => selectTab("orders")}
           onAmend={(orderId) => setModal({ mode: "amend", orderId })}

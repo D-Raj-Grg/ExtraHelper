@@ -83,3 +83,21 @@ export const TIMEZONES = [
 /** Shared card grid: two columns from `lg`, cards top-aligned so uneven
  * heights don't stretch. Every settings tab uses this so the rhythm matches. */
 export const CARD_GRID = "grid items-start gap-6 lg:grid-cols-2"
+
+/**
+ * When the trading day turns over, in minutes past local midnight.
+ *
+ * A restaurant's day does not end at midnight — a sale rung at 01:30 belongs to
+ * the night before. Shared by the Select and by `updateSettings`, so the server
+ * rejects exactly what the UI never offered. Mirrors
+ * `tenant_settings.day_cutoff_minutes` and `public.business_day`.
+ */
+export const DAY_CUTOFFS: { value: number; label: string }[] = [
+  { value: 0, label: "Midnight" },
+  { value: 60, label: "1:00 am" },
+  { value: 120, label: "2:00 am" },
+  { value: 180, label: "3:00 am" },
+  { value: 240, label: "4:00 am" },
+  { value: 300, label: "5:00 am" },
+  { value: 360, label: "6:00 am" },
+]

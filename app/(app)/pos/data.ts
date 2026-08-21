@@ -108,10 +108,15 @@ export async function loadComposerData(tenantId: string): Promise<PosComposerDat
  * only difference is whether the modal starts open — so the fetch lives here
  * rather than being written twice.
  *
- * `timeZone` is the tenant's: the Completed tab and the KOT tail are scoped to
- * the restaurant's own day, not the server's.
+ * `timeZone` and `cutoffMinutes` are the tenant's: the Completed tab and the
+ * KOT tail are scoped to the restaurant's own business day, not the server's,
+ * and that day need not start at midnight.
  */
-export async function loadPosData(tenantId: string, timeZone: string): Promise<PosData> {
+export async function loadPosData(
+  tenantId: string,
+  timeZone: string,
+  cutoffMinutes = 0,
+): Promise<PosData> {
   const supabase = await createClient()
 
   // Nested rather than sequential: the composer's six and the board's four all
@@ -133,9 +138,9 @@ export async function loadPosData(tenantId: string, timeZone: string): Promise<P
       // Kitchen tickets for the KOT tab. Finished ones come down too so the
       // Completed view has something to show without a second round trip — the
       // builder is what keeps that tail from being every ticket ever fired.
-      kotTabQuery(supabase, tenantId, timeZone),
+      kotTabQuery(supabase, tenantId, timeZone, cutoffMinutes),
       // Today's finished orders, for the Completed tab.
-      completedOrdersQuery(supabase, tenantId, timeZone),
+      completedOrdersQuery(supabase, tenantId, timeZone, cutoffMinutes),
       // Whether this member may open a bill / reprint its receipt. A parallel
       // round trip rather than reading `role`, because custom roles exist and
       // `role === "cashier"` is not the same question.

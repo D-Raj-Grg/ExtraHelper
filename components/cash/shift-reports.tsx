@@ -10,18 +10,8 @@ import {
 } from "@/components/ui/table"
 import { formatDateTime, money } from "@/lib/format"
 import { cn } from "@/lib/utils"
+import { variance } from "./variance"
 import type { ClosedSession } from "./types"
-
-/**
- * Variance is `counted − expected` (see close_cash_session): negative means the
- * drawer came up short, positive means it was over. Both are worth a second
- * look, but only short is a loss — so they don't share a colour.
- */
-function variance(cents: number) {
-  if (cents === 0) return { label: "Balanced", tone: "text-emerald-600 dark:text-emerald-400" }
-  if (cents < 0) return { label: "Short", tone: "text-destructive" }
-  return { label: "Over", tone: "text-amber-600 dark:text-amber-400" }
-}
 
 function signedMoney(cents: number, currency: string) {
   return `${cents > 0 ? "+" : ""}${money(cents, currency)}`

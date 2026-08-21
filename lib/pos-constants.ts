@@ -78,12 +78,16 @@ export const ORDER_DONE_STATUSES = ["billed", "closed", "cancelled"]
  *
  * The FK hint is spelled out for the same reason the tables one is: an implicit
  * embed breaks the day a second FK to bills appears.
+ *
+ * The bill's payments ride along so the day summary can show the split without
+ * a second round trip. Merged bills repeat across rows, so anything summing
+ * these must dedupe by bill id first — see DaySummaryBar.
  */
 export const COMPLETED_ORDER_SELECT =
   "id, order_type, status, created_at, guests, table_id, bill_id, " +
   "restaurant_tables!orders_table_id_fkey(label), " +
   "order_items(id, name_snapshot, qty, unit_price_cents, is_void), " +
-  "bills!orders_bill_id_fkey(id, status, total_cents)"
+  "bills!orders_bill_id_fkey(id, status, total_cents, payments(method, amount_cents, status))"
 
 /**
  * A busy till closes a few hundred orders a day. Caps the worst case without a
@@ -145,6 +149,7 @@ export function completedOrdersQuery(
   supabase: SupabaseClient,
   tenantId: string,
   timeZone: string,
+  cutoffMinutes = 0,
   now: Date = new Date(),
 ) {
   return supabase
@@ -152,7 +157,7 @@ export function completedOrdersQuery(
     .select(COMPLETED_ORDER_SELECT)
     .eq("tenant_id", tenantId)
     .in("status", ORDER_DONE_STATUSES)
-    .or(`status.eq.billed,created_at.gte.${tzDayStart(now, timeZone).toISOString()}`)
+    .or(`status.eq.billed,created_at.gte.${tzDayStart(now, timeZone, cutoffMinutes).toISOString()}`)
     .order("created_at", { ascending: false })
     .order("created_at", { referencedTable: "order_items" })
     .limit(COMPLETED_ORDER_LIMIT)
@@ -169,9 +174,10 @@ export function kotTabQuery(
   supabase: SupabaseClient,
   tenantId: string,
   timeZone: string,
+  cutoffMinutes = 0,
   now: Date = new Date(),
 ) {
-  const since = tzDayStart(now, timeZone).toISOString()
+  const since = tzDayStart(now, timeZone, cutoffMinutes).toISOString()
   return supabase
     .from("kots")
     .select(KOT_CARD_SELECT)

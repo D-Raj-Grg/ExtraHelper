@@ -51,7 +51,13 @@ export type PosCompletedOrder = {
   bill_id: string | null
   restaurant_tables: { label: string } | null
   order_items: PosCardLine[]
-  bills: { id: string; status: string; total_cents: number } | null
+  bills: {
+    id: string
+    status: string
+    total_cents: number
+    /** Repeats on every order sharing a merged bill — dedupe by bill id. */
+    payments: { method: string; amount_cents: number; status: string }[] | null
+  } | null
 }
 
 /** A modifier line as the KOT tab shows it. */

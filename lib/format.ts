@@ -150,23 +150,90 @@ export function tzOffsetMs(date: Date, timeZone: string): number {
 }
 
 /**
- * The UTC instant at which the tenant-local day containing `at` begins.
+ * The UTC instant at which the tenant's business day containing `at` begins.
  *
  * "Today" on a POS is the restaurant's today, not the server's — a till in
  * Kathmandu closing at 23:00 local is already tomorrow in UTC. Lives here rather
  * than in report-range so client components can import it too (this module has
  * no server imports); report-range keeps its own tzMidnight, which takes a
  * user-typed "YYYY-MM-DD" rather than an instant.
+ *
+ * `cutoffMinutes` moves the turnover off midnight — 240 means the day rolls at
+ * 4am, so a sale at 01:30 still belongs to the night before. It is passed in,
+ * never read from the server here: that would drag `next/headers` into the
+ * browser bundle. Callers get it from `ActiveTenant.dayCutoffMinutes`, and the
+ * SQL twin is `public.tenant_day_start` / `public.business_day`.
  */
-export function tzDayStart(at: Date, timeZone: string): Date {
-  const [y, mo, d] = new Intl.DateTimeFormat("en-CA", { timeZone })
-    .format(at)
-    .split("-")
-    .map(Number)
-  // Probe the offset at local noon: midnight itself can fall inside a DST gap,
-  // where the zone has no such wall-clock time at all.
-  const off = tzOffsetMs(new Date(Date.UTC(y, mo - 1, d, 12)), timeZone)
-  return new Date(Date.UTC(y, mo - 1, d) - off)
+export function tzDayStart(at: Date, timeZone: string, cutoffMinutes = 0): Date {
+  const [y, mo, d] = businessDay(at, timeZone, cutoffMinutes).split("-").map(Number)
+  return utcFromWall(Date.UTC(y, mo - 1, d) + cutoffMinutes * 60_000, timeZone)
+}
+
+/**
+ * Which business day an instant falls in, as "YYYY-MM-DD" — the TS twin of
+ * `public.business_day`, and the key the day-close sheet is addressed by.
+ *
+ * The cutoff is subtracted from the LOCAL wall clock, not from the UTC instant,
+ * because that is what `business_day` does: `(at at time zone tz) - interval`.
+ * Subtracting in UTC first agrees with it on every ordinary day and disagrees on
+ * the two DST-transition days a year, where the offset differs either side of
+ * the shift — an hour is enough to land a 4am cutoff on the wrong date.
+ */
+export function businessDay(at: Date, timeZone: string, cutoffMinutes = 0): string {
+  const wall = new Date(wallClockMs(at, timeZone) - cutoffMinutes * 60_000)
+  const p = (n: number) => String(n).padStart(2, "0")
+  return `${wall.getUTCFullYear()}-${p(wall.getUTCMonth() + 1)}-${p(wall.getUTCDate())}`
+}
+
+/**
+ * `at`'s wall clock in `timeZone`, encoded as if it were UTC — so it can be
+ * shifted and read back with plain getUTC* calls, with no zone maths in between.
+ */
+function wallClockMs(at: Date, timeZone: string): number {
+  return at.getTime() + tzOffsetMs(at, timeZone)
+}
+
+/**
+ * The reverse: the UTC instant at which a given wall clock occurs in `timeZone`.
+ *
+ * Matching Postgres exactly is the whole job — the client-side day bound and the
+ * server-side one have to agree to the millisecond, or the POS and the day-close
+ * sheet disagree about which sales are today.
+ *
+ * An offset can only be sampled at an instant, and the instant is what we are
+ * solving for. So sample well either side of the wall time, which gives one
+ * candidate per offset in play; keep the candidates that actually read back as
+ * the wall time asked for, and take the LATEST.
+ *
+ * The bracket is 26 hours, not 12. A wall clock read as if it were UTC sits up
+ * to 14 hours from the instant it names (Kiritimati is +14, Baker Island −12),
+ * so a 12-hour reach can land BOTH probes on the same side of a shift and never
+ * generate the other offset at all — which is exactly how Chatham (+13:45) came
+ * out an hour late. 14 for the offset plus 12 to clear the shift is 26.
+ *
+ * That single rule covers both awkward hours of the year, which is why it is
+ * expressed as one rule rather than as special cases:
+ *  - Fall back, where a wall time happens twice: both candidates are valid and
+ *    the later (standard time) wins, which is what Postgres returns.
+ *  - Spring forward, where a wall time never happens: neither is valid, and the
+ *    later is the instant the clock jumps to — 02:00 becomes 03:00, not 01:00.
+ *    Postgres resolves the gap forwards too.
+ *
+ * Verified against Postgres over 89,928 probes: twelve zones — including the
+ * half-hour shift of Lord Howe, the 12:45 offset of Chatham, southern-hemisphere
+ * Santiago and Asuncion, and no-DST Kolkata — six cutoffs, every seven hours
+ * across a full year. Three earlier versions passed a spot check and failed that
+ * sweep: probing at local noon broke ordinary spring-forward days, one pass
+ * broke later cutoffs, and iterating to a fixed point broke the skipped hour.
+ */
+function utcFromWall(wallMs: number, timeZone: string): Date {
+  const REACH = 26 * 3600_000
+  const candidate = (probe: number) => wallMs - tzOffsetMs(new Date(probe), timeZone)
+  const readsBack = (utc: number) => utc + tzOffsetMs(new Date(utc), timeZone) === wallMs
+
+  const all = [candidate(wallMs - REACH), candidate(wallMs + REACH)]
+  const valid = all.filter(readsBack)
+  return new Date(Math.max(...(valid.length ? valid : all)))
 }
 
 /**

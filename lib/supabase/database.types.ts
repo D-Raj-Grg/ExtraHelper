@@ -363,7 +363,9 @@ export type Database = {
       }
       cash_sessions: {
         Row: {
+          auto_opened: boolean
           branch_id: string | null
+          branch_key: string | null
           cashier_id: string | null
           closed_at: string | null
           counted_cents: number | null
@@ -376,7 +378,9 @@ export type Database = {
           variance_cents: number | null
         }
         Insert: {
+          auto_opened?: boolean
           branch_id?: string | null
+          branch_key?: string | null
           cashier_id?: string | null
           closed_at?: string | null
           counted_cents?: number | null
@@ -389,7 +393,9 @@ export type Database = {
           variance_cents?: number | null
         }
         Update: {
+          auto_opened?: boolean
           branch_id?: string | null
+          branch_key?: string | null
           cashier_id?: string | null
           closed_at?: string | null
           counted_cents?: number | null
@@ -2115,6 +2121,7 @@ export type Database = {
           attempts: number
           bill_id: string | null
           branch_id: string | null
+          business_day: string | null
           claimed_at: string | null
           claimed_by: string | null
           copies: number
@@ -2134,6 +2141,7 @@ export type Database = {
           attempts?: number
           bill_id?: string | null
           branch_id?: string | null
+          business_day?: string | null
           claimed_at?: string | null
           claimed_by?: string | null
           copies?: number
@@ -2153,6 +2161,7 @@ export type Database = {
           attempts?: number
           bill_id?: string | null
           branch_id?: string | null
+          business_day?: string | null
           claimed_at?: string | null
           claimed_by?: string | null
           copies?: number
@@ -3248,6 +3257,7 @@ export type Database = {
         Row: {
           block_negative_stock: boolean
           currency: string
+          day_cutoff_minutes: number
           order_type_fees: Json
           packaging_fee: number
           payment_gateway: string
@@ -3264,6 +3274,7 @@ export type Database = {
         Insert: {
           block_negative_stock?: boolean
           currency?: string
+          day_cutoff_minutes?: number
           order_type_fees?: Json
           packaging_fee?: number
           payment_gateway?: string
@@ -3280,6 +3291,7 @@ export type Database = {
         Update: {
           block_negative_stock?: boolean
           currency?: string
+          day_cutoff_minutes?: number
           order_type_fees?: Json
           packaging_fee?: number
           payment_gateway?: string
@@ -3576,6 +3588,10 @@ export type Database = {
         Args: { _bill_id: string; _subtotal: number }
         Returns: number
       }
+      business_day: {
+        Args: { _at: string; _cutoff_min: number; _tz: string }
+        Returns: string
+      }
       cancel_invite: {
         Args: { _email: string; _tenant: string }
         Returns: undefined
@@ -3603,6 +3619,7 @@ export type Database = {
           attempts: number
           bill_id: string | null
           branch_id: string | null
+          business_day: string | null
           claimed_at: string | null
           claimed_by: string | null
           copies: number
@@ -3675,6 +3692,12 @@ export type Database = {
         Returns: string
       }
       current_tenant_ids: { Args: never; Returns: string[] }
+      daily_report: { Args: { _day?: string; _tenant: string }; Returns: Json }
+      daily_report_build: {
+        Args: { _day: string; _tenant: string }
+        Returns: Json
+      }
+      daily_report_for_print: { Args: { _job_id: string }; Returns: Json }
       dashboard_summary: {
         Args: { _days?: number; _tenant: string }
         Returns: Json
@@ -3688,6 +3711,16 @@ export type Database = {
       delete_printer: { Args: { _printer_id: string }; Returns: undefined }
       delete_supplier: { Args: { _supplier_id: string }; Returns: undefined }
       delete_variant: { Args: { _variant_id: string }; Returns: undefined }
+      enqueue_day_report_job: {
+        Args: {
+          _copies: number
+          _day: string
+          _idem: string
+          _printer_id: string
+          _tenant: string
+        }
+        Returns: string
+      }
       enqueue_print_job: {
         Args: {
           _bill_id: string
@@ -4000,6 +4033,16 @@ export type Database = {
           revenue_cents: number
         }[]
       }
+      report_sales_by_day: {
+        Args: { _from: string; _tenant: string; _to: string }
+        Returns: {
+          avg_cents: number
+          day: string
+          day_label: string
+          orders: number
+          revenue_cents: number
+        }[]
+      }
       report_staff: {
         Args: { _from: string; _tenant: string; _to: string }
         Returns: {
@@ -4266,6 +4309,7 @@ export type Database = {
         | "bill"
         | "test"
         | "receipt"
+        | "day_report"
       print_job_status:
         | "queued"
         | "printed"
@@ -4481,6 +4525,7 @@ export const Constants = {
         "bill",
         "test",
         "receipt",
+        "day_report",
       ],
       print_job_status: ["queued", "printed", "failed", "claimed", "cancelled"],
       printer_connection: ["network", "system", "usb", "bluetooth"],
