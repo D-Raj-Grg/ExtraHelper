@@ -16,6 +16,7 @@ import { paymentMethodLabel } from "@/lib/payment-constants"
 import { cn } from "@/lib/utils"
 import { ReportEmpty, ReportSection, TableFrame } from "./report-section"
 import { StatTiles } from "./stat-tiles"
+import { DayOrders, type DayOrder } from "./day-orders"
 import { cutoffLabel, type DayReport } from "./day-report"
 
 function signedMoney(cents: number, currency: string) {
@@ -29,7 +30,15 @@ function signedMoney(cents: number, currency: string) {
  * one consistent snapshot — a sheet assembled from six independent queries can
  * disagree with itself while the reader is looking at it.
  */
-export function DayClose({ r }: { r: DayReport }) {
+export function DayClose({
+  r,
+  orders,
+  ordersTruncated,
+}: {
+  r: DayReport
+  orders: DayOrder[]
+  ordersTruncated: boolean
+}) {
   const cur = r.currency
   const s = r.sales
   const cash = r.cash
@@ -149,6 +158,14 @@ export function DayClose({ r }: { r: DayReport }) {
             warn: r.refunds.total_cents > 0,
           },
         ]}
+      />
+
+      <DayOrders
+        orders={orders}
+        currency={cur}
+        timezone={r.timezone}
+        truncated={ordersTruncated}
+        revenueCents={s.revenue_cents}
       />
 
       <ReportSection
