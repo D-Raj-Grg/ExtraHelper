@@ -1241,7 +1241,35 @@ and one of which could kill printing on a device until it was restarted. They ar
 
 - [x] **The day-close page 500'd on every date** (2026-08-21). Reported against `/reports/day?date=2026-08-15`; it was not that date, it was every date. Splitting the Orders table into a client island (for the detail sheet's open state) left the pure helpers — `lineTotal`, `lineCount`, `destination` — exported from the `"use client"` file, and `DayOrders`, a Server Component, *called* them while rendering. Every export of a client module becomes a **client reference** on the server, so calling one throws `Attempted to call a temporary Client Reference from the server but it is on the client`. **`tsc --noEmit` and `next build` both pass** — nothing is type-wrong and nothing fails to compile — so it shipped, and it fails only at render. This is CLAUDE.md's "a client component may not import from a file that imports `lib/supabase/server`" rule crossed in the other direction, and the other direction is the dangerous one because the build does not catch it. Fix: the shape, the cap and the four helpers moved to `components/reports/day-order-utils.ts`, a plain module both sides import; the client table stopped exporting them. **Diagnosed from data first, not guessed**: the RPC was healthy for 2026-08-15 (4 bills, NPR 5,210) and the 4 orders in the window had 16 lines with no null names, prices or quantities — which ruled the data out and pointed at the code. **Verified without a browser** by a static check asserting no Server Component imports a lowercase (non-component) binding from a client module: it reports the three bad imports on the broken tree and clean on the fixed one, run both ways round to prove it actually discriminates. Kept as `scripts/check-rsc-boundaries.mjs` + `npm run check:rsc`, and the rule added to CLAUDE.md's known traps — this class is invisible to the whole existing toolchain and cost a production 500. **Standing lesson**: a brand-new route needs one real render before it ships; typecheck and build are not evidence that a page loads.
 
-- [ ] **`delete_my_account()` exists but the web has no way to call it** (2026-08-23). Added in `supabase/migrations/20260823090000_delete_my_account.sql` because the Flutter app now creates accounts, and App Store Guideline 5.1.1(v) requires in-app deletion once it does. The RPC is granted to `authenticated`, so it is callable from both clients — the web just has no button. Someone who signed up on the web and wants out currently cannot get out. Belongs on the account/profile settings surface with the same confirm and the same two refusals (sole owner of a restaurant; account attached to `cash_movements` / `supplier_payments`, whose `created_by` is `not null ... on delete restrict` so a cash record keeps its author).
+- [x] **`delete_my_account()` exists but the web has no way to call it** (2026-08-23, closed same day).
+      Added in `supabase/migrations/20260823091000_delete_my_account.sql` because the Flutter app now
+      creates accounts, and App Store Guideline 5.1.1(v) requires in-app deletion once it does. The RPC
+      is granted to `authenticated`, so it was callable from both clients — the web just had no button,
+      and someone who signed up on the web could not get out. The same erasure obligation applies there;
+      the App Store is only what forced the date.
+    - `deleteAccount()` lives in `app/auth/actions.ts` beside `logout`, **not** in
+      `profile/actions.ts`, because two surfaces need it. It passes the RPC's `P0001` (sole owner) and
+      `P0002` (cash records) messages through verbatim — they were written to be read by the person who
+      hit them — and returns the errcode alongside so the caller can offer the way out that `P0001` only
+      describes.
+    - Sign-out after the delete is `signOut({ scope: "local" })`. The row in `auth.users` is gone but
+      the JWT cookie outlives it, and a *global* sign-out posts to the logout endpoint with a token whose
+      user no longer exists — a failure there would leave the cookies sitting. Then `/login?deleted=1`,
+      which the login page now turns into a notice in the slot it already had for `?error=confirm`.
+    - `components/delete-account-section.tsx` reuses `ConfirmPhraseDialog`, so retyping to unlock reads
+      the same as Delete Restaurant. The phrase is the **email**, not the restaurant name — this is the
+      person, not the tenant.
+    - **The gap inside the gap:** `app/(app)/layout.tsx` redirects anyone with no active tenant to
+      `/onboarding`, so `/profile` is unreachable by exactly the people most likely to want out — someone
+      who signed up and never finished onboarding, or whose only restaurant was deleted. They also hit
+      neither refusal, so they are the cleanest possible delete. Hence the `compact` variant on the
+      onboarding start step. Putting the button only on `/profile` would have shipped a compliance
+      feature the non-compliant case could not reach.
+    - No audit row: `audit_logs.actor_id` is `on delete set null`, so an entry written a moment before
+      would immediately go anonymous. No grace period either — restaurant deletion has 7 days because
+      it destroys a business's data; account deletion destroys nothing that matters, which is precisely
+      what the two refusals guarantee.
+
 - [ ] **The "Confirm signup" email template needs `{{ .Token }}`** (2026-08-23). Dashboard change, not in this repo — there is no `supabase/config.toml`. The mobile app verifies email with the 6-digit code rather than the link, which is what let signup ship without any deep-link configuration. Adding the token does not affect the web: the link stays and `/auth/confirm` still handles it.
 - [ ] **Mobile now calls `provision_tenant` and `claim_invites` directly.** Anything that changes either RPC's arity is a two-client change from now on — and `create or replace function` cannot change arity, so it means `drop` + `create` + re-issued grants naming the full new signature.
 

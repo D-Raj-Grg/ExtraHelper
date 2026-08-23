@@ -11,6 +11,7 @@ import {
   type JoinState,
 } from "@/app/onboarding/actions"
 import { switchTenant } from "@/app/(app)/tenant-actions"
+import { DeleteAccountSection } from "@/components/delete-account-section"
 import { initialsFor } from "@/lib/initials"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
@@ -100,6 +101,12 @@ export function OnboardingForm({
           onBack={() => setStep("start")}
         />
       )}
+
+      {/* The only route out for someone with no restaurant: `(app)/layout`
+          bounces them straight back here, so /profile is unreachable. */}
+      {!hasTenant && step === "start" && profile.email ? (
+        <DeleteAccountSection email={profile.email} variant="compact" />
+      ) : null}
     </div>
   )
 }

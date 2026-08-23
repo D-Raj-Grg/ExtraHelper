@@ -197,3 +197,44 @@ export async function logout() {
   revalidatePath("/", "layout")
   redirect("/login")
 }
+
+/**
+ * What `deleteAccount` gives the UI back — always a refusal. On success the
+ * action redirects, the router navigates, and the client's promise resolves to
+ * `undefined`; hence the `| undefined` on the return type rather than a lie.
+ */
+export type DeleteAccountState = { error: string; code?: string }
+
+/**
+ * Delete the signed-in user's own account (App Store Guideline 5.1.1(v), and
+ * the same erasure obligation on the web). All the judgement lives in the
+ * `delete_my_account()` RPC — this only translates its refusals and tears the
+ * session down afterwards.
+ *
+ * Lives here rather than in `profile/actions.ts` because two surfaces need it:
+ * `/profile` and `/onboarding`. Someone with no tenant is bounced out of the
+ * `(app)` group by its layout and would otherwise never reach a delete button.
+ */
+export async function deleteAccount(): Promise<DeleteAccountState | undefined> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: "Not signed in." }
+
+  const { error } = await supabase.rpc("delete_my_account")
+  if (error) {
+    // P0001 (sole owner) and P0002 (cash records) carry text written to be read
+    // by the person who hit them — pass those through untouched. The code goes
+    // with it so the caller can offer the way out that P0001 only describes.
+    if (error.code === "28000") return { error: "You're signed out — sign in again.", code: "28000" }
+    return { error: error.message, code: error.code }
+  }
+
+  // The row in `auth.users` is gone but the JWT cookie outlives it. Local scope
+  // only: a global sign-out posts to the logout endpoint with a token whose
+  // user no longer exists, and a failure there would leave the cookies sitting.
+  await supabase.auth.signOut({ scope: "local" })
+  revalidatePath("/", "layout")
+  redirect("/login?deleted=1")
+}

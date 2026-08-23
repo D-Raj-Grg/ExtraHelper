@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation"
 import { getProfile } from "@/lib/supabase/profile"
 import { ProfileForm } from "@/components/profile-form"
+import { DeleteAccountSection } from "@/components/delete-account-section"
 import { PageShell, PageHeader } from "@/components/page-header"
 
 export const dynamic = "force-dynamic"
@@ -18,6 +19,8 @@ export default async function ProfilePage() {
         avatarUrl={profile.avatarUrl}
         email={profile.email ?? ""}
       />
+      <hr className="my-8 border-border" />
+      <DeleteAccountSection email={profile.email ?? ""} />
     </PageShell>
   )
 }
