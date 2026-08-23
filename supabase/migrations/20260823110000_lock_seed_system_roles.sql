@@ -1,0 +1,27 @@
+-- `seed_system_roles` is an internal helper, not an API. Stop clients calling it.
+--
+-- Found while auditing every `security definer` function that takes a `_tenant`
+-- argument. It is the only one in `public` with **no tenant guard at all**:
+-- every sibling checks `has_permission`, `has_tenant_role`, `current_tenant_ids`
+-- or an `assert_may_*` helper first. This one takes any uuid and writes.
+--
+-- The original roles migration did `revoke execute ... from anon, public`, which
+-- is why `anon` could never reach it — but Supabase's `alter default privileges`
+-- had already granted `authenticated`, and that was never revoked. So **any
+-- logged-in user of any restaurant could call it against any other restaurant's
+-- tenant id.** The roles insert is `on conflict (tenant_id, name) do nothing`
+-- and so mostly a no-op, but the `role_permissions` insert that follows it
+-- re-applies `default_role_permissions` for each system role — meaning an owner
+-- who had deliberately *removed* a permission from Waiter or Cashier would have
+-- it silently restored by a stranger. That is a cross-tenant write, and rule #1
+-- is that tenant isolation is sacred.
+--
+-- No grant replaces it, because nothing outside the database calls it: the only
+-- callers are `provision_tenant` and the one-time backfill in
+-- `20260712091000_seed_system_roles.sql`, both `security definer` bodies owned
+-- by `postgres`. Nested calls inside those are checked against the **owner's**
+-- privileges, not the caller's, so provisioning a restaurant is unaffected.
+-- Verified before applying: no reference in the web app or the Flutter app
+-- beyond the generated `database.types.ts` entry, which is codegen, not a call.
+
+revoke execute on function public.seed_system_roles(uuid) from public, anon, authenticated;
