@@ -3,6 +3,8 @@
  * actions file) — a "use server" module may only export async functions, so
  * exporting a const array from it breaks when imported into a Client Component.
  */
+import type { SupabaseClient } from "@supabase/supabase-js"
+
 export const KOT_FLOW = ["new", "preparing", "ready", "served"] as const
 export type KotStatus = (typeof KOT_FLOW)[number] | "recalled"
 
@@ -129,10 +131,86 @@ export function nextKotStatus(status: string): KotStatus | null {
 export const KDS_SELECT =
   "id, status, created_at, printed_at, station_id, order_id, " +
   "kitchen_stations(name), " +
-  "orders(status, table_id, restaurant_tables!orders_table_id_fkey(label)), " +
+  "orders!inner(status, table_id, restaurant_tables!orders_table_id_fkey(label)), " +
   "kot_items(id, qty, status, " +
   "order_items(id, name_snapshot, is_void, void_reason, notes, " +
   "order_item_modifiers(name_snapshot, qty)))"
+
+/**
+ * Orders whose tickets are history: the money is in, or the order was
+ * abandoned. Nothing more will be cooked for either.
+ *
+ * Lives here rather than in lib/pos-constants.ts because that module already
+ * imports from this one (KOT_ACTIVE_STATUSES) — the other direction would be
+ * circular. pos-constants re-exports it so its own callers are unchanged.
+ *
+ * Deliberately excludes `billed`: a table can ask for the bill and then order
+ * one more round, which fires a fresh ticket onto an order sitting at `billed`.
+ * Counting that as history hides live work from the people who have to cook it.
+ * `closed` is the status that means paid.
+ */
+export const KOT_HISTORY_ORDER_STATUSES = ["closed", "cancelled"]
+
+/** Bumped tickets stay recallable for a short window. */
+export const RECALL_WINDOW_MS = 20 * 60 * 1000
+
+/**
+ * The board's queries, shared server+client as *builders* rather than as a
+ * select string.
+ *
+ * Sharing the string was not enough: the server page and the client's Realtime
+ * refetch each rebuilt the filters by hand, and a divergence there visibly
+ * strips the board on the first ping. lib/pos-constants.ts hit this and moved
+ * to builders (kotTabQuery, completedOrdersQuery); this follows it.
+ *
+ * `orders!inner` in KDS_SELECT is what makes the history filter reach the
+ * PARENT row. Against a left-embedded resource, `.not("orders.status", …)`
+ * filters the embedded rows — nulling `orders` while keeping the ticket. The
+ * inner join drops the ticket instead, and cannot lose anything a left join
+ * would have kept: kots.order_id is `not null references orders on delete
+ * cascade`.
+ */
+function kdsBase(supabase: SupabaseClient, tenantId: string, station: string) {
+  const q = supabase
+    .from("kots")
+    .select(KDS_SELECT)
+    .eq("tenant_id", tenantId)
+    .not("orders.status", "in", `(${KOT_HISTORY_ORDER_STATUSES.join(",")})`)
+  if (station === "expo") return q.is("station_id", null)
+  if (station !== "all") return q.eq("station_id", station)
+  return q
+}
+
+/** Tickets still on the board, oldest first. Never date-bound — one fired at
+ *  23:55 is still the kitchen's problem at 00:05. The settle trigger, not a
+ *  cutoff, is what stops this growing forever. */
+export function kdsActiveQuery(supabase: SupabaseClient, tenantId: string, station: string) {
+  return kdsBase(supabase, tenantId, station)
+    .in("status", KOT_ACTIVE_STATUSES)
+    .order("created_at", { ascending: true })
+}
+
+/**
+ * The "recall one bumped early" strip.
+ *
+ * Shares kdsBase deliberately. Since a settled order now sweeps its tickets to
+ * `served`, without the history filter every paid table's tickets would land
+ * here for 20 minutes and turn a short recall list into a wall of finished
+ * work. Tickets swept by the `billed` transition still appear, which is right:
+ * a billed-but-unpaid table is exactly where "we bumped that too early" is
+ * still a real recall.
+ */
+export function kdsRecallQuery(
+  supabase: SupabaseClient,
+  tenantId: string,
+  station: string,
+  now: number = Date.now(),
+) {
+  return kdsBase(supabase, tenantId, station)
+    .eq("status", "served")
+    .gte("created_at", new Date(now - RECALL_WINDOW_MS).toISOString())
+    .order("created_at", { ascending: false })
+}
 
 /**
  * How long a ticket has been open, as a tone the whole board agrees on.

@@ -11,7 +11,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-import { KOT_ACTIVE_STATUSES } from "@/lib/kds-constants"
+import { KOT_ACTIVE_STATUSES, KOT_HISTORY_ORDER_STATUSES } from "@/lib/kds-constants"
 import { tzDayStart } from "@/lib/format"
 
 /**
@@ -107,8 +107,12 @@ export const KOT_TAB_LIMIT = 400
  * more round; that fires a fresh ticket onto an order sitting at `billed`, and
  * counting it as history hides live work from the people who have to cook it.
  * `closed` is the status that means paid, and it is the one that belongs here.
+ *
+ * Defined in lib/kds-constants.ts (the KDS board queries need it too, and this
+ * module already imports from there — the other direction would be circular);
+ * re-exported here so the POS callers are unchanged.
  */
-export const KOT_HISTORY_ORDER_STATUSES = ["closed", "cancelled"]
+export { KOT_HISTORY_ORDER_STATUSES }
 
 /**
  * A ticket is done when the kitchen bumped it, or its order is closed or

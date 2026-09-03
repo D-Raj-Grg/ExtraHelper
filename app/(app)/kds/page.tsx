@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server"
 import { requirePermission } from "@/lib/supabase/guards"
 import { KdsBoard } from "@/components/kds-board"
 import { EightySixPanel } from "@/components/eighty-six-panel"
-import { KDS_SELECT, KOT_ACTIVE_STATUSES } from "@/lib/kds-constants"
+import { kdsActiveQuery } from "@/lib/kds-constants"
 
 // KDS should reflect the kitchen live; don't cache.
 export const dynamic = "force-dynamic"
@@ -14,7 +14,10 @@ export default async function KdsPage({
 }) {
   const tenant = await requirePermission("kds.view")
   const supabase = await createClient()
-  const { station } = await searchParams
+  // Normalise once: the query and the board must agree on what "no station"
+  // means, and they used to disagree (undefined here, "all" there).
+  const { station: stationParam } = await searchParams
+  const station = stationParam ?? "all"
 
   const [{ data: stations }, { data: menuItems }] = await Promise.all([
     supabase
@@ -30,16 +33,9 @@ export default async function KdsPage({
       .order("name"),
   ])
 
-  // Active tickets — optionally scoped to one station ("expo" = unrouted/null).
-  let active = supabase
-    .from("kots")
-    .select(KDS_SELECT)
-    .eq("tenant_id", tenant.tenantId)
-    .in("status", KOT_ACTIVE_STATUSES)
-    .order("created_at", { ascending: true })
-  if (station === "expo") active = active.is("station_id", null)
-  else if (station) active = active.eq("station_id", station)
-  const { data: kots } = await active
+  // Active tickets — station scoping and the settled-order exclusion both live
+  // in the builder, so the client's Realtime refetch cannot drift from this.
+  const { data: kots } = await kdsActiveQuery(supabase, tenant.tenantId, station)
 
   return (
     <div className="min-h-svh bg-background p-4 md:p-6">
@@ -55,7 +51,7 @@ export default async function KdsPage({
       <KdsBoard
         kots={(kots ?? []) as never}
         stations={stations ?? []}
-        station={station ?? "all"}
+        station={station}
         tenantId={tenant.tenantId}
       />
     </div>

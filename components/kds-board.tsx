@@ -10,8 +10,8 @@ import { voidLine } from "@/app/(app)/pos/actions"
 import { createClient } from "@/lib/supabase/client"
 import {
   kotStatusLabel,
-  KDS_SELECT,
-  KOT_ACTIVE_STATUSES,
+  kdsActiveQuery,
+  kdsRecallQuery,
   KOT_FLOW,
   KOT_STATUS_META,
   type KotStatus,
@@ -30,8 +30,6 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 
-// Bumped tickets stay recallable for a short window.
-const RECALL_WINDOW_MS = 20 * 60 * 1000
 const STORAGE_KEY = "kds:station"
 /** Cancelled is not a kot_status — it's a voided line. Kept out of KOT_FLOW on purpose. */
 const CANCELLED = "cancelled"
@@ -93,29 +91,18 @@ export function KdsBoard({
     router.push(next === "all" ? "/kds" : `/kds?station=${next}`)
   }
 
-  // Apply the active station filter to a kots query (shared by both fetches).
-  const scoped = useCallback(
-    (q: ReturnType<ReturnType<typeof createClient>["from"]>) => {
-      const base = q.select(KDS_SELECT).eq("tenant_id", tenantId)
-      if (station === "expo") return base.is("station_id", null)
-      if (station !== "all") return base.eq("station_id", station)
-      return base
-    },
-    [tenantId, station],
-  )
-
+  // Both fetches go through the shared builders, so this cannot drift from what
+  // the server page rendered — the drift is what visibly strips the board on the
+  // first Realtime ping.
   const refetch = useCallback(async () => {
     const supabase = createClient()
     const [act, srv] = await Promise.all([
-      scoped(supabase.from("kots")).in("status", KOT_ACTIVE_STATUSES).order("created_at", { ascending: true }),
-      scoped(supabase.from("kots"))
-        .eq("status", "served")
-        .gte("created_at", new Date(Date.now() - RECALL_WINDOW_MS).toISOString())
-        .order("created_at", { ascending: false }),
+      kdsActiveQuery(supabase, tenantId, station),
+      kdsRecallQuery(supabase, tenantId, station),
     ])
     if (act.data) setLiveKots(act.data as unknown as KdsKot[])
     if (srv.data) setServed(srv.data as unknown as KdsKot[])
-  }, [scoped])
+  }, [tenantId, station])
 
   // Optimistic: the tap paints instantly, the refetch reconciles. A dish patch
   // also re-derives its ticket from the least-advanced live line, mirroring what
