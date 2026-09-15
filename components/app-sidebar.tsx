@@ -2,6 +2,7 @@
 
 import * as React from "react"
 
+import { SidebarNavLink, useActiveUrl } from "@/components/nav-link"
 import { NavMain } from "@/components/nav-main"
 import { NavSecondary } from "@/components/nav-secondary"
 import { NavUser } from "@/components/nav-user"
@@ -130,6 +131,13 @@ export function AppSidebar({
     .map((g) => ({ ...g, items: g.items.filter((i) => canSee(i.title)) }))
     .filter((g) => g.items.length > 0)
   const navSecondary = data.navSecondary.filter((i) => canSee(i.title))
+  // Resolved across every nav url at once so only the deepest match lights up
+  // ("/reports" must not stay lit on "/reports/day").
+  const activeUrl = useActiveUrl([
+    ...navTop.map((i) => i.url),
+    ...navGroups.flatMap((g) => g.items.map((i) => i.url)),
+    ...navSecondary.map((i) => i.url),
+  ])
   // Show the switcher whenever there's an active tenant — even with one
   // restaurant it hosts the "+ Add restaurant" action.
   const showSwitcher = (tenants?.length ?? 0) >= 1 && Boolean(activeTenantId)
@@ -143,7 +151,7 @@ export function AppSidebar({
             <SidebarMenuItem>
               <SidebarMenuButton
                 className="data-[slot=sidebar-menu-button]:p-1.5!"
-                render={<a href="/" />}
+                render={<SidebarNavLink href="/" />}
               >
                 <CommandIcon className="size-5!" />
                 <span className="text-base font-semibold">
@@ -157,8 +165,13 @@ export function AppSidebar({
       <SidebarContent>
         {/* The CTA is hardcoded inside NavMain rather than being one of
             `navTop`, so its NAV_PERM entry has to be applied by hand. */}
-        <NavMain items={navTop} groups={navGroups} showNewOrder={canSee("New Order")} />
-        <NavSecondary items={navSecondary} className="mt-auto" />
+        <NavMain
+          items={navTop}
+          groups={navGroups}
+          showNewOrder={canSee("New Order")}
+          activeUrl={activeUrl}
+        />
+        <NavSecondary items={navSecondary} activeUrl={activeUrl} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>
         <NavUser user={user ?? data.user} />

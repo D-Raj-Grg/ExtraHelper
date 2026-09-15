@@ -1,6 +1,7 @@
 "use client"
 
 import { useNewOrder } from "@/components/pos/new-order-provider"
+import { NavPending, SidebarNavLink } from "@/components/nav-link"
 import {
   SidebarGroup,
   SidebarGroupContent,
@@ -21,11 +22,14 @@ export function NavMain({
   items,
   groups = [],
   showNewOrder = true,
+  activeUrl = null,
 }: {
   items: NavItem[]
   groups?: { label: string; items: NavItem[] }[]
   /** Holds order.view. Server-side guards and RLS are the real gate. */
   showNewOrder?: boolean
+  /** Resolved once across the whole sidebar — see `useActiveUrl`. */
+  activeUrl?: string | null
 }) {
   const { openNewOrder } = useNewOrder()
 
@@ -53,12 +57,7 @@ export function NavMain({
         </SidebarMenu>
         <SidebarMenu>
           {items.map((item) => (
-            <SidebarMenuItem key={item.title}>
-              <SidebarMenuButton tooltip={item.title} render={<a href={item.url} />}>
-                {item.icon}
-                <span>{item.title}</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
+            <NavItemLink key={item.title} item={item} activeUrl={activeUrl} />
           ))}
         </SidebarMenu>
       </SidebarGroupContent>
@@ -67,16 +66,33 @@ export function NavMain({
           <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
           <SidebarMenu>
             {group.items.map((item) => (
-              <SidebarMenuItem key={item.title}>
-                <SidebarMenuButton tooltip={item.title} render={<a href={item.url} />}>
-                  {item.icon}
-                  <span>{item.title}</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
+              <NavItemLink key={item.title} item={item} activeUrl={activeUrl} />
             ))}
           </SidebarMenu>
         </SidebarGroupContent>
       ))}
     </SidebarGroup>
+  )
+}
+
+/**
+ * One nav row. Split out of the maps above so each row gets its own
+ * `useLinkStatus` (inside `NavPending`) for the pending spinner.
+ */
+function NavItemLink({ item, activeUrl }: { item: NavItem; activeUrl: string | null }) {
+  const isActive = item.url === activeUrl
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        tooltip={item.title}
+        isActive={isActive}
+        aria-current={isActive ? "page" : undefined}
+        render={<SidebarNavLink href={item.url} />}
+      >
+        {item.icon}
+        <span>{item.title}</span>
+        <NavPending />
+      </SidebarMenuButton>
+    </SidebarMenuItem>
   )
 }

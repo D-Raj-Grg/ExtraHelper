@@ -128,3 +128,36 @@
     @apply font-sans;
   }
 }
+/*
+ * Nav pending hint. Starts invisible and fades in after 150ms, so a prefetched
+ * route that lands immediately never flashes a spinner, while a slow one still
+ * answers "did my tap register?" inside the window where people re-tap.
+ * `prefers-reduced-motion` keeps the hint (it's information) and drops the spin.
+ */
+@keyframes nav-pending-in {
+  to {
+    opacity: 1;
+  }
+}
+
+/* Own rotation rather than Tailwind's `spin`: that keyframe is only emitted
+   while some component still uses `animate-spin`, so borrowing it would leave
+   this spinner silently frozen the day the last one stops. */
+@keyframes nav-pending-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.nav-pending {
+  opacity: 0;
+  animation:
+    nav-pending-spin 1s linear infinite,
+    nav-pending-in 120ms ease-out 150ms forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-pending {
+    animation: nav-pending-in 1ms linear 150ms forwards;
+  }
+}

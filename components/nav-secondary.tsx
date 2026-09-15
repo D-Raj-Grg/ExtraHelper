@@ -2,6 +2,8 @@
 
 import * as React from "react"
 
+import { NavPending, SidebarNavLink } from "@/components/nav-link"
+
 import {
   SidebarGroup,
   SidebarGroupContent,
@@ -12,6 +14,7 @@ import {
 
 export function NavSecondary({
   items,
+  activeUrl = null,
   ...props
 }: {
   items: {
@@ -19,21 +22,42 @@ export function NavSecondary({
     url: string
     icon: React.ReactNode
   }[]
+  /** Resolved once across the whole sidebar — see `useActiveUrl`. */
+  activeUrl?: string | null
 } & React.ComponentPropsWithoutRef<typeof SidebarGroup>) {
   return (
     <SidebarGroup {...props}>
       <SidebarGroupContent>
         <SidebarMenu>
           {items.map((item) => (
-            <SidebarMenuItem key={item.title}>
-              <SidebarMenuButton render={<a href={item.url} />}>
-                {item.icon}
-                <span>{item.title}</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
+            <SecondaryItem key={item.title} item={item} activeUrl={activeUrl} />
           ))}
         </SidebarMenu>
       </SidebarGroupContent>
     </SidebarGroup>
+  )
+}
+
+/** Own component so each row can use the active/pending hooks. */
+function SecondaryItem({
+  item,
+  activeUrl,
+}: {
+  item: { title: string; url: string; icon: React.ReactNode }
+  activeUrl: string | null
+}) {
+  const isActive = item.url === activeUrl
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        isActive={isActive}
+        aria-current={isActive ? "page" : undefined}
+        render={<SidebarNavLink href={item.url} />}
+      >
+        {item.icon}
+        <span>{item.title}</span>
+        <NavPending />
+      </SidebarMenuButton>
+    </SidebarMenuItem>
   )
 }
