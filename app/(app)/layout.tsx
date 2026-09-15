@@ -1,5 +1,6 @@
+import { Suspense } from "react"
 import { redirect } from "next/navigation"
-import { AppSidebar } from "@/components/app-sidebar"
+import { AppSidebarSection, AppSidebarSkeleton } from "@/components/app-sidebar-section"
 import { SiteHeader } from "@/components/site-header"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { Toaster } from "@/components/ui/sonner"
@@ -9,69 +10,48 @@ import { TenantProvider } from "@/components/tenant-provider"
 import { PreferencesProvider } from "@/components/preferences-provider"
 import { OfflineSyncProvider } from "@/components/offline-sync-provider"
 import { PrintProvider } from "@/components/print/print-provider"
-import { AutoPrintWorker } from "@/components/print/auto-print-worker"
+import { AutoPrintWorkerMount } from "@/components/print/auto-print-worker-mount"
 import { RealtimeAuth } from "@/components/realtime-auth"
 import { NewOrderProvider } from "@/components/pos/new-order-provider"
-import { createClient } from "@/lib/supabase/server"
-import { getActiveTenant, getTenantMemberships } from "@/lib/supabase/tenant"
+import { getActiveTenant } from "@/lib/supabase/tenant"
 import { getUserPreferences } from "@/lib/supabase/preferences"
-import { getMyPermissions } from "@/lib/supabase/permissions"
-import { getProfile } from "@/lib/supabase/profile"
-import { PermissionProvider } from "@/components/permission-provider"
+import { getCurrentUser } from "@/lib/supabase/user"
 
 /**
  * Shared shell for all authenticated staff pages: sidebar + header. Auth is
  * enforced once here (proxy also guards) so every page inside renders inside
  * the same chrome. Public routes (login, /t, /s, /book, receipt) live outside
  * this route group and get no sidebar.
+ *
+ * Only what gates or themes the whole page is awaited here — the user (redirect
+ * to /login), the tenant (redirect to /onboarding) and preferences (theme, or
+ * the page paints in the wrong one). Sidebar data and the print worker's config
+ * stream behind their own boundaries so the page body is not held up by reads
+ * it does not use.
  */
 export default async function AppLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const user = await getCurrentUser()
   if (!user) redirect("/login")
 
-  const tenant = await getActiveTenant()
+  // Neither read depends on the other, so they go together rather than serially.
+  const [tenant, prefs] = await Promise.all([getActiveTenant(), getUserPreferences()])
   if (!tenant) redirect("/onboarding")
 
-  const [prefs, memberships, permissions, profile, settings] = await Promise.all([
-    getUserPreferences(),
-    getTenantMemberships(),
-    getMyPermissions(tenant.tenantId),
-    getProfile(),
-    supabase
-      .from("tenant_settings")
-      .select("printing_mode")
-      .eq("tenant_id", tenant.tenantId)
-      .maybeSingle(),
-  ])
-
-  // In cloud mode the headless agent owns the print queue and browsers stay
-  // out of it, so the worker is not mounted at all.
-  const printingMode = settings.data?.printing_mode === "cloud" ? "cloud" : "local"
-
-  const sidebarUser = {
-    name:
-      profile?.fullName ??
-      (user.user_metadata?.restaurant_name as string) ??
-      user.email?.split("@")[0] ??
-      "User",
-    email: user.email ?? "",
-    avatar: profile?.avatarUrl ?? "",
-  }
+  const fallbackName =
+    (user.user_metadata?.restaurant_name as string) ?? user.email?.split("@")[0] ?? "User"
 
   return (
     <TenantProvider tenant={tenant}>
       <PreferencesProvider initialTheme={prefs.theme} initialScale={prefs.scale}>
-      <PermissionProvider permissions={permissions}>
       <OfflineSyncProvider>
       <PrintProvider>
-      <AutoPrintWorker tenantId={tenant.tenantId} branchId={null} mode={printingMode} />
+      <Suspense fallback={null}>
+        <AutoPrintWorkerMount tenantId={tenant.tenantId} />
+      </Suspense>
       <RealtimeAuth />
       {/* Above the sidebar, so the New order button can reach it — and outside
           SidebarInset, so the composer isn't nested in the page it opens over. */}
@@ -84,12 +64,13 @@ export default async function AppLayout({
           } as React.CSSProperties
         }
       >
-        <AppSidebar
-          variant="inset"
-          user={sidebarUser}
-          tenants={memberships}
-          activeTenantId={tenant.tenantId}
-        />
+        <Suspense fallback={<AppSidebarSkeleton />}>
+          <AppSidebarSection
+            tenant={tenant}
+            userEmail={user.email ?? ""}
+            fallbackName={fallbackName}
+          />
+        </Suspense>
         <SidebarInset>
           {tenant.impersonating ? <ImpersonationBanner name={tenant.name} /> : null}
           <SiteHeader />
@@ -108,7 +89,6 @@ export default async function AppLayout({
       </NewOrderProvider>
       </PrintProvider>
       </OfflineSyncProvider>
-      </PermissionProvider>
       </PreferencesProvider>
     </TenantProvider>
   )

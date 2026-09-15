@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server"
+import { getMyPermissions } from "@/lib/supabase/permissions"
 import {
   ACTIVE_ORDER_STATUSES,
   completedOrdersQuery,
@@ -121,7 +122,7 @@ export async function loadPosData(
 
   // Nested rather than sequential: the composer's six and the board's four all
   // go out together, so splitting the loader costs no latency here.
-  const [composer, [orders, kots, completed, canCheckout]] = await Promise.all([
+  const [composer, [orders, kots, completed, permissionKeys]] = await Promise.all([
     loadComposerData(tenantId),
     Promise.all([
       supabase
@@ -141,10 +142,11 @@ export async function loadPosData(
       kotTabQuery(supabase, tenantId, timeZone, cutoffMinutes),
       // Today's finished orders, for the Completed tab.
       completedOrdersQuery(supabase, tenantId, timeZone, cutoffMinutes),
-      // Whether this member may open a bill / reprint its receipt. A parallel
-      // round trip rather than reading `role`, because custom roles exist and
-      // `role === "cashier"` is not the same question.
-      supabase.rpc("has_permission", { _tenant: tenantId, _key: "checkout.view" }),
+      // Whether this member may open a bill / reprint its receipt. The key set
+      // rather than `role`, because custom roles exist and `role === "cashier"`
+      // is not the same question — and the layout already resolved the set, so
+      // this costs nothing.
+      getMyPermissions(tenantId),
     ]),
   ])
 
@@ -153,7 +155,7 @@ export async function loadPosData(
     orders: (orders.data ?? []) as unknown as PosOrderCard[],
     kots: (kots.data ?? []) as unknown as PosKot[],
     completed: (completed.data ?? []) as unknown as PosCompletedOrder[],
-    canCheckout: canCheckout.data === true,
+    canCheckout: permissionKeys.includes("checkout.view"),
   }
 }
 

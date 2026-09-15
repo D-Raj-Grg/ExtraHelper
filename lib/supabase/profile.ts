@@ -1,4 +1,6 @@
+import { cache } from "react"
 import { createClient } from "@/lib/supabase/server"
+import { getCurrentUser } from "@/lib/supabase/user"
 
 export type Profile = {
   id: string
@@ -9,12 +11,10 @@ export type Profile = {
 }
 
 /** The signed-in user's profile (display name / @handle / avatar). Null if not signed in. */
-export async function getProfile(): Promise<Profile | null> {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+export const getProfile = cache(async (): Promise<Profile | null> => {
+  const user = await getCurrentUser()
   if (!user) return null
+  const supabase = await createClient()
 
   const { data } = await supabase
     .from("profiles")
@@ -29,4 +29,4 @@ export async function getProfile(): Promise<Profile | null> {
     avatarUrl: data?.avatar_url ?? null,
     email: user.email ?? null,
   }
-}
+})

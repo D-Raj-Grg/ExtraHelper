@@ -4,6 +4,7 @@ import { SessionCard } from "@/components/cash/session-card"
 import { ShiftReports } from "@/components/cash/shift-reports"
 import type { CashMovement, ClosedSession } from "@/components/cash/types"
 import { PageShell, PageHeader } from "@/components/page-header"
+import { getMyPermissions } from "@/lib/supabase/permissions"
 
 export const dynamic = "force-dynamic"
 
@@ -42,8 +43,8 @@ export default async function CashPage() {
   // Movements on the open session, plus whether this user may sign them off.
   // cash.approve is deliberately NOT held by the cashier role — a cashier
   // approving their own payout would make the review step decorative.
-  const [{ data: canApproveData }, { data: movementRows }] = await Promise.all([
-    supabase.rpc("has_permission", { _tenant: tenant.tenantId, _key: "cash.approve" }),
+  const [permissionKeys, { data: movementRows }] = await Promise.all([
+    getMyPermissions(tenant.tenantId),
     open
       ? supabase
           .from("cash_movements")
@@ -54,7 +55,7 @@ export default async function CashPage() {
           .order("created_at", { ascending: false })
       : Promise.resolve({ data: [] }),
   ])
-  const canApprove = canApproveData === true
+  const canApprove = permissionKeys.includes("cash.approve")
 
   // Both cashier_id and created_by point at auth.users, not profiles, so
   // PostgREST can't infer either join — resolve every display name at once.

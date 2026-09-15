@@ -1,5 +1,7 @@
+import { cache } from "react"
 import { cookies } from "next/headers"
 import { createClient } from "@/lib/supabase/server"
+import { getCurrentUser } from "@/lib/supabase/user"
 
 export const ACTIVE_TENANT_COOKIE = "active-tenant"
 export const IMPERSONATE_COOKIE = "impersonate-tenant"
@@ -35,12 +37,14 @@ type Row = {
     | null
 }
 
-async function fetchMemberships(): Promise<Row[]> {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+/**
+ * Cached per request: the active tenant, the tenant switcher and every page
+ * guard all resolve from this one read instead of re-running it each time.
+ */
+const fetchMemberships = cache(async (): Promise<Row[]> => {
+  const user = await getCurrentUser()
   if (!user) return []
+  const supabase = await createClient()
 
   const { data } = await supabase
     .from("user_tenants")
@@ -52,7 +56,7 @@ async function fetchMemberships(): Promise<Row[]> {
     .order("tenant_id", { ascending: true }) // stable ordering for "first"
 
   return (data ?? []) as Row[]
-}
+})
 
 function tenantOf(row: Row) {
   return Array.isArray(row.tenants) ? row.tenants[0] : row.tenants
@@ -63,7 +67,7 @@ function tenantOf(row: Row) {
  * cookie (tenant switcher), else their first membership. Null if not onboarded.
  * RLS scopes the query to the caller's own memberships.
  */
-export async function getActiveTenant(): Promise<ActiveTenant | null> {
+export const getActiveTenant = cache(async (): Promise<ActiveTenant | null> => {
   const store = await cookies()
 
   // Platform-admin impersonation: resolve a tenant the caller need not belong
@@ -121,7 +125,7 @@ export async function getActiveTenant(): Promise<ActiveTenant | null> {
     paymentGateway: settings?.payment_gateway ?? "sandbox",
     deletionScheduledAt: tenant?.deletion_scheduled_at ?? null,
   }
-}
+})
 
 /** All tenants the current user belongs to — for the tenant switcher. */
 export async function getTenantMemberships(): Promise<TenantMembership[]> {
@@ -140,9 +144,7 @@ export async function getTenantMemberships(): Promise<TenantMembership[]> {
 /** Pending (invited/redeemed, not-yet-approved) memberships — awaiting owner approval. */
 export async function getPendingMemberships(): Promise<{ tenantId: string; name: string; role: string }[]> {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const user = await getCurrentUser()
   if (!user) return []
   const { data } = await supabase
     .from("user_tenants")

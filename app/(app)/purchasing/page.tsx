@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server"
 import { requirePermission } from "@/lib/supabase/guards"
 import { PurchasingManager } from "@/components/purchasing/purchasing-manager"
 import { PageShell, PageHeader } from "@/components/page-header"
+import { getMyPermissions } from "@/lib/supabase/permissions"
 
 export const dynamic = "force-dynamic"
 
@@ -44,7 +45,7 @@ export default async function PurchasingPage({
     { data: balances },
     { data: payments },
     { data: summary },
-    { data: canDeleteData },
+    permissionKeys,
   ] = await Promise.all([
     supabase
       .from("suppliers")
@@ -67,7 +68,7 @@ export default async function PurchasingPage({
       .order("paid_at", { ascending: false })
       .limit(PAY_PAGE),
     supabase.rpc("purchasing_summary", { _tenant: tenant.tenantId }),
-    supabase.rpc("has_permission", { _tenant: tenant.tenantId, _key: "purchasing.delete" }),
+    getMyPermissions(tenant.tenantId),
   ])
 
   // Paid-per-order, scoped to the orders actually on this page rather than
@@ -106,7 +107,7 @@ export default async function PurchasingPage({
         payments={(payments ?? []) as never}
         paidByPo={paidByPo}
         summary={((summary as unknown as unknown[])?.[0] as never) ?? null}
-        canDelete={canDeleteData === true}
+        canDelete={permissionKeys.includes("purchasing.delete")}
         initialTab={sp.tab ?? "orders"}
       />
     </PageShell>

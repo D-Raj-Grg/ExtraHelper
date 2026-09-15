@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation"
 import type { User } from "@supabase/supabase-js"
 import { createClient } from "@/lib/supabase/server"
+import { getCurrentUser } from "@/lib/supabase/user"
+import { getMyPermissions } from "@/lib/supabase/permissions"
 import { getActiveTenant, type ActiveTenant } from "@/lib/supabase/tenant"
 
 /** Per-tenant staff roles (mirrors the `app_role` enum in the database). */
@@ -21,10 +23,7 @@ export type AppRole =
 
 /** The signed-in user, or redirect to /login. */
 export async function requireUser(): Promise<User> {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const user = await getCurrentUser()
   if (!user) redirect("/login")
   return user
 }
@@ -58,12 +57,12 @@ export async function requireRole(
  */
 export async function requirePermission(key: string): Promise<ActiveTenant> {
   const tenant = await requireTenant()
-  const supabase = await createClient()
-  const { data } = await supabase.rpc("has_permission", {
-    _tenant: tenant.tenantId,
-    _key: key,
-  })
-  if (data !== true) redirect("/")
+  // The key set, not a per-key `has_permission` round trip: the app layout
+  // already resolves the same set for the sidebar, so this reuses that cached
+  // result instead of adding an RPC to every page render. Both SQL functions
+  // branch identically (custom role → system role → base-role defaults).
+  const keys = await getMyPermissions(tenant.tenantId)
+  if (!keys.includes(key)) redirect("/")
   return tenant
 }
 

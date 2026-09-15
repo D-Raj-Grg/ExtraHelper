@@ -3,6 +3,7 @@ import { requirePermission } from "@/lib/supabase/guards"
 import { PageShell, PageHeader } from "@/components/page-header"
 import { TeamManager } from "@/components/team/team-manager"
 import type { Member, Permission } from "@/components/team/types"
+import { getMyPermissions } from "@/lib/supabase/permissions"
 
 export const dynamic = "force-dynamic"
 
@@ -10,7 +11,7 @@ export default async function TeamPage() {
   const tenant = await requirePermission("staff.view")
   const supabase = await createClient()
 
-  const [{ data: roles }, { data: perms }, { data: members }, { data: memberRoles }, { data: canEditData }] =
+  const [{ data: roles }, { data: perms }, { data: members }, { data: memberRoles }, permissionKeys] =
     await Promise.all([
       supabase
         .from("roles")
@@ -21,7 +22,7 @@ export default async function TeamPage() {
       supabase.from("permissions").select("key, grp, label, sort").order("sort"),
       supabase.rpc("list_tenant_members", { _tenant: tenant.tenantId }),
       supabase.from("user_tenants").select("role_id").eq("tenant_id", tenant.tenantId).eq("status", "active"),
-      supabase.rpc("has_permission", { _tenant: tenant.tenantId, _key: "staff.edit" }),
+      getMyPermissions(tenant.tenantId),
     ])
 
   const roleRows = (roles ?? []) as {
@@ -62,7 +63,7 @@ export default async function TeamPage() {
         roles={rolesOut}
         permissions={(perms ?? []) as Permission[]}
         members={(members ?? []) as Member[]}
-        canEdit={canEditData === true}
+        canEdit={permissionKeys.includes("staff.edit")}
       />
     </PageShell>
   )

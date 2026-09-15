@@ -1,3 +1,4 @@
+import { cache } from "react"
 import { createClient } from "@/lib/supabase/server"
 import { requireUser } from "@/lib/supabase/guards"
 import {
@@ -13,7 +14,7 @@ export type UserPreferences = { theme: Theme; scale: number }
  * The signed-in user's UI preferences (theme + text scale), falling back to
  * defaults when no row exists yet. Own-row only — enforced by RLS.
  */
-export async function getUserPreferences(): Promise<UserPreferences> {
+export const getUserPreferences = cache(async (): Promise<UserPreferences> => {
   const user = await requireUser()
   const supabase = await createClient()
   const { data } = await supabase
@@ -26,4 +27,4 @@ export async function getUserPreferences(): Promise<UserPreferences> {
     theme: data?.theme === "dark" ? "dark" : DEFAULT_THEME,
     scale: data ? clampScale(data.text_scale) : DEFAULT_SCALE,
   }
-}
+})
