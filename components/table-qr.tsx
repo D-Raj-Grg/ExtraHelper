@@ -1,8 +1,13 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useSyncExternalStore } from "react"
 import QRCode from "qrcode"
 import { Button } from "@/components/ui/button"
+
+/** The origin never changes within a document, so there is nothing to subscribe to. */
+function subscribeNever() {
+  return () => {}
+}
 
 /**
  * Scannable QR for a table's dine-in link (`/t/{token}`). Encodes the URL as a
@@ -10,16 +15,34 @@ import { Button } from "@/components/ui/button"
  */
 export function TableQr({ token, label }: { token: string; label: string }) {
   const [dataUrl, setDataUrl] = useState<string>("")
-  const [url, setUrl] = useState<string>("")
   const [copied, setCopied] = useState(false)
 
+  // The origin is unknown on the server and constant in the browser, so it is
+  // read through a store with an empty server snapshot: hydration matches, and
+  // the real value arrives without an effect copying it into state.
+  const origin = useSyncExternalStore(
+    subscribeNever,
+    () => window.location.origin,
+    () => "",
+  )
+  const url = origin ? `${origin}/t/${token}` : ""
+
   useEffect(() => {
-    const link = `${window.location.origin}/t/${token}`
-    setUrl(link)
-    QRCode.toDataURL(link, { width: 240, margin: 1 })
-      .then(setDataUrl)
-      .catch(() => setDataUrl(""))
-  }, [token])
+    if (!url) return
+    // Async, so `setDataUrl` lands in a later tick rather than synchronously
+    // during the effect — no cascading render.
+    let cancelled = false
+    QRCode.toDataURL(url, { width: 240, margin: 1 })
+      .then((d) => {
+        if (!cancelled) setDataUrl(d)
+      })
+      .catch(() => {
+        if (!cancelled) setDataUrl("")
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [url])
 
   function copy() {
     void navigator.clipboard?.writeText(url)

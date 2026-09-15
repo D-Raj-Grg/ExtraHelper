@@ -6,7 +6,7 @@ import {
   useContext,
   useEffect,
   useRef,
-  useState,
+  useSyncExternalStore,
 } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
@@ -17,10 +17,15 @@ import {
   bumpAttempt,
   enqueue,
   listQueue,
-  queueCount,
   removeEntry,
   type QueueEntry,
 } from "@/lib/offline/queue"
+import {
+  getQueueCount,
+  getServerQueueCount,
+  refreshQueueCount,
+  subscribeQueueCount,
+} from "@/lib/offline/queue-store"
 
 type OfflineCtx = {
   online: boolean
@@ -31,6 +36,26 @@ type OfflineCtx = {
 }
 
 const Ctx = createContext<OfflineCtx | null>(null)
+
+/**
+ * Connectivity read as the external store it is, rather than mirrored into
+ * state from an effect. `navigator.onLine` is already the source of truth and
+ * the browser already has an event for it — copying it into `useState` on
+ * mount meant a second render on every page load just to learn what the
+ * browser could have told us directly.
+ *
+ * The server snapshot is `true`: there is no connectivity to report during
+ * SSR, and assuming online matches what the markup is rendered for. A genuinely
+ * offline client corrects it on the first client render.
+ */
+function subscribeOnline(onChange: () => void) {
+  window.addEventListener("online", onChange)
+  window.addEventListener("offline", onChange)
+  return () => {
+    window.removeEventListener("online", onChange)
+    window.removeEventListener("offline", onChange)
+  }
+}
 
 // "ok" = applied, "reject" = server refused (validation → count toward drop),
 // "retry" = transient/network (leave in queue, do NOT burn an attempt).
@@ -76,13 +101,17 @@ async function replay(entry: QueueEntry): Promise<ReplayResult> {
  */
 export function OfflineSyncProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter()
-  const [online, setOnline] = useState(true)
-  const [pending, setPending] = useState(0)
+  const online = useSyncExternalStore(
+    subscribeOnline,
+    () => navigator.onLine,
+    () => true,
+  )
+  const pending = useSyncExternalStore(
+    subscribeQueueCount,
+    getQueueCount,
+    getServerQueueCount,
+  )
   const syncing = useRef(false)
-
-  const refreshCount = useCallback(async () => {
-    setPending(await queueCount())
-  }, [])
 
   const syncNow = useCallback(async () => {
     if (syncing.current || typeof navigator !== "undefined" && !navigator.onLine) return
@@ -110,7 +139,7 @@ export function OfflineSyncProvider({ children }: { children: React.ReactNode })
           break // transient — stop, retry the whole batch on next reconnect
         }
       }
-      await refreshCount()
+      await refreshQueueCount()
       if (ok > 0) {
         toast.success(`Synced ${ok} offline ${ok === 1 ? "action" : "actions"}.`)
         router.refresh()
@@ -121,40 +150,34 @@ export function OfflineSyncProvider({ children }: { children: React.ReactNode })
     } finally {
       syncing.current = false
     }
-  }, [refreshCount, router])
+  }, [router])
 
+  // `online` above reports connectivity; this effect is only the side effect of
+  // regaining it — drain the queue. Both the listener and the mount call are
+  // guarded by `syncNow` itself, which no-ops while offline or already syncing.
   useEffect(() => {
-    setOnline(navigator.onLine)
-    void refreshCount()
-    const goOnline = () => {
-      setOnline(true)
-      void syncNow()
-    }
-    const goOffline = () => setOnline(false)
+    void refreshQueueCount()
+    const goOnline = () => void syncNow()
     window.addEventListener("online", goOnline)
-    window.addEventListener("offline", goOffline)
     if (navigator.onLine) void syncNow()
-    return () => {
-      window.removeEventListener("online", goOnline)
-      window.removeEventListener("offline", goOffline)
-    }
-  }, [refreshCount, syncNow])
+    return () => window.removeEventListener("online", goOnline)
+  }, [syncNow])
 
   const enqueuePayment = useCallback<OfflineCtx["enqueuePayment"]>(
     async (p, key) => {
       await enqueue({ kind: "payment", payload: p, key })
-      await refreshCount()
+      await refreshQueueCount()
       toast.message("Payment queued — will sync when back online.")
     },
-    [refreshCount],
+    [],
   )
   const enqueueOrder = useCallback<OfflineCtx["enqueueOrder"]>(
     async (p, key) => {
       await enqueue({ kind: "order", payload: p, key })
-      await refreshCount()
+      await refreshQueueCount()
       toast.message("Order queued — will sync when back online.")
     },
-    [refreshCount],
+    [],
   )
 
   return (

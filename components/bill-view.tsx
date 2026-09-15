@@ -101,6 +101,18 @@ type MergeableOrder = {
   restaurant_tables: { label: string } | null
 }
 
+/**
+ * Module scope, and only ever called from an event handler — never in render.
+ * `crypto.randomUUID` and the `Date.now`/`Math.random` fallback are impure, so
+ * inside the component body they read as render-time randomness (and the
+ * purity lint flags them as such).
+ */
+function freshPaymentKey(): string {
+  return typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.round(Math.random() * 1e9)}`
+}
+
 export function BillView({
   currency,
   bill,
@@ -130,13 +142,7 @@ export function BillView({
   const payKey = useRef<{ key: string; cents: number } | null>(null)
   const keyFor = (cents: number) => {
     if (!payKey.current || payKey.current.cents !== cents) {
-      payKey.current = {
-        key:
-          typeof crypto !== "undefined" && crypto.randomUUID
-            ? crypto.randomUUID()
-            : `${Date.now()}-${Math.round(Math.random() * 1e9)}`,
-        cents,
-      }
+      payKey.current = { key: freshPaymentKey(), cents }
     }
     return payKey.current.key
   }

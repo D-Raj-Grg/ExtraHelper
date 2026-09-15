@@ -52,9 +52,17 @@ export function NotificationTabs({
 }) {
   const [tab, setTab] = useState<"order" | "activity">("order")
 
-  // Order tab kept live via Realtime (scoped debounced refetch).
+  // Order tab kept live via Realtime (scoped debounced refetch). A fresh
+  // server render (router.refresh, navigation) has to win over what Realtime
+  // last wrote, so the live copy resets when the prop identity changes —
+  // adjusted during render rather than in an effect, which would paint the
+  // stale rows first and re-render on top of them.
   const [liveOrders, setLiveOrders] = useState<OrderRow[]>(orders)
-  useEffect(() => setLiveOrders(orders), [orders])
+  const [seededOrders, setSeededOrders] = useState(orders)
+  if (orders !== seededOrders) {
+    setSeededOrders(orders)
+    setLiveOrders(orders)
+  }
 
   const refetch = useCallback(async () => {
     const supabase = createClient()
@@ -93,7 +101,13 @@ export function NotificationTabs({
   // Activity tab — also live (audit_logs realtime; RLS delivers only to
   // owner/manager, so only subscribe when the tab is available).
   const [liveActivity, setLiveActivity] = useState<ActivityRow[]>(activity ?? [])
-  useEffect(() => setLiveActivity(activity ?? []), [activity])
+  // Compared on `activity` itself, not on `activity ?? []` — the coalesced
+  // array is a new reference every render and would reset the list forever.
+  const [seededActivity, setSeededActivity] = useState(activity)
+  if (activity !== seededActivity) {
+    setSeededActivity(activity)
+    setLiveActivity(activity ?? [])
+  }
 
   const refetchActivity = useCallback(async () => {
     const supabase = createClient()
