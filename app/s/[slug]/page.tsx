@@ -1,4 +1,6 @@
+import Link from "next/link"
 import { notFound } from "next/navigation"
+import { StarIcon } from "lucide-react"
 import { createClient } from "@/lib/supabase/server"
 import { Storefront } from "@/components/storefront"
 
@@ -22,7 +24,13 @@ export default async function StorefrontPage({
 }) {
   const { slug } = await params
   const supabase = await createClient()
-  const { data } = await supabase.rpc("storefront_menu", { _slug: slug })
+  // Two independent public RPCs, so they go together. `review_page` returns
+  // null whenever the review page is off or has nothing to link to, which is
+  // exactly the condition for not offering it here either.
+  const [{ data }, { data: review }] = await Promise.all([
+    supabase.rpc("storefront_menu", { _slug: slug }),
+    supabase.rpc("review_page", { _slug: slug }),
+  ])
   if (!data) notFound()
   const menu = data as Menu
 
@@ -38,6 +46,16 @@ export default async function StorefrontPage({
         fees={menu.fees ?? {}}
         categories={menu.categories}
       />
+
+      {review ? (
+        <Link
+          href={`/r/${slug}`}
+          className="mt-6 flex min-h-11 items-center justify-center gap-2 rounded-lg border bg-card px-4 py-3 text-sm font-semibold transition-colors hover:bg-muted motion-reduce:transition-none"
+        >
+          <StarIcon className="size-4" aria-hidden />
+          Eaten here before? Leave us a review
+        </Link>
+      ) : null}
     </div>
   )
 }

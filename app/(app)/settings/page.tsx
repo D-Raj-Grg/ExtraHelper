@@ -21,11 +21,12 @@ export default async function SettingsPage() {
     { data: printers },
     { data: printJobs },
     { data: printerLimit },
+    { data: slugRow },
   ] = await Promise.all([
     supabase
       .from("tenant_settings")
       .select(
-        "currency, timezone, day_cutoff_minutes, service_charge, packaging_fee, tax_rules, receipt_template, block_negative_stock, payment_gateway, printing_mode, qr_auto_fire",
+        "currency, timezone, day_cutoff_minutes, service_charge, packaging_fee, tax_rules, receipt_template, block_negative_stock, payment_gateway, printing_mode, qr_auto_fire, review_enabled, review_place_id, review_listing_url, review_score, review_count, review_checked, review_contact_phone",
       )
       .eq("tenant_id", tenant.tenantId)
       .maybeSingle(),
@@ -52,6 +53,9 @@ export default async function SettingsPage() {
       .order("created_at", { ascending: false })
       .limit(30),
     supabase.rpc("tenant_limit", { _tenant: tenant.tenantId, _key: "printers" }),
+    // The public slug the review page lives under. Owned by `tenants`, not
+    // `tenant_settings`, same as the restaurant name.
+    supabase.from("tenants").select("slug").eq("id", tenant.tenantId).maybeSingle(),
   ])
 
   // Owner-only Dangerous Area: usage counts, plan denominators, transfer
@@ -165,6 +169,16 @@ export default async function SettingsPage() {
         printerLimit={typeof printerLimit === "number" ? printerLimit : null}
         printingMode={settings?.printing_mode === "cloud" ? "cloud" : "local"}
         canManagePrinters={tenant.role === "owner" || tenant.role === "manager"}
+        slug={(slugRow?.slug as string | null) ?? null}
+        reviewEnabled={Boolean(settings?.review_enabled)}
+        reviewPlaceId={settings?.review_place_id ?? ""}
+        reviewListingUrl={settings?.review_listing_url ?? ""}
+        // Empty string, never "0": a rating nobody has checked is unknown, and
+        // the inputs have to be able to say so.
+        reviewScore={settings?.review_score == null ? "" : String(settings.review_score)}
+        reviewCount={settings?.review_count == null ? "" : String(settings.review_count)}
+        reviewChecked={settings?.review_checked ?? ""}
+        reviewContactPhone={settings?.review_contact_phone ?? ""}
         danger={danger}
       />
     </PageShell>

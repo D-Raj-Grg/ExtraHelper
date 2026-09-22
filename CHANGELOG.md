@@ -8,6 +8,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Added
+- **A one-page way for a guest to leave you a Google review.** Turn it on in Settings → Reviews, paste your Google listing, and you get a printable QR for the table or the till. A guest who scans it picks a rating, taps what stood out — the food, the service, the wait, the price — and gets a ready-written review they can edit before posting. Every draft is worded differently, so a run of reviews never reads like the same message copied out, which is what gets them removed. The rating and review count from your listing can be shown at the top; leave them blank until you have checked, and nothing is shown rather than a zero. A guest who picks three stars or fewer is asked what could be better instead, and can be offered your phone number — but the button to post on Google is exactly the same as it is at five stars. Steering unhappy guests away from your listing is against Google's rules, so the page does not do it. This is separate from the star feedback on the dine-in QR menu, which stays private to you.
+
 ### Security
 - **Adding an off-menu item is now enforced by the database, not by the page.** "Something off the menu" is the one place in ExtraHelper where a price is typed rather than looked up, and until now the check that you were allowed to do it lived only in the web app's own code. Anyone able to sign in to a restaurant could have written the same line another way — at a price of their choosing, and with nothing in the manager log to show for it. The rule now lives in the database: it re-checks your role and your permission, refuses an order that has already been billed or closed, caps the price, and records the amount in the manager log in the same step as the line. Nothing changes on screen. The mobile app uses the same rule, so both apps behave identically.
 

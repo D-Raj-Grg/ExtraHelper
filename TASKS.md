@@ -6,6 +6,98 @@
 
 ---
 
+## Guest reviews — a Google review page per restaurant (2026-09-22, web + DB)
+
+Ported from the `logfitness_web` review flow and made multi-tenant. The gap it fills: the only
+review surface we had was **private** — QR star feedback → `feedback` → `/loyalty`. Useful to the
+owner, invisible to the next diner deciding where to eat. This adds the public half, and the two do
+not overlap: the private one collects, this one *routes* a guest to Google.
+
+The flow is four steps — rating → what stood out → an editable draft → post it — and nothing is
+submitted to us. The draft is assembled in the browser and leaves via the clipboard, because a
+review has to be posted by the guest from their own account or Google discards it.
+
+**Not review-gating.** A low rating changes the chip labels to "what could we do better", swaps the
+phrase pool to the honest-feedback tone and *adds* a recovery phone — the Google button stays
+exactly as available as it is at five stars. Filtering unhappy guests away from the listing violates
+Google's policy and is the thing this pattern is usually abused for.
+
+- [x] `20260922090000_reviews.sql` — seven columns on `tenant_settings`
+      (`review_enabled`, `review_place_id`, `review_listing_url`, `review_score`, `review_count`,
+      `review_checked`, `review_contact_phone`) plus `review_page(slug) -> jsonb`, SECURITY DEFINER
+      and granted to `anon` — the same controlled-anon pattern as `storefront_menu`. No new table,
+      so no new RLS policy; the columns inherit `tenant_settings`' member-scoped policies.
+      `review_score`/`review_count` are **nullable on purpose**: a listing nobody has checked yet is
+      unknown, and `not null default 0` would have rendered every restaurant as nought out of five.
+      The RPC returns null — so the route 404s — for an unknown slug, a suspended tenant, a page
+      switched off, **and** a page enabled with no Place ID and no listing URL, because a QR that
+      leads nowhere is worse than no QR. **Verified** against a local Postgres 16: all four null
+      cases, both check constraints biting, grants landing on `anon` + `authenticated`, and the file
+      re-applying cleanly.
+- [x] `lib/review-composer.ts` — the phrase bank (9 restaurant aspects × praise/improve pools,
+      openers and closers keyed by tone) and `composeReview`. Sentences are shuffled and drawn from
+      pools by a seeded PRNG, so two guests who tap the same chips still get visibly different text:
+      a fixed template posted verbatim by dozens of accounts is exactly what Google's duplicate
+      filter removes. Openers interpolate the restaurant's own name. A **plain module** — no
+      `"use client"`, no `lib/supabase/server` — because the Server Component page and the client
+      composer both import it, and that boundary crossed either way is a build failure or a render
+      500.
+- [x] `app/r/[slug]/page.tsx` + `components/reviews/review-composer.tsx` — the public page. Stars are
+      real radios under `sr-only`, so arrow keys and screen readers work; the rating is also spelled
+      out as `3 / 5` so fill-vs-outline is never the only signal. Chips reuse `ChoiceChip`. Every
+      target a guest hits is ≥44px. The headline rating is shown **as Google reports it** and is
+      deliberately *not* emitted as `aggregateRating` JSON-LD — Google ignores a business's
+      self-declared rating on its own page and can penalise it.
+- [x] Settings → **Reviews** tab (`components/settings/reviews-tab.tsx`) — the switch, the Place ID,
+      the listing link, the two figures, the last-checked date, the recovery phone, and a printable
+      QR for the table card. Publishing with nothing to link to is refused **at save**, not left to
+      404 later: the restaurant would otherwise only find out from a guest.
+- [x] `components/link-qr.tsx` — `TableQr`'s encode/print/download extracted so the review card and
+      the table cards are one implementation, not two. `TableQr` is now a thin wrapper.
+- [x] `/s/[slug]` storefront offers the page when it is live.
+- [x] **`/r` added to the proxy's `PUBLIC_PREFIXES`.** Found by rendering the route, not by reading
+      it: `tsc`, `next build` and `check:rsc` were all clean while every guest scanning the QR would
+      have been bounced to `/login`. Same standing lesson as the day-close 500 — a brand-new route
+      needs one real render before it ships.
+- [x] **Verified in a real browser** (Chromium, 390px viewport) against a stubbed `review_page`:
+      26 assertions green — chips and draft gated on a rating, draft names the restaurant, a chip
+      lengthens it, re-roll changes the wording but keeps the selection, a hand edit sticks and is
+      then discarded by a new chip, the critical tone flips labels and pools, the recovery phone
+      appears only when one is saved, the Google button survives a two-star rating, arrow keys move
+      the rating, all three tap targets measure 44px, no horizontal scroll, no console errors. Plus
+      the server cases over HTTP: 200 with no login redirect, 404 on an unknown slug, score block
+      absent when never checked, count hidden under ten, Place ID preferred over the listing URL.
+      tsc + build + `check:rsc` clean; lint unchanged (1 pre-existing error, none in touched files).
+- [ ] **Guest quotes wall not ported.** `logfitness_web` also renders a marquee of Google review text
+      pasted into a TS file. Left out deliberately: per-tenant quotes need somewhere to live and an
+      editor to put them there, and hand-pasting is a marketing-site habit that does not obviously
+      scale to every restaurant on the platform. Decide whether it earns a `tenant_reviews` table.
+- [ ] **Place ID is hand-entered.** Google's Place ID finder is a separate tool, so a non-technical
+      owner will paste the wrong string at least once. A "test this link" button next to the field
+      would catch it before the QR is printed.
+
+---
+
+## Menu data — "1 Jir" retired for "250 gm" (2026-09-22, data)
+
+Owner request: drop the `1 Jir` portion from the sekuwa dishes and sell 250 gm instead, at +350 buff,
++350 chicken, +600 mutton, +400 pork.
+
+- [x] `supabase/scripts/2026-09-22_sekuwa_250gm_variants.sql` — deliberately **not** a migration:
+      this is one restaurant's menu, and a migration replays into every environment. Transactional,
+      re-runnable, and it refuses rather than guesses — a name pattern matching anything other than
+      exactly one dish aborts the whole thing (`%pork%` would otherwise have happily also repriced a
+      Pork Momo). Deleting a variant is not free: `order_items.variant_id` is `on delete set null`,
+      so past orders stop recording *which size* was sold, which the script says at the top.
+      **Verified** against a local Postgres 16 replica of `menu_items`/`item_variants`: first run
+      drops all three `1 Jir` spellings and prices the four `250 gm` rows, a second run is a no-op,
+      and an ambiguous match rolls back with nothing half-applied.
+- [!] **Not applied to the live database.** This session has no Supabase access — the connector is
+      unauthorized and the repo carries no credentials. The script is ready to paste into the SQL
+      editor.
+
+---
+
 ## Adding items after the bill is up (2026-08-16, web + DB)
 
 A table asks for the bill, then orders one more water. There was no way to add it — the line got
@@ -1138,6 +1230,11 @@ and one of which could kill printing on a device until it was restarted. They ar
 - [x] Online storefront (per-tenant subdomain/slug): menu, cart, address, delivery/pickup slot, order-type fee — public `/s/[slug]` (`storefront_menu`/`place_online_order` anon SECURITY DEFINER): cart, pickup/delivery toggle, name/phone/address, order-type fee from settings → creates `online_orders` + order. **Verified** (browser render + anon MCP order). TODO: delivery/pickup time-slot picker. (`20260711020634_storefront`)
 - [x] Delivery status tracking — `/online` staff board (`app/online/actions.ts`): status flow received→preparing→ready→out_for_delivery→delivered, dispatch (driver → `delivery_tracking`). Tenant-scoped. TODO: customer-facing tracking page.
 - [x] Loyalty/CRM: customer accounts, points earn/burn, tiers, offers/coupons, order history, post-visit feedback/ratings — `/loyalty` (`loyalty_adjust()` manager-gated trusted fn): earn/redeem points, auto-tier (bronze/silver/gold), feedback list; QR star feedback feeds it. **Verified**: earn 150 + burn 50 → 100 pts silver, overdraw blocked. TODO: coupons/offers redemption, order-history view. (`20260711020954_loyalty`)
+- [x] Guest review page (public `/r/[slug]`): rating → aspect chips → generated draft → post to the
+      restaurant's own Google listing; per-tenant Place ID, figures and recovery phone in Settings →
+      Reviews, with a printable QR. Not review-gating — the Google button is identical at one star and
+      five. Complements the private QR star feedback rather than replacing it. **Verified** in a real
+      browser (26 assertions) + over HTTP. (`20260922090000_reviews`)
 - [ ] Multiple menus (dine-in vs delivery pricing, happy-hour) + schedules
 - [~] **Verify:** QR/online order lands in KDS; reservation blocks table → seat → bill (E2E) — QR order → POS/KDS ✅; online order → `/online` ✅; reservation → seat → table occupied ✅. TODO: full reservation→bill chain E2E.
 

@@ -10,6 +10,7 @@ import { DangerTab } from "./danger-tab"
 import { GeneralTab } from "./general-tab"
 import { PrintersTab } from "./printers-tab"
 import { ReceiptTab } from "./receipt-tab"
+import { ReviewsTab } from "./reviews-tab"
 import type { Branch, DangerData, PrinterRow, PrintJobRow, TaxRule } from "./types"
 
 export function SettingsManager({
@@ -34,6 +35,14 @@ export function SettingsManager({
   printerLimit,
   printingMode,
   canManagePrinters,
+  slug,
+  reviewEnabled,
+  reviewPlaceId,
+  reviewListingUrl,
+  reviewScore,
+  reviewCount,
+  reviewChecked,
+  reviewContactPhone,
   danger,
 }: {
   restaurantName: string
@@ -59,6 +68,16 @@ export function SettingsManager({
   printingMode: "local" | "cloud"
   /** Printer setup is owner/manager work — same gate as branches. */
   canManagePrinters: boolean
+  /** Public slug the review page lives under; null if the tenant has none. */
+  slug: string | null
+  reviewEnabled: boolean
+  reviewPlaceId: string
+  reviewListingUrl: string
+  /** Strings, not numbers: "" is "never checked", which 0 cannot express. */
+  reviewScore: string
+  reviewCount: string
+  reviewChecked: string
+  reviewContactPhone: string
   /** Owner-only; null for non-owners (tab hidden). */
   danger: DangerData | null
 }) {
@@ -84,6 +103,7 @@ export function SettingsManager({
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="charges">Charges &amp; tax</TabsTrigger>
           <TabsTrigger value="receipt">Receipt &amp; branding</TabsTrigger>
+          <TabsTrigger value="reviews">Reviews</TabsTrigger>
           {canManagePrinters ? <TabsTrigger value="printers">Printers</TabsTrigger> : null}
           {canManageBranches ? <TabsTrigger value="branches">Branches</TabsTrigger> : null}
           {danger ? <TabsTrigger value="danger">Danger zone</TabsTrigger> : null}
@@ -114,6 +134,18 @@ export function SettingsManager({
             logoUrl={logoUrl}
             qrUrl={qrUrl}
             qrCaption={qrCaption}
+          />
+        </TabsContent>
+        <TabsContent value="reviews" keepMounted>
+          <ReviewsTab
+            slug={slug}
+            reviewEnabled={reviewEnabled}
+            reviewPlaceId={reviewPlaceId}
+            reviewListingUrl={reviewListingUrl}
+            reviewScore={reviewScore}
+            reviewCount={reviewCount}
+            reviewChecked={reviewChecked}
+            reviewContactPhone={reviewContactPhone}
           />
         </TabsContent>
         {canManagePrinters ? (

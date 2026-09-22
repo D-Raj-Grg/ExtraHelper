@@ -69,6 +69,48 @@ export async function updateSettings(
   if (!DAY_CUTOFFS.some((c) => c.value === dayCutoffMinutes))
     return { error: "Unknown day-start time." }
 
+  // ---- Guest reviews ------------------------------------------------------
+  // The public /r/{slug} page. Per rule #2 the listing, the figures and the
+  // recovery number are all this restaurant's own — nothing platform-wide.
+  const reviewEnabled = formData.get("reviewEnabled") === "on"
+  const reviewPlaceId = String(formData.get("reviewPlaceId") ?? "").trim() || null
+  const reviewListingUrl = String(formData.get("reviewListingUrl") ?? "").trim() || null
+  const reviewContactPhone = String(formData.get("reviewContactPhone") ?? "").trim() || null
+
+  if (reviewListingUrl) {
+    let ok = false
+    try {
+      const u = new URL(reviewListingUrl)
+      ok = u.protocol === "http:" || u.protocol === "https:"
+    } catch {
+      ok = false
+    }
+    if (!ok) return { error: "The listing link must be a full http(s) URL." }
+  }
+
+  // Refused at save rather than left to 404 later: publishing with nothing to
+  // link to prints a QR that goes nowhere, and the restaurant would only find
+  // out from a guest.
+  if (reviewEnabled && !reviewPlaceId && !reviewListingUrl)
+    return { error: "Add a Google Place ID or a listing link before publishing the review page." }
+
+  // "" means never checked. That is not zero, and the columns are nullable so
+  // it can be stored as the unknown it is.
+  const rawScore = String(formData.get("reviewScore") ?? "").trim()
+  const reviewScore = rawScore === "" ? null : Number(rawScore)
+  if (reviewScore !== null && (!Number.isFinite(reviewScore) || reviewScore < 1 || reviewScore > 5))
+    return { error: "Google rating must be between 1 and 5, or left empty." }
+
+  const rawCount = String(formData.get("reviewCount") ?? "").trim()
+  const reviewCount = rawCount === "" ? null : Number(rawCount)
+  if (reviewCount !== null && (!Number.isInteger(reviewCount) || reviewCount < 0))
+    return { error: "Number of reviews must be a whole number of zero or more, or left empty." }
+
+  const rawChecked = String(formData.get("reviewChecked") ?? "").trim()
+  const reviewChecked = rawChecked === "" ? null : rawChecked
+  if (reviewChecked !== null && !/^\d{4}-\d{2}-\d{2}$/.test(reviewChecked))
+    return { error: "Last checked must be a date." }
+
   const supabase = await createClient()
   const { error } = await supabase
     .from("tenant_settings")
@@ -82,6 +124,13 @@ export async function updateSettings(
       block_negative_stock: blockNegativeStock,
       qr_auto_fire: qrAutoFire,
       payment_gateway: paymentGateway,
+      review_enabled: reviewEnabled,
+      review_place_id: reviewPlaceId,
+      review_listing_url: reviewListingUrl,
+      review_score: reviewScore,
+      review_count: reviewCount,
+      review_checked: reviewChecked,
+      review_contact_phone: reviewContactPhone,
     })
     .eq("tenant_id", tenant.tenantId)
   if (error) return { error: error.message }
