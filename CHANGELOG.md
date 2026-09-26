@@ -8,31 +8,57 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+_Nothing yet._
+
+---
+
+## [1.0.15] — 2026-09-26 · Expenses, order alerts, and the work since 1.0.14
+
+Everything pushed to `main` since 1.0.14. Most of August and early September shipped without changelog entries; those items are gathered here in brief, with commit hashes, so the record is complete.
+
 ### Added
 - **Daily expenses — the paper daily book, in the app.** A new **Expenses** page (sidebar, Operations) where anyone on staff logs what they spent for the restaurant: the amount, a category tapped from chips (Groceries, Vegetables & Meat, Gas / Fuel, Transport / Ride, Utilities, Staff food, Repairs, Other), a few words ("Rice 5kg", "Pathao for dishwasher"), and where the money came from: **Cash**, **Online / eSewa**, or **Owner's pocket**. Waiters and kitchen staff see only what they logged; owners, managers and cashiers see everyone's. A mistake is **voided with a reason** and stays visible, crossed out, rather than disappearing.
 - **Receipt photos.** Snap or upload the bill when you log an expense, or attach, replace or remove it later from the expense's menu. Photos are private to the restaurant: only the person who logged it and those who can see all expenses can open them. The photo also shows on Day close.
 - **The night count on Day close.** A new **Cash book** card works out what you *should* have in hand — cash taken in sales, minus cash refunds, minus cash expenses — and the same for online. You type what you counted ("cash left 100, online 1000") and it shows **Balanced**, **Short** or **Over** with the amount. You can recount a closed day. Day close also lists the day's expenses by item and category, and both are in the CSV export.
 - **Expenses in Reports.** A new **Expenses** tab for any range (today, last 7 days, last 30 days, year, custom). It shows total spend compared with the previous period (going up is marked as the bad direction), revenue, **net after expenses**, expenses as a share of revenue, the split by where the money came from, and breakdowns by category and by day. Each day links to that day's expenses.
 - **Your own categories.** Owners and managers can add, rename, retire and restore expense categories. Retiring one keeps it on past entries.
-
-### Changed
-- **The cash drawer is now optional, and off by default.** Most small restaurants never open a shift drawer, so **Settings → General → Use the cash drawer** turns it on only for those who do. When it's off, the Cash Drawer page is hidden and Day close uses the simple night count above. It was left on for the one restaurant that had already been using it. With the drawer on, a cash expense logged while your drawer is open also comes out of that drawer automatically.
-
-### Added
 - **Hear about every step of an order, not just its arrival.** The bell in the header used to light up only when a new order came in. It now follows each order through the whole service — **new order, preparing, ready to serve, served, billed, paid**, and cancelled — so the floor knows a dish is up without walking to the pass, and the till knows a table has paid. Each update pops up as it happens ("Ready to serve — Table A2", with the amount when there is one) and has a **View** button that opens the order or the bill. You are never alerted about something you did yourself.
 - **Unread you can trust.** The bell shows how many updates you haven't seen, counted by the database so the number stays right beyond the 20 it lists. **Mark all read** clears it, and so does tapping any update; just opening the bell doesn't. Someone signing in for the first time sees the last 24 hours as unread, not every order the restaurant has ever taken.
 - **The Notifications page matches the bell.** The Orders tab is now **Updates**: the last 100 order updates, live, with unread ones in bold and marked with a dot, an "N unread" line and its own **Mark all read**. Marking read on the page clears the bell straight away, and the other way round.
 - The bell appears for anyone whose role can see notifications, including custom roles, instead of a fixed list of roles. Kitchen and store-room roles don't get it. On phones the bell is now a full-size tap target.
+- **Day close (Z-report).** One page for a business day: sales, payments, cash, top items and every order of the day, each order opening in full. The POS shows a running summary for the day, and Reports gains a per-day sales table. (f74dbd7, b7ef412, e820307)
+- **Add to a bill that hasn't been paid,** see every unpaid bill in one place, and **leave a bill on a regular customer's tab.** (a0a8435, f1efef6)
+- **eSewa, FonePay and bank transfer at the till** as payment methods of their own. (a06cee9)
+- **Take an order from any screen,** and the POS has a **Completed orders** tab. (1257877, 09e4a49)
+- **Cash drawer movements.** Record cash taken out or put in during a shift, have a manager review it, and the drawer's expected cash now subtracts payouts and cash refunds. (33e3ce1, 462911c, 9dd59d7, 9468fcf)
+- **Purchasing, rebuilt.** Quick purchase, paying suppliers and what you still owe them, archiving suppliers, the full purchase-order lifecycle, correcting a received order, and voiding a payment. (da280ca, 6f09042, 8802e86)
+- **QR guest menu rebuilt** with dish photos, search and sizes. **Reservations host board rebuilt.** (0ee2b57, a4db5af)
+- **Menu variants can be edited and reordered.** Inventory units are now a managed list instead of free text. (365bdb3, f2d4495)
+- **Owners can edit what the built-in roles may do** (Waiter, Cashier and the rest). (66e5e53)
+- **Delete your own account** from the profile page. (e61d7f1, 1288a93)
+- **Printing:** the slip carries the logo and payment QR, the printed invoice matches the one on screen, and the bill and the receipt are two separate documents. (c7b90b8, 042f90a, fbbf560)
+- The notifications bell opens a quick view instead of leaving the page. (8970d18)
+
+### Changed
+- **The cash drawer is now optional, and off by default.** Most small restaurants never open a shift drawer, so **Settings → General → Use the cash drawer** turns it on only for those who do. When it's off, the Cash Drawer page is hidden and Day close uses the simple night count above. It was left on for the one restaurant that had already been using it. With the drawer on, a cash expense logged while your drawer is open also comes out of that drawer automatically.
+- **Confirming an order sends it to the kitchen.** The new-order screen had two buttons — *Confirm & fire* and *Confirm only* — and *Confirm only* left the order sitting where no kitchen screen or printer could see it. There is now one button: confirm an order and the tickets go out. Orders taken offline fire by themselves the moment the connection is back, instead of waiting for someone to remember them. Holding a course back is still done from the order itself, by adding the later dishes when you want them cooked.
+- **Pages switch instantly.** Moving between pages no longer freezes and then jumps: a loading outline shows straight away, and each request reads your account and restaurant once instead of several times. (d04b6f8, 9b6da72, 94f2be4)
+- Picking where an order goes (a table, takeaway) now opens the dish list straight away. (675e95d)
 
 ### Security
 - **Adding an off-menu item is now enforced by the database, not by the page.** "Something off the menu" is the one place in ExtraHelper where a price is typed rather than looked up, and until now the check that you were allowed to do it lived only in the web app's own code. Anyone able to sign in to a restaurant could have written the same line another way — at a price of their choosing, and with nothing in the manager log to show for it. The rule now lives in the database: it re-checks your role and your permission, refuses an order that has already been billed or closed, caps the price, and records the amount in the manager log in the same step as the line. Nothing changes on screen. The mobile app uses the same rule, so both apps behave identically.
+- **Menu editing, purchasing writes and stock movements are enforced by the database,** not only by the page, so they can't be done another way. (0aef790, 8802e86, 00121cf)
+- **Team screens are gated on permissions, and every database function was checked for who may call it.** Several were left callable by any signed-in user and are now locked down. (1288a93)
 
 ### Fixed
 - **The kitchen screen no longer keeps tickets from tables that already paid and left.** A ticket only ever left the board when a cook bumped it, so any ticket that was missed stayed there — through billing, through payment, overnight, indefinitely. Cooks learned to ignore the bottom of the screen, which is the worst thing a kitchen screen can teach. Settling an order now clears its tickets automatically: paying or cancelling clears all of them, and printing the bill clears the ones that were already on the screen at that moment. **A round ordered after the bill has gone out still shows up** — it is real food someone has to cook, and the guest is being charged for it. Leaving a bill on a customer's tab clears the tickets too, since the guest has gone. One consequence worth knowing: if you print the bill while a dish is still cooking, that ticket goes grey straight away. It stays in the *Completed orders* strip for 20 minutes, where it can be pulled back onto the board.
-
-### Changed
-- **Confirming an order sends it to the kitchen.** The new-order screen had two buttons — *Confirm & fire* and *Confirm only* — and *Confirm only* left the order sitting where no kitchen screen or printer could see it. There is now one button: confirm an order and the tickets go out. Orders taken offline fire by themselves the moment the connection is back, instead of waiting for someone to remember them. Holding a course back is still done from the order itself, by adding the later dishes when you want them cooked.
-
+- **QR orders reach the kitchen.** A guest's order was saved but never ticketed; two of the first three ever placed had no kitchen ticket. Changing a discount also no longer stacks on the first. Two other ordering and billing actions the floor relied on are no longer refused. (dd73411)
+- Printed pages are sized to the paper roll, not to A4. (5455022)
+- A USB printer on macOS says what to do instead of failing silently. (f2c31f7)
+- `/receipt` matches the printed slip. (b1fa45c)
+- The dish grid no longer pushes the cart off the new-order popup, and dish photos no longer flicker when switching category. (a0d4050, a660f47)
+- Purchasing no longer shows stale rows after a save. (da74157)
+- API routes are no longer redirected to the login page. (4ce43c4)
 
 <details><summary>Technical — order notifications</summary>
 
@@ -59,7 +85,6 @@ Migrations `20260926090000_daily_expenses.sql`, `20260926093000_expenses_day_rpc
 - **Web.** `/expenses` (`components/expenses/*`), `components/reports/cash-book.tsx`, `components/reports/expenses-tab.tsx`. `StatTiles` gains `lowerIsBetter`. `DayPicker` gains `basePath`.
 
 </details>
-
 ---
 
 ## [1.0.14] — 2026-08-01
