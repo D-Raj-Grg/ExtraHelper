@@ -550,6 +550,44 @@ export type Database = {
           },
         ]
       }
+      day_closings: {
+        Row: {
+          business_date: string
+          cash_counted_cents: number
+          closed_at: string
+          closed_by: string
+          note: string | null
+          online_counted_cents: number | null
+          tenant_id: string
+        }
+        Insert: {
+          business_date: string
+          cash_counted_cents: number
+          closed_at?: string
+          closed_by: string
+          note?: string | null
+          online_counted_cents?: number | null
+          tenant_id: string
+        }
+        Update: {
+          business_date?: string
+          cash_counted_cents?: number
+          closed_at?: string
+          closed_by?: string
+          note?: string | null
+          online_counted_cents?: number | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "day_closings_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       delivery_tracking: {
         Row: {
           driver_name: string | null
@@ -652,6 +690,130 @@ export type Database = {
           },
           {
             foreignKeyName: "discounts_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      expense_categories: {
+        Row: {
+          archived_at: string | null
+          created_at: string
+          id: string
+          name: string
+          sort: number
+          tenant_id: string
+        }
+        Insert: {
+          archived_at?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          sort?: number
+          tenant_id: string
+        }
+        Update: {
+          archived_at?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          sort?: number
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expense_categories_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      expenses: {
+        Row: {
+          amount_cents: number
+          branch_id: string | null
+          business_date: string
+          cash_movement_id: string | null
+          category_id: string
+          client_key: string | null
+          created_at: string
+          created_by: string
+          id: string
+          note: string
+          paid_from: Database["public"]["Enums"]["expense_paid_from"]
+          receipt_path: string | null
+          tenant_id: string
+          updated_at: string
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
+        }
+        Insert: {
+          amount_cents: number
+          branch_id?: string | null
+          business_date: string
+          cash_movement_id?: string | null
+          category_id: string
+          client_key?: string | null
+          created_at?: string
+          created_by: string
+          id?: string
+          note: string
+          paid_from?: Database["public"]["Enums"]["expense_paid_from"]
+          receipt_path?: string | null
+          tenant_id: string
+          updated_at?: string
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
+        }
+        Update: {
+          amount_cents?: number
+          branch_id?: string | null
+          business_date?: string
+          cash_movement_id?: string | null
+          category_id?: string
+          client_key?: string | null
+          created_at?: string
+          created_by?: string
+          id?: string
+          note?: string
+          paid_from?: Database["public"]["Enums"]["expense_paid_from"]
+          receipt_path?: string | null
+          tenant_id?: string
+          updated_at?: string
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expenses_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expenses_cash_movement_id_fkey"
+            columns: ["cash_movement_id"]
+            isOneToOne: false
+            referencedRelation: "cash_movements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expenses_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "expense_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expenses_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -1578,6 +1740,99 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "modifiers_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notification_reads: {
+        Row: {
+          last_read_at: string
+          tenant_id: string
+          user_id: string
+        }
+        Insert: {
+          last_read_at?: string
+          tenant_id: string
+          user_id: string
+        }
+        Update: {
+          last_read_at?: string
+          tenant_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_reads_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notifications: {
+        Row: {
+          actor_id: string | null
+          amount_cents: number | null
+          bill_id: string | null
+          body: string
+          created_at: string
+          id: string
+          kind: string
+          order_id: string | null
+          order_type: string | null
+          table_label: string | null
+          tenant_id: string
+          title: string
+        }
+        Insert: {
+          actor_id?: string | null
+          amount_cents?: number | null
+          bill_id?: string | null
+          body: string
+          created_at?: string
+          id?: string
+          kind: string
+          order_id?: string | null
+          order_type?: string | null
+          table_label?: string | null
+          tenant_id: string
+          title: string
+        }
+        Update: {
+          actor_id?: string | null
+          amount_cents?: number | null
+          bill_id?: string | null
+          body?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          order_id?: string | null
+          order_type?: string | null
+          table_label?: string | null
+          tenant_id?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_bill_id_fkey"
+            columns: ["bill_id"]
+            isOneToOne: false
+            referencedRelation: "bills"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -3256,6 +3511,7 @@ export type Database = {
       tenant_settings: {
         Row: {
           block_negative_stock: boolean
+          cash_drawer_enabled: boolean
           currency: string
           day_cutoff_minutes: number
           order_type_fees: Json
@@ -3273,6 +3529,7 @@ export type Database = {
         }
         Insert: {
           block_negative_stock?: boolean
+          cash_drawer_enabled?: boolean
           currency?: string
           day_cutoff_minutes?: number
           order_type_fees?: Json
@@ -3290,6 +3547,7 @@ export type Database = {
         }
         Update: {
           block_negative_stock?: boolean
+          cash_drawer_enabled?: boolean
           currency?: string
           day_cutoff_minutes?: number
           order_type_fees?: Json
@@ -3567,6 +3825,14 @@ export type Database = {
         Args: { _tenant: string; _user_id: string }
         Returns: undefined
       }
+      archive_expense_category: {
+        Args: { _id: string; _tenant: string }
+        Returns: undefined
+      }
+      assert_may_change_expense: {
+        Args: { _e: Database["public"]["Tables"]["expenses"]["Row"] }
+        Returns: undefined
+      }
       assert_may_delete_purchasing: {
         Args: { _tenant: string }
         Returns: undefined
@@ -3650,6 +3916,16 @@ export type Database = {
           variance_cents: number
         }[]
       }
+      close_day: {
+        Args: {
+          _cash_counted_cents: number
+          _day: string
+          _note?: string
+          _online_counted_cents?: number
+          _tenant: string
+        }
+        Returns: undefined
+      }
       complete_print_job: {
         Args: {
           _error: string
@@ -3697,6 +3973,10 @@ export type Database = {
         Args: { _day: string; _tenant: string }
         Returns: Json
       }
+      daily_report_core: {
+        Args: { _day: string; _tenant: string }
+        Returns: Json
+      }
       daily_report_for_print: { Args: { _job_id: string }; Returns: Json }
       dashboard_summary: {
         Args: { _days?: number; _tenant: string }
@@ -3706,6 +3986,7 @@ export type Database = {
         Args: { _base: Database["public"]["Enums"]["app_role"] }
         Returns: string[]
       }
+      delete_my_account: { Args: never; Returns: undefined }
       delete_po: { Args: { _po_id: string }; Returns: undefined }
       delete_po_line: { Args: { _line_id: string }; Returns: undefined }
       delete_printer: { Args: { _printer_id: string }; Returns: undefined }
@@ -3734,6 +4015,7 @@ export type Database = {
         }
         Returns: string
       }
+      expenses_day: { Args: { _day?: string; _tenant: string }; Returns: Json }
       fire_order: { Args: { _order_id: string }; Returns: number }
       fire_order_kots: {
         Args: { _order_id: string; _tenant: string }
@@ -3785,7 +4067,10 @@ export type Database = {
         Returns: number
       }
       mark_kot_printed: { Args: { _kot_id: string }; Returns: undefined }
+      mark_notifications_read: { Args: { _tenant: string }; Returns: string }
       mark_order_served: { Args: { _order_id: string }; Returns: undefined }
+      may_read_expense_receipt: { Args: { _name: string }; Returns: boolean }
+      may_touch_expense_receipt: { Args: { _name: string }; Returns: boolean }
       merge_receipt_template: {
         Args: { _patch: Json; _tenant: string }
         Returns: Json
@@ -3882,6 +4167,18 @@ export type Database = {
         }
         Returns: string
       }
+      record_expense: {
+        Args: {
+          _amount_cents: number
+          _business_date?: string
+          _category: string
+          _client_key?: string
+          _note: string
+          _paid_from?: Database["public"]["Enums"]["expense_paid_from"]
+          _tenant: string
+        }
+        Returns: string
+      }
       record_payment: {
         Args: {
           _amount_cents: number
@@ -3967,6 +4264,10 @@ export type Database = {
           plate_cost_cents: number
           sale_price_cents: number
         }[]
+      }
+      report_expenses: {
+        Args: { _from: string; _tenant: string; _to: string }
+        Returns: Json
       }
       report_extras: {
         Args: { _from: string; _tenant: string; _to: string }
@@ -4125,6 +4426,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      set_expense_receipt: {
+        Args: { _id: string; _path: string }
+        Returns: string
+      }
       set_item_86: {
         Args: { _is_86: boolean; _item_id: string }
         Returns: undefined
@@ -4214,6 +4519,7 @@ export type Database = {
         Args: { _order_id: string }
         Returns: undefined
       }
+      tenant_business_today: { Args: { _tenant: string }; Returns: string }
       tenant_day_start: {
         Args: { _at?: string; _tenant: string }
         Returns: string
@@ -4238,12 +4544,30 @@ export type Database = {
           suspended: number
         }[]
       }
+      update_expense: {
+        Args: {
+          _amount_cents: number
+          _category: string
+          _id: string
+          _note: string
+          _paid_from: Database["public"]["Enums"]["expense_paid_from"]
+        }
+        Returns: undefined
+      }
       update_po_line: {
         Args: { _line_id: string; _qty: number; _unit_cost_cents: number }
         Returns: undefined
       }
       update_variant: {
         Args: { _name: string; _price_delta_cents: number; _variant_id: string }
+        Returns: undefined
+      }
+      upsert_expense_category: {
+        Args: { _id: string; _name: string; _tenant: string }
+        Returns: string
+      }
+      void_expense: {
+        Args: { _id: string; _reason: string }
         Returns: undefined
       }
       void_order_item: {
@@ -4276,6 +4600,7 @@ export type Database = {
       cash_movement_status: "pending" | "approved" | "rejected"
       cash_session_status: "open" | "closed"
       discount_type: "percent" | "flat"
+      expense_paid_from: "cash" | "online" | "owner"
       kot_status: "new" | "preparing" | "ready" | "served" | "recalled"
       loyalty_txn_type: "earn" | "burn" | "adjust"
       order_status:
@@ -4356,12 +4681,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -4385,11 +4710,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -4410,11 +4735,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -4435,11 +4760,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -4452,11 +4777,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -4490,6 +4815,7 @@ export const Constants = {
       cash_movement_status: ["pending", "approved", "rejected"],
       cash_session_status: ["open", "closed"],
       discount_type: ["percent", "flat"],
+      expense_paid_from: ["cash", "online", "owner"],
       kot_status: ["new", "preparing", "ready", "served", "recalled"],
       loyalty_txn_type: ["earn", "burn", "adjust"],
       order_status: [

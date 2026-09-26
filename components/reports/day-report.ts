@@ -70,6 +70,56 @@ export type DayReport = {
     }
   }
   top_items: { description: string; qty: number; revenue_cents: number }[]
+  /** Added by 20260926090000_daily_expenses.sql. */
+  cash_drawer_enabled: boolean
+  expenses: DayExpenses
+  cash_book: DayCashBook
+}
+
+export type DayExpenseItem = {
+  id: string
+  at: string
+  time: string
+  category: string
+  note: string
+  amount_cents: number
+  paid_from: string
+  by: string | null
+  receipt_path: string | null
+  /** Signed by the page (private bucket); absent in the print payload. */
+  receipt_url?: string | null
+}
+
+export type DayExpenses = {
+  total_cents: number
+  count: number
+  by_paid_from: { cash: number; online: number; owner: number }
+  by_category: { name: string; amount_cents: number; count: number }[]
+  items: DayExpenseItem[]
+}
+
+/**
+ * The night count without a drawer: cash taken − cash refunds − cash expenses
+ * is what should be in hand; same for online. Counted figures come from
+ * `day_closings`, null until someone closes the day.
+ */
+export type DayCashBook = {
+  cash_sales_cents: number
+  cash_refunds_cents: number
+  cash_expenses_cents: number
+  expected_cash_cents: number
+  online_sales_cents: number
+  online_refunds_cents: number
+  online_expenses_cents: number
+  expected_online_cents: number
+  closed: boolean
+  counted_cash_cents: number | null
+  counted_online_cents: number | null
+  cash_variance_cents: number | null
+  online_variance_cents: number | null
+  note: string | null
+  closed_at: string | null
+  closed_by: string | null
 }
 
 /** "4:00 am" for 240; null at midnight, where there is nothing to explain. */

@@ -56,6 +56,7 @@ export async function updateSettings(
   // the operator actually cleared it — which is what makes waiter confirmation
   // an opt-in and auto-fire the default.
   const qrAutoFire = formData.get("qrAutoFire") === "on"
+  const cashDrawerEnabled = formData.get("cashDrawerEnabled") === "on"
 
   // Pluggable payment gateway (rule #6). Only registered keys are accepted.
   const GATEWAYS = ["sandbox", "manual"]
@@ -81,6 +82,7 @@ export async function updateSettings(
       tax_rules: taxRules,
       block_negative_stock: blockNegativeStock,
       qr_auto_fire: qrAutoFire,
+      cash_drawer_enabled: cashDrawerEnabled,
       payment_gateway: paymentGateway,
     })
     .eq("tenant_id", tenant.tenantId)

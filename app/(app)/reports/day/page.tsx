@@ -8,6 +8,7 @@ import { DAY_ORDER_LIMIT, type DayOrder } from "@/components/reports/day-order-u
 import type { DayReport } from "@/components/reports/day-report"
 import { businessDay } from "@/lib/format"
 import { isYmd } from "@/lib/report-range"
+import { RECEIPT_URL_TTL_SECONDS } from "@/lib/expense-constants"
 
 export const dynamic = "force-dynamic"
 
@@ -38,6 +39,19 @@ export default async function DayClosePage({
     _day: date,
   })
   const report = data as unknown as DayReport | null
+
+  // Receipt photos sit in a private bucket; sign the day's in one call.
+  const receiptPaths = (report?.expenses.items ?? [])
+    .map((x) => x.receipt_path)
+    .filter((p): p is string => !!p)
+  if (report && receiptPaths.length) {
+    const { data: signed } = await supabase.storage
+      .from("expense-receipts")
+      .createSignedUrls(receiptPaths, RECEIPT_URL_TTL_SECONDS)
+    const urlByPath = new Map((signed ?? []).map((x) => [x.path, x.signedUrl]))
+    for (const x of report.expenses.items)
+      x.receipt_url = x.receipt_path ? (urlByPath.get(x.receipt_path) ?? null) : null
+  }
 
   // The ledger behind the totals. Bounded by the window the RPC itself resolved
   // (`from`/`to` off its own payload) rather than a second computation of the

@@ -25,7 +25,7 @@ export default async function SettingsPage() {
     supabase
       .from("tenant_settings")
       .select(
-        "currency, timezone, day_cutoff_minutes, service_charge, packaging_fee, tax_rules, receipt_template, block_negative_stock, payment_gateway, printing_mode, qr_auto_fire",
+        "currency, timezone, day_cutoff_minutes, service_charge, packaging_fee, tax_rules, receipt_template, block_negative_stock, cash_drawer_enabled, payment_gateway, printing_mode, qr_auto_fire",
       )
       .eq("tenant_id", tenant.tenantId)
       .maybeSingle(),
@@ -153,6 +153,7 @@ export default async function SettingsPage() {
           terms: receipt.terms ?? "",
         }}
         blockNegativeStock={Boolean(settings?.block_negative_stock)}
+        cashDrawerEnabled={Boolean(settings?.cash_drawer_enabled)}
         qrAutoFire={settings?.qr_auto_fire ?? true}
         paymentGateway={settings?.payment_gateway ?? "sandbox"}
         logoUrl={receipt.logo_url ?? null}

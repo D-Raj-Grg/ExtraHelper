@@ -7,6 +7,7 @@ import { InventoryTab } from "@/components/reports/inventory-tab"
 import { ReportFilters } from "@/components/reports/report-filters"
 import { ReportSkeleton } from "@/components/reports/report-skeleton"
 import { SalesTab } from "@/components/reports/sales-tab"
+import { ExpensesTab } from "@/components/reports/expenses-tab"
 import { StaffTab } from "@/components/reports/staff-tab"
 import {
   REPORT_TABS,
@@ -52,6 +53,9 @@ export default async function ReportsPage({
         {tab === "inventory" ? <InventoryTab {...ctx} /> : null}
         {tab === "staff" ? <StaffTab {...ctx} /> : null}
         {tab === "customers" ? <CustomersTab {...ctx} /> : null}
+        {tab === "expenses" ? (
+          <ExpensesTab {...ctx} PF={prevFrom.toISOString()} PT={prevTo.toISOString()} />
+        ) : null}
       </Suspense>
     </PageShell>
   )

@@ -25,6 +25,7 @@ import {
   ChefHatIcon,
   ShoppingBagIcon,
   BanknoteIcon,
+  WalletIcon,
   CalendarCheckIcon,
   ArmchairIcon,
   BookOpenIcon,
@@ -47,6 +48,7 @@ const NAV_PERM: Record<string, string> = {
   "Kitchen (KDS)": "kds.view",
   "Online Orders": "online.view",
   "Cash Drawer": "cash.view",
+  Expenses: "expenses.create",
   Inventory: "inventory.view",
   Purchasing: "purchasing.view",
   Reports: "reports.view",
@@ -80,6 +82,7 @@ const data = {
         { title: "POS", url: "/pos", icon: <ReceiptIcon /> },
         { title: "Kitchen (KDS)", url: "/kds", icon: <ChefHatIcon /> },
         { title: "Online Orders", url: "/online", icon: <ShoppingBagIcon /> },
+        { title: "Expenses", url: "/expenses", icon: <WalletIcon /> },
         { title: "Cash Drawer", url: "/cash", icon: <BanknoteIcon /> },
         { title: "Reservations", url: "/reservations", icon: <CalendarCheckIcon /> },
         { title: "Floors & Tables", url: "/tables", icon: <ArmchairIcon /> },
@@ -115,14 +118,18 @@ export function AppSidebar({
   user,
   tenants,
   activeTenantId,
+  cashDrawerEnabled = false,
   ...props
 }: React.ComponentProps<typeof Sidebar> & {
   user?: { name: string; email: string; avatar: string }
   tenants?: TenantMembership[]
   activeTenantId?: string
+  /** Off → the shift drawer is hidden; expenses + day close cover the cash book. */
+  cashDrawerEnabled?: boolean
 }) {
   const perms = usePermissions()
   const canSee = (title: string) => {
+    if (title === "Cash Drawer" && !cashDrawerEnabled) return false
     const p = NAV_PERM[title]
     return !p || perms.has(p)
   }

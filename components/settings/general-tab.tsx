@@ -20,6 +20,7 @@ export function GeneralTab({
   dayCutoffMinutes,
   paymentGateway,
   blockNegativeStock,
+  cashDrawerEnabled,
   qrAutoFire,
 }: {
   restaurantName: string
@@ -28,6 +29,7 @@ export function GeneralTab({
   dayCutoffMinutes: number
   paymentGateway: string
   blockNegativeStock: boolean
+  cashDrawerEnabled: boolean
   qrAutoFire: boolean
 }) {
   return (
@@ -176,6 +178,26 @@ export function GeneralTab({
               <FieldDescription>
                 When on, firing an item whose ingredients would go negative is rejected. Off by
                 default — negatives are allowed and flagged as “oversold”.
+              </FieldDescription>
+            </Field>
+            <Field>
+              <FieldLabel
+                htmlFor="cashDrawerEnabled"
+                className="flex items-center gap-2 font-medium"
+              >
+                <Checkbox
+                  id="cashDrawerEnabled"
+                  name="cashDrawerEnabled"
+                  value="on"
+                  defaultChecked={cashDrawerEnabled}
+                />
+                Use the cash drawer (shift float &amp; count)
+              </FieldLabel>
+              <FieldDescription>
+                Off by default. Most small restaurants just log expenses through the day and count
+                cash and online at night on Day close. Turn this on if cashiers open a drawer with a
+                float and count it at the end of each shift — cash expenses then come out of the
+                open drawer automatically.
               </FieldDescription>
             </Field>
           </CardContent>

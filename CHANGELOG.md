@@ -8,6 +8,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Added
+- **Daily expenses — the paper daily book, in the app.** A new **Expenses** page (sidebar, Operations) where anyone on staff logs what they spent for the restaurant: the amount, a category tapped from chips (Groceries, Vegetables & Meat, Gas / Fuel, Transport / Ride, Utilities, Staff food, Repairs, Other), a few words ("Rice 5kg", "Pathao for dishwasher"), and where the money came from: **Cash**, **Online / eSewa**, or **Owner's pocket**. Waiters and kitchen staff see only what they logged; owners, managers and cashiers see everyone's. A mistake is **voided with a reason** and stays visible, crossed out, rather than disappearing.
+- **Receipt photos.** Snap or upload the bill when you log an expense, or attach, replace or remove it later from the expense's menu. Photos are private to the restaurant: only the person who logged it and those who can see all expenses can open them. The photo also shows on Day close.
+- **The night count on Day close.** A new **Cash book** card works out what you *should* have in hand — cash taken in sales, minus cash refunds, minus cash expenses — and the same for online. You type what you counted ("cash left 100, online 1000") and it shows **Balanced**, **Short** or **Over** with the amount. You can recount a closed day. Day close also lists the day's expenses by item and category, and both are in the CSV export.
+- **Expenses in Reports.** A new **Expenses** tab for any range (today, last 7 days, last 30 days, year, custom). It shows total spend compared with the previous period (going up is marked as the bad direction), revenue, **net after expenses**, expenses as a share of revenue, the split by where the money came from, and breakdowns by category and by day. Each day links to that day's expenses.
+- **Your own categories.** Owners and managers can add, rename, retire and restore expense categories. Retiring one keeps it on past entries.
+
+### Changed
+- **The cash drawer is now optional, and off by default.** Most small restaurants never open a shift drawer, so **Settings → General → Use the cash drawer** turns it on only for those who do. When it's off, the Cash Drawer page is hidden and Day close uses the simple night count above. It was left on for the one restaurant that had already been using it. With the drawer on, a cash expense logged while your drawer is open also comes out of that drawer automatically.
+
+### Added
+- **Hear about every step of an order, not just its arrival.** The bell in the header used to light up only when a new order came in. It now follows each order through the whole service — **new order, preparing, ready to serve, served, billed, paid**, and cancelled — so the floor knows a dish is up without walking to the pass, and the till knows a table has paid. Each update pops up as it happens ("Ready to serve — Table A2", with the amount when there is one) and has a **View** button that opens the order or the bill. You are never alerted about something you did yourself.
+- **Unread you can trust.** The bell shows how many updates you haven't seen, counted by the database so the number stays right beyond the 20 it lists. **Mark all read** clears it, and so does tapping any update; just opening the bell doesn't. Someone signing in for the first time sees the last 24 hours as unread, not every order the restaurant has ever taken.
+- **The Notifications page matches the bell.** The Orders tab is now **Updates**: the last 100 order updates, live, with unread ones in bold and marked with a dot, an "N unread" line and its own **Mark all read**. Marking read on the page clears the bell straight away, and the other way round.
+- The bell appears for anyone whose role can see notifications, including custom roles, instead of a fixed list of roles. Kitchen and store-room roles don't get it. On phones the bell is now a full-size tap target.
+
 ### Security
 - **Adding an off-menu item is now enforced by the database, not by the page.** "Something off the menu" is the one place in ExtraHelper where a price is typed rather than looked up, and until now the check that you were allowed to do it lived only in the web app's own code. Anyone able to sign in to a restaurant could have written the same line another way — at a price of their choosing, and with nothing in the manager log to show for it. The rule now lives in the database: it re-checks your role and your permission, refuses an order that has already been billed or closed, caps the price, and records the amount in the manager log in the same step as the line. Nothing changes on screen. The mobile app uses the same rule, so both apps behave identically.
 
@@ -16,6 +32,33 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ### Changed
 - **Confirming an order sends it to the kitchen.** The new-order screen had two buttons — *Confirm & fire* and *Confirm only* — and *Confirm only* left the order sitting where no kitchen screen or printer could see it. There is now one button: confirm an order and the tickets go out. Orders taken offline fire by themselves the moment the connection is back, instead of waiting for someone to remember them. Holding a course back is still done from the order itself, by adding the later dishes when you want them cooked.
+
+
+<details><summary>Technical — order notifications</summary>
+
+Migrations `20260926120000_order_notifications.sql`, `20260926130000_order_notifications_hardening.sql`.
+
+- **Model.** `public.notifications` (tenant, kind, order/bill, order type, table label, amount, title, body, `actor_id`, `created_at`) written only by SECURITY DEFINER triggers; `notification_reads(user_id, tenant_id, last_read_at)` is a per-user cursor rather than a row per recipient, so a status change is one insert however many staff there are. `mark_notifications_read(_tenant)` returns the server timestamp. Select RLS is `has_permission(tenant,'notifications.view')` (+ platform admin); no client write policy. Added to `supabase_realtime`.
+- **Triggers.** `trg_orders_notify_insert` (`WHEN new.status = 'placed'` — QR/online) and `trg_orders_notify_update` (`WHEN old.status is distinct from new.status`), so the repeat `set status='closed'` every checkout issues on each order of a bill never enters the function. "New order" is `draft → placed|in_kitchen` (staff orders fire straight to the kitchen); `placed → in_kitchen` is not re-announced, and `split_order_items`' direct `in_kitchen` insert is not a new order. `trg_bills_notify` fires once per bill on `→ paid` (a refund-then-repay does not announce twice). Bodies swallow errors with a warning: a notification is never worth failing an order write. Partial indexes on `order_id` / `bill_id` for the cascades; `pg_cron` job `prune_notifications` deletes rows older than 30 days nightly.
+- **Bell** (`components/notification-bell.tsx`). Unread = `created_at > max(cursor, now − 24h)` and `actor_id` not you; one rule (`isUnread` in `lib/notification-constants.ts`) for the badge, the bold rows and the toast. Refetch is latest-wins (request id bumped by `markAllRead` and effect cleanup). The insert handler is a `useEffectEvent`, so the channel no longer depends on `perms` — a fresh `Set` after every `router.refresh()` had been tearing it down and rejoining after each POS order. After the first (history-only) load, a refetch toasts the unread rows it is first to see, so a row the 45s poll or a rejoin catch-up found before Realtime delivered it still announces.
+- **Page** (`components/notification-tabs.tsx`). Same cursor rule, latest-wins refetch, catch-up on every `SUBSCRIBED` (including the first). Bell and page share read state through a window event (`lib/notification-read-sync.ts`).
+- **Wiring.** The header sits outside the sidebar's `PermissionProvider`; the layout passes the un-awaited, request-cached `getMyPermissions` promise and the user id to `SiteHeader`, and the bell unwraps it with `use()` under its own Suspense boundary.
+
+</details>
+
+<details><summary>Technical — daily expenses, receipts, night count</summary>
+
+Migrations `20260926090000_daily_expenses.sql`, `20260926093000_expenses_day_rpc.sql`, `20260926100000_expense_receipts_and_range_report.sql` (applied via MCP).
+
+- **Tables.** `expense_categories` (per tenant, unique `lower(name)`, `archived_at`; seeded for every tenant + `trg_seed_default_expense_categories` on new tenants), `expenses` (`business_date`, `amount_cents`, `note`, `paid_from` enum `cash|online|owner`, `receipt_path`, `cash_movement_id`, `client_key` unique per tenant, void columns), `day_closings` (PK `(tenant_id, business_date)`, upsert). RLS is select-only; expenses rows need `created_by = auth.uid()` or `expenses.view`.
+- **Permissions.** `expenses.create` (all base roles), `expenses.view` (+cashier), `expenses.manage` (owner/manager). `default_role_permissions` updated and system roles backfilled.
+- **RPCs.** `record_expense` (idempotent on `_client_key`; backdating needs `.manage`; drawer mode inserts a linked auto-approved `cash_movements` payout), `update_expense` / `void_expense` (the logger on the same business day, or `.manage`; a linked payout follows while its session is open), `upsert_expense_category`, `archive_expense_category`, `close_day` (`reports.view`), `expenses_day` (mobile read, resolves today server-side), `set_expense_receipt` (validates the path sits under `{tenant}/{expense}/`, the object exists, and the caller may change it; returns the old path for cleanup), `report_expenses(_tenant, _from, _to)` (a business day counts when its start instant is in the window).
+- **Storage.** Private bucket `expense-receipts` (5 MB, images only). Insert/delete policy: `may_touch_expense_receipt(name)`. Select: `may_read_expense_receipt(name)`. Pages sign URLs for 1 hour.
+- **Report.** `daily_report_build` renamed to `daily_report_core` and wrapped; adds `expenses`, `cash_book` and `cash_drawer_enabled`. `points` is excluded from online.
+- **Setting.** `tenant_settings.cash_drawer_enabled` (default false; true where `cash_sessions` existed). `ActiveTenant.cashDrawerEnabled` gates the sidebar and `/cash`.
+- **Web.** `/expenses` (`components/expenses/*`), `components/reports/cash-book.tsx`, `components/reports/expenses-tab.tsx`. `StatTiles` gains `lowerIsBetter`. `DayPicker` gains `basePath`.
+
+</details>
 
 ---
 

@@ -9,6 +9,8 @@ export type Tile = {
   delta?: Delta
   /** Draws attention to a number that isn't neutral news (voids, refunds). */
   warn?: boolean
+  /** A cost, where going up is the bad direction (expenses). */
+  lowerIsBetter?: boolean
 }
 
 /**
@@ -30,7 +32,7 @@ export function StatTiles({ tiles }: { tiles: Tile[] }) {
             >
               {t.value}
             </CardTitle>
-            {t.delta ? <DeltaLabel delta={t.delta} /> : null}
+            {t.delta ? <DeltaLabel delta={t.delta} lowerIsBetter={t.lowerIsBetter} /> : null}
           </CardHeader>
         </Card>
       ))}
@@ -38,18 +40,28 @@ export function StatTiles({ tiles }: { tiles: Tile[] }) {
   )
 }
 
-function DeltaLabel({ delta }: { delta: NonNullable<Delta> }) {
+function DeltaLabel({
+  delta,
+  lowerIsBetter = false,
+}: {
+  delta: NonNullable<Delta>
+  lowerIsBetter?: boolean
+}) {
   const Icon =
     delta.dir === "down" ? TrendingDownIcon : delta.dir === "new" ? MinusIcon : TrendingUpIcon
+  // The icon keeps the direction; only the verdict colour flips for a cost.
+  const good = lowerIsBetter ? delta.dir === "down" : delta.dir === "up"
   return (
     <p
       className={cn(
         "flex items-center gap-1 text-xs tabular-nums",
-        delta.dir === "down"
-          ? "text-destructive"
-          : delta.dir === "new"
-            ? "text-muted-foreground"
-            : "text-emerald-600 dark:text-emerald-400",
+        delta.dir === "new"
+          ? "text-muted-foreground"
+          : good
+            ? "text-emerald-600 dark:text-emerald-400"
+            : lowerIsBetter
+              ? "text-amber-600 dark:text-amber-400"
+              : "text-destructive",
       )}
     >
       <Icon className="size-3.5 shrink-0" aria-hidden />

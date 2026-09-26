@@ -22,6 +22,7 @@ export function SettingsManager({
   taxRules,
   receipt,
   blockNegativeStock,
+  cashDrawerEnabled,
   qrAutoFire,
   paymentGateway,
   logoUrl,
@@ -45,6 +46,7 @@ export function SettingsManager({
   taxRules: TaxRule[]
   receipt: { header: string; footer: string; terms: string }
   blockNegativeStock: boolean
+  cashDrawerEnabled: boolean
   qrAutoFire: boolean
   paymentGateway: string
   logoUrl: string | null
@@ -97,6 +99,7 @@ export function SettingsManager({
             dayCutoffMinutes={dayCutoffMinutes}
             paymentGateway={paymentGateway}
             blockNegativeStock={blockNegativeStock}
+            cashDrawerEnabled={cashDrawerEnabled}
             qrAutoFire={qrAutoFire}
           />
         </TabsContent>

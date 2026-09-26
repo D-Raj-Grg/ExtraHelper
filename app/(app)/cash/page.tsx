@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { requirePermission } from "@/lib/supabase/guards"
 import { SessionCard } from "@/components/cash/session-card"
@@ -10,6 +11,8 @@ export const dynamic = "force-dynamic"
 
 export default async function CashPage() {
   const tenant = await requirePermission("cash.view")
+  // Drawer switched off in Settings: expenses + Day close are the cash book.
+  if (!tenant.cashDrawerEnabled) redirect("/expenses")
   const supabase = await createClient()
 
   const {

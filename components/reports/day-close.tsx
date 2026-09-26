@@ -1,4 +1,4 @@
-import { AlertTriangleIcon, ZapIcon } from "lucide-react"
+import { AlertTriangleIcon, ImageIcon, ZapIcon } from "lucide-react"
 
 import { ExportButtons } from "@/components/export-buttons"
 import { PrintDayReportButton } from "@/components/reports/print-day-report-button"
@@ -16,6 +16,8 @@ import { paymentMethodLabel } from "@/lib/payment-constants"
 import { cn } from "@/lib/utils"
 import { ReportEmpty, ReportSection, TableFrame } from "./report-section"
 import { StatTiles } from "./stat-tiles"
+import { CashBook } from "./cash-book"
+import { paidFromLabel } from "@/lib/expense-constants"
 import { DayOrders } from "./day-orders"
 import type { DayOrder } from "./day-order-utils"
 import { cutoffLabel, type DayReport } from "./day-report"
@@ -43,6 +45,8 @@ export function DayClose({
   const cur = r.currency
   const s = r.sales
   const cash = r.cash
+  const book = r.cash_book
+  const exp = r.expenses
   const cut = cutoffLabel(r.cutoff_minutes)
 
   // The reconciliation gap, stated rather than hidden — see DayReport.carried_cents.
@@ -92,6 +96,16 @@ export function DayClose({
       amount: money(r.refunds.total_cents, cur),
     },
     { section: "Counts", label: "Voided bills", count: String(r.void_bills), amount: "" },
+    ...r.expenses.items.map((x) => ({
+      section: "Expenses",
+      label: `${x.category} — ${x.note} (${paidFromLabel(x.paid_from)})`,
+      count: "",
+      amount: money(-x.amount_cents, cur),
+    })),
+    { section: "Cash book", label: "Expected cash", count: "", amount: money(book.expected_cash_cents, cur) },
+    { section: "Cash book", label: "Counted cash", count: "", amount: countedOrBlank(book.counted_cash_cents, cur) },
+    { section: "Cash book", label: "Expected online", count: "", amount: money(book.expected_online_cents, cur) },
+    { section: "Cash book", label: "Counted online", count: "", amount: countedOrBlank(book.counted_online_cents, cur) },
     ...cash.sessions.map((x) => ({
       section: "Cash drawer",
       label: x.cashier ?? "Unknown cashier",
@@ -257,57 +271,142 @@ export function DayClose({
         </p>
       ) : null}
 
+      <CashBook day={r.day} book={book} currency={cur} timezone={r.timezone} />
+
       <ReportSection
-        title="Cash drawer"
-        rows={cash.sessions.map((x) => ({
-          cashier: x.cashier ?? "Unknown",
-          closed: x.closed_at ? formatDateTime(x.closed_at, r.timezone) : "—",
-          float: money(x.opening_float_cents, cur),
-          out: money(x.payouts_cents, cur),
-          expected: money(x.expected_cents ?? 0, cur),
-          counted: money(x.counted_cents ?? 0, cur),
-          variance: signedMoney(x.variance_cents ?? 0, cur),
+        title={`Expenses · ${money(exp.total_cents, cur)}`}
+        rows={exp.items.map((x) => ({
+          time: x.time,
+          category: x.category,
+          note: x.note,
+          paid_from: paidFromLabel(x.paid_from),
+          by: x.by ?? "",
+          amount: money(x.amount_cents, cur),
         }))}
         columns={[
-          { key: "cashier", label: "Cashier" },
-          { key: "closed", label: "Closed" },
-          { key: "float", label: "Float" },
-          { key: "out", label: "Cash out" },
-          { key: "expected", label: "Expected" },
-          { key: "counted", label: "Counted" },
-          { key: "variance", label: "Variance" },
+          { key: "time", label: "Time" },
+          { key: "category", label: "Category" },
+          { key: "note", label: "What" },
+          { key: "paid_from", label: "Paid from" },
+          { key: "by", label: "By" },
+          { key: "amount", label: "Amount" },
         ]}
-        filename={`day-close-cash-${r.day}`}
-        empty="No drawer was closed on this day."
+        filename={`day-close-expenses-${r.day}`}
+        empty="No expenses logged on this day."
       >
         <Table className="w-full text-sm">
           <TableHeader className="bg-muted/50">
             <TableRow>
-              <TableHead className="px-3 py-2 font-medium">Cashier</TableHead>
-              <TableHead className="px-3 py-2 font-medium">Closed</TableHead>
-              <TableHead className="px-3 py-2 text-right font-medium">Float</TableHead>
-              <TableHead className="px-3 py-2 text-right font-medium">Cash out</TableHead>
-              <TableHead className="px-3 py-2 text-right font-medium">Expected</TableHead>
-              <TableHead className="px-3 py-2 text-right font-medium">Counted</TableHead>
-              <TableHead className="px-3 py-2 text-right font-medium">Variance</TableHead>
+              <TableHead className="px-3 py-2 font-medium">Time</TableHead>
+              <TableHead className="px-3 py-2 font-medium">What</TableHead>
+              <TableHead className="px-3 py-2 font-medium">Paid from</TableHead>
+              <TableHead className="px-3 py-2 font-medium">By</TableHead>
+              <TableHead className="px-3 py-2 text-right font-medium">Amount</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {cash.sessions.map((x) => {
-              const v = variance(x.variance_cents ?? 0)
-              return (
-                <TableRow key={x.id}>
-                  <TableCell className="px-3 py-2 font-medium">{x.cashier ?? "Unknown"}</TableCell>
-                  <TableCell className="px-3 py-2 whitespace-nowrap text-muted-foreground">
-                    {x.closed_at ? formatDateTime(x.closed_at, r.timezone) : "—"}
-                  </TableCell>
-                  <TableCell className="px-3 py-2 text-right tabular-nums text-muted-foreground">
-                    {money(x.opening_float_cents, cur)}
-                  </TableCell>
-                  <TableCell className="px-3 py-2 text-right tabular-nums text-muted-foreground">
-                    {x.payouts_cents > 0 ? `−${money(x.payouts_cents, cur)}` : "—"}
-                    {x.paid_in_cents > 0 ? (
-                      <span className="block text-xs">+{money(x.paid_in_cents, cur)} in</span>
+            {exp.items.map((x) => (
+              <TableRow key={x.id}>
+                <TableCell className="px-3 py-2 tabular-nums text-muted-foreground">{x.time}</TableCell>
+                <TableCell className="px-3 py-2">
+                  <span className="block">{x.note}</span>
+                  <span className="text-xs text-muted-foreground">{x.category}</span>
+                  {x.receipt_url ? (
+                    <a
+                      href={x.receipt_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="ml-2 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline print:hidden"
+                    >
+                      <ImageIcon className="size-3" aria-hidden />
+                      Receipt
+                    </a>
+                  ) : null}
+                </TableCell>
+                <TableCell className="px-3 py-2">{paidFromLabel(x.paid_from)}</TableCell>
+                <TableCell className="px-3 py-2 text-muted-foreground">{x.by ?? "—"}</TableCell>
+                <TableCell className="px-3 py-2 text-right tabular-nums">
+                  {money(x.amount_cents, cur)}
+                </TableCell>
+              </TableRow>
+            ))}
+            {exp.by_category.map((c) => (
+              <TableRow key={`cat-${c.name}`} className="bg-muted/30">
+                <TableCell />
+                <TableCell className="px-3 py-2 text-muted-foreground" colSpan={3}>
+                  {c.name} · {c.count}
+                </TableCell>
+                <TableCell className="px-3 py-2 text-right tabular-nums text-muted-foreground">
+                  {money(c.amount_cents, cur)}
+                </TableCell>
+              </TableRow>
+            ))}
+            <TableRow>
+              <TableCell />
+              <TableCell className="px-3 py-2 font-semibold" colSpan={3}>
+                Total expenses
+              </TableCell>
+              <TableCell className="px-3 py-2 text-right font-semibold tabular-nums">
+                {money(exp.total_cents, cur)}
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+      </ReportSection>
+
+      {/* The shift drawer only shows for tenants that use it, or on a day one ran. */}
+      {r.cash_drawer_enabled || cash.sessions.length > 0 ? (
+        <ReportSection
+          title="Cash drawer"
+          rows={cash.sessions.map((x) => ({
+            cashier: x.cashier ?? "Unknown",
+            closed: x.closed_at ? formatDateTime(x.closed_at, r.timezone) : "—",
+            float: money(x.opening_float_cents, cur),
+            out: money(x.payouts_cents, cur),
+            expected: money(x.expected_cents ?? 0, cur),
+            counted: money(x.counted_cents ?? 0, cur),
+            variance: signedMoney(x.variance_cents ?? 0, cur),
+          }))}
+          columns={[
+            { key: "cashier", label: "Cashier" },
+            { key: "closed", label: "Closed" },
+            { key: "float", label: "Float" },
+            { key: "out", label: "Cash out" },
+            { key: "expected", label: "Expected" },
+            { key: "counted", label: "Counted" },
+            { key: "variance", label: "Variance" },
+          ]}
+          filename={`day-close-cash-${r.day}`}
+          empty="No drawer was closed on this day."
+        >
+          <Table className="w-full text-sm">
+            <TableHeader className="bg-muted/50">
+              <TableRow>
+                <TableHead className="px-3 py-2 font-medium">Cashier</TableHead>
+                <TableHead className="px-3 py-2 font-medium">Closed</TableHead>
+                <TableHead className="px-3 py-2 text-right font-medium">Float</TableHead>
+                <TableHead className="px-3 py-2 text-right font-medium">Cash out</TableHead>
+                <TableHead className="px-3 py-2 text-right font-medium">Expected</TableHead>
+                <TableHead className="px-3 py-2 text-right font-medium">Counted</TableHead>
+                <TableHead className="px-3 py-2 text-right font-medium">Variance</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {cash.sessions.map((x) => {
+                const v = variance(x.variance_cents ?? 0)
+                return (
+                  <TableRow key={x.id}>
+                    <TableCell className="px-3 py-2 font-medium">{x.cashier ?? "Unknown"}</TableCell>
+                    <TableCell className="px-3 py-2 whitespace-nowrap text-muted-foreground">
+                      {x.closed_at ? formatDateTime(x.closed_at, r.timezone) : "—"}
+                    </TableCell>
+                    <TableCell className="px-3 py-2 text-right tabular-nums text-muted-foreground">
+                      {money(x.opening_float_cents, cur)}
+                    </TableCell>
+                    <TableCell className="px-3 py-2 text-right tabular-nums text-muted-foreground">
+                      {x.payouts_cents > 0 ? `−${money(x.payouts_cents, cur)}` : "—"}
+                      {x.paid_in_cents > 0 ? (
+                        <span className="block text-xs">+{money(x.paid_in_cents, cur)} in</span>
                     ) : null}
                     {x.auto_approved_count > 0 ? (
                       <span
@@ -335,6 +434,7 @@ export function DayClose({
           </TableBody>
         </Table>
       </ReportSection>
+      ) : null}
 
       <ReportSection
         title="Top items"
@@ -417,6 +517,10 @@ export function DayClose({
       </TableFrame>
     </div>
   )
+}
+
+function countedOrBlank(cents: number | null, cur: string) {
+  return cents !== null ? money(cents, cur) : ""
 }
 
 function MoneyRow({ label, cents, cur }: { label: string; cents: number; cur: string }) {

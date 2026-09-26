@@ -53,6 +53,7 @@ export async function AppSidebarSection({
         user={sidebarUser}
         tenants={memberships}
         activeTenantId={tenant.tenantId}
+        cashDrawerEnabled={tenant.cashDrawerEnabled}
       />
     </PermissionProvider>
   )

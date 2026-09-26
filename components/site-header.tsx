@@ -30,6 +30,7 @@ const TITLES: [prefix: string, label: string][] = [
   ["/reports", "Reports"],
   ["/loyalty", "Loyalty"],
   ["/cash", "Cash Drawer"],
+  ["/expenses", "Expenses"],
   ["/billing", "Billing"],
   ["/bill", "Bill"],
   ["/notifications", "Notifications"],
@@ -61,7 +62,14 @@ function crumbsFor(pathname: string): Crumb[] {
   return [{ label: sectionLabel, href: sectionPrefix }, { label: sub[1] }]
 }
 
-export function SiteHeader() {
+export function SiteHeader({
+  permissions,
+  userId,
+}: {
+  /** Unawaited `getMyPermissions()` — only the bell waits on it, not the header. */
+  permissions: Promise<string[]>
+  userId: string
+}) {
   const pathname = usePathname()
   const crumbs = crumbsFor(pathname)
   return (
@@ -96,7 +104,7 @@ export function SiteHeader() {
           </BreadcrumbList>
         </Breadcrumb>
         <div className="ml-auto flex items-center gap-2">
-          <NotificationBell />
+          <NotificationBell permissions={permissions} userId={userId} />
           <OfflineBadge />
           <AppearanceControls />
         </div>

@@ -110,6 +110,15 @@ export function formatDateTime(iso: string, timeZone = "UTC"): string {
   }
 }
 
+/** "2:05 PM" in the tenant's timezone — for rows already grouped under one day. */
+export function formatTime(iso: string, timeZone = "UTC"): string {
+  try {
+    return new Intl.DateTimeFormat("en-US", { timeStyle: "short", timeZone }).format(new Date(iso))
+  } catch {
+    return new Date(iso).toISOString().slice(11, 16)
+  }
+}
+
 /**
  * "Just now" / "12m ago" / "3h ago" / "2d ago". `now` comes from the caller
  * (see `lib/clock.ts`) rather than `Date.now()` so the value is stable across a

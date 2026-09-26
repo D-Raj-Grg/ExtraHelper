@@ -15,6 +15,7 @@ export const REPORT_TABS = [
   { key: "inventory", label: "Inventory" },
   { key: "staff", label: "Staff" },
   { key: "customers", label: "Customers" },
+  { key: "expenses", label: "Expenses" },
 ] as const
 
 export type ReportTab = (typeof REPORT_TABS)[number]["key"]

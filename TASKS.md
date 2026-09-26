@@ -6,6 +6,34 @@
 
 ---
 
+## Daily expenses + night cash count (2026-09-26, web + DB + Flutter)
+
+Small restaurants keep a paper daily book: "Rs 100 rice", "Rs 100 ride for dishwasher", then at night
+"cash left 100, online 1000". `cash_movements` could not hold this because it needs an open drawer
+session, and almost nobody opens one (prod had 2 sessions total).
+
+Migrations: `20260926090000_daily_expenses.sql`, `20260926093000_expenses_day_rpc.sql` (both applied via MCP).
+
+- [x] `expense_categories` (per tenant, seeded with 8 defaults + a trigger on new tenants; retire, don't delete),
+      `expenses` (ledger, `paid_from` cash|online|owner, void with reason, `client_key` idempotency),
+      `day_closings` (cash/online counted per business day, upsert = recount). Read-only RLS; writes via RPCs.
+- [x] Permissions: `expenses.create` (every base role), `expenses.view` (owner/manager/cashier; others see only
+      their own rows), `expenses.manage` (owner/manager: edit or void anyone's, backdate, categories).
+- [x] RPCs: `record_expense`, `update_expense`, `void_expense`, `upsert_expense_category`,
+      `archive_expense_category`, `close_day`, `expenses_day` (mobile read; server resolves today).
+- [x] `tenant_settings.cash_drawer_enabled`, off by default and on for tenants that already had sessions.
+      Off: Cash Drawer hidden from the sidebar, `/cash` redirects to `/expenses`, and the day-close drawer table is hidden.
+      On: a cash expense logged while holding an open drawer also writes a linked auto-approved payout. Update and void follow it while the session is open.
+- [x] `daily_report_build` renamed to `daily_report_core` and wrapped. The payload adds `expenses`, `cash_book`
+      (expected cash = cash payments − cash refunds − cash expenses; same for online, `points` excluded) and
+      `cash_drawer_enabled`. The print path reads the same builder.
+- [x] Web: `/expenses` (quick-add chips, day picker, totals, edit/void, categories dialog), Settings → General
+      drawer toggle, and on Day close the Cash book card (count + recount) plus an Expenses section. Both are in the CSV too.
+- [x] Flutter: see `../extrahelper_flutter/TASKS.md`.
+- [ ] Thermal day-report slip: print the Expenses total and the Cash book lines (the payload already carries them).
+- [x] Receipt photo on an expense: private `expense-receipts` bucket, `set_expense_receipt`, web + Flutter (`20260926100000`).
+- [x] Expenses in the range reports: `report_expenses` + Reports → Expenses tab (net after expenses). The phone shows 7/30-day totals.
+
 ## Adding items after the bill is up (2026-08-16, web + DB)
 
 A table asks for the bill, then orders one more water. There was no way to add it — the line got
@@ -1292,6 +1320,17 @@ and one of which could kill printing on a device until it was restarted. They ar
     - **Trap paid for again: the migration file must reproduce the live database.** The version applied through `apply_migration` had been retyped without the inline comments that are inside the function bodies, so the file and the database disagreed from the moment it landed — the same defect found in the daily-report review. Caught by `md5(regexp_replace(prosrc,'\s+',' ','g'))` against the file's own body text, and fixed by re-applying the file verbatim; both functions now md5-match. **Do this check on every migration that ships a function body — it is cheap and it has now caught the same class twice.**
     - Known operational change, in `CHANGELOG.md`: printing the bill while a dish is still cooking greys that ticket immediately. It stays recallable for 20 minutes — but `RECALL_WINDOW_MS` filters on `created_at`, not on when the ticket was swept, so a ticket fired more than 20 minutes before the bill is not recallable at all. Fixing that properly needs a `settled_at` column on `kots`; deliberately out of scope.
 - [ ] **`kots` has no `settled_at`, so the recall window measures the wrong thing.** The "Completed orders — recall" strip bounds on `created_at`, which means a ticket bumped (or swept) long after it was fired is already outside the window and cannot be pulled back. Harmless before the sweep existed, more visible now. Wants a `settled_at timestamptz` written by the bump RPCs and the settle trigger, with the strip bounding on it.
+
+- [x] **Order lifecycle notifications on the web** (2026-09-26, backend in `supabase/migrations/20260926120000_order_notifications.sql`). The bell used to watch `orders.status = 'placed'` behind a hard-coded role list, so staff heard about an order arriving and nothing after. It now reads `public.notifications` — new → preparing → ready → served → billed → paid, plus cancelled — written by the order/bill triggers.
+    - **Gated on `notifications.view`, the same key RLS checks**, not `ALLOWED = [owner, manager, cashier, waiter]` — a custom role gets the bell exactly when it can read the rows. The header sits outside the sidebar's `PermissionProvider`, and widening that provider would put the permission read back on the layout's critical path. Instead the layout passes the **unawaited** `getMyPermissions()` promise (request-cached, so it is the sidebar's query, not a second one) plus `user.id` through `SiteHeader`; the bell unwraps it with `use()` behind its own `Suspense` and mounts its own `PermissionProvider`. Nothing but the bell waits on it.
+    - **Unread = newer than `notification_reads.last_read_at` and `actor_id` not you.** No cursor yet = the last 24h counts, so a first login is not a badge of every order ever. The badge is a server-side `count` (so it is right past the 20 rows shown), capped `99+`. Opening the panel marks nothing; "Mark all read" (optimistic, rolls back + `toast.error` on failure) or tapping any row calls `mark_notifications_read`.
+    - Realtime `INSERT` on `notifications` filtered by tenant: prepend, +1, and a sonner toast (`"Ready to serve — Table A2"`, amount as description, **View** → `/pos/{order_id}`, or `/bill/{bill_id}` for a payment). Your own actions land in the feed but never badge or toast. A `seen` id set stops a refetch/realtime race double-counting; resubscribe triggers a catch-up refetch; the 45s safety refetch and 200ms debounced first load are kept.
+    - Links only where the viewer can go: `notificationHref` checks `order.view` / `checkout.view`, and a row with nowhere to go is a button (mark read) or plain content — a link that redirects home is worse than no link.
+    - **Shared row + constants:** `lib/notification-constants.ts` (plain module — shape, select, kind labels, tones, `isUnread`, `notificationHref`) and `components/notification-row.tsx` (client; icon per kind — ShoppingBag / ChefHat / BellRing / HandPlatter / Receipt / BadgeCheck / CircleX). Tones follow the semantic map (blue new, amber preparing, emerald ready/served/paid, orange billed, destructive cancelled); the icon + title carry the meaning, unread is bold + dot + sr-only text, rows are ≥44px.
+    - `/notifications`: the Orders tab became **Updates** — last 100 notifications, server-rendered then live (insert prepend + resubscribe catch-up + 45s safety), same row. Activity tab unchanged. The page wraps the tabs in a `PermissionProvider` fed by the guard's cached key set.
+    - `database.types.ts` already carried both tables and the RPC — no hand edit needed. No sound (autoplay policy makes it unreliable without a user gesture; left out deliberately).
+    - Verified: `tsc --noEmit` clean, eslint clean on every touched file, `check:rsc` clean (365 files), `next build` passes. **Not yet rendered in a browser** — per the standing lesson above, the first real open of the bell and `/notifications` is still owed.
+    - **Review follow-ups (2026-09-26).** Two review passes, fixed: hardening migration `20260926130000` (split no longer a false "New order", `bill_paid` once per bill, WHEN-clause triggers, order/bill indexes, 30-day `pg_cron` prune); bell refetch is latest-wins (no badge resurrection after "Mark all read"), insert handler is an Effect Event (no channel churn per `router.refresh()`), count window capped at 24h, 44px trigger on phones. **Toasts can no longer be lost**: a refetch toasts the unread rows it is first to see (after the first, history-only load), so a row the poll/rejoin found before realtime still announces. **`/notifications` shows unread** (same cursor + 24h rule, bold + dot), with "Mark all read" and tap-to-read; bell and page sync read state through `lib/notification-read-sync.ts` (window event) instead of waiting for the 45s poll.
 
 ## Blocked — Open Questions (PRD §9)
 - [!] Launch payment gateway(s): Stripe global vs regional e-wallet?
