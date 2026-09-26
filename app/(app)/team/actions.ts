@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
 import { requirePermission } from "@/lib/supabase/guards"
 import { writeAudit } from "@/lib/supabase/audit"
+import { createAdminClient } from "@/lib/supabase/admin"
 
 export type TeamState = { error: string } | { ok: true } | undefined
 
@@ -243,6 +244,109 @@ export async function cancelInvite(email: string): Promise<TeamState> {
   const supabase = await createClient()
   const { error } = await supabase.rpc("cancel_invite", { _tenant: tenant.tenantId, _email: email })
   if (error) return { error: error.message }
+  revalidatePath("/team")
+  return { ok: true }
+}
+
+/**
+ * Staff forget passwords, and many have no inbox they check, so an owner can
+ * set one for them. Takeover-grade, so the gate is the owner-only
+ * `assert_can_set_member_password` RPC (not staff.edit) run under the caller's
+ * JWT; only once it passes does the service-role client touch auth.
+ */
+function passwordProblem(password: string): string | null {
+  if (password.length < 8) return "Use at least 8 characters."
+  if (password.length > 72) return "Keep it to 72 characters or fewer."
+  if (!/[a-z]/i.test(password) || !/\d/.test(password)) return "Mix letters and numbers."
+  return null
+}
+
+function friendlyPasswordError(message: string): string {
+  const msg = message.toLowerCase()
+  if (msg.includes("weak") || msg.includes("password")) {
+    return "That password was rejected. Use at least 8 characters with a mix of letters and numbers."
+  }
+  return message
+}
+
+export async function setMemberPassword(userId: string, password: string): Promise<TeamState> {
+  const tenant = await requirePermission("staff.edit")
+  const problem = passwordProblem(password)
+  if (problem) return { error: problem }
+
+  const supabase = await createClient()
+  const { data: email, error: gateErr } = await supabase.rpc("assert_can_set_member_password", {
+    _tenant: tenant.tenantId,
+    _user_id: userId,
+  })
+  if (gateErr) return { error: gateErr.message }
+
+  const admin = createAdminClient()
+  if (!admin) return { error: "Password changes aren't configured on this server." }
+  const { error } = await admin.auth.admin.updateUserById(userId, { password })
+  if (error) return { error: friendlyPasswordError(error.message) }
+
+  // The password itself never goes in the log.
+  await writeAudit({
+    tenantId: tenant.tenantId,
+    action: "password_reset",
+    entityType: "user_tenant",
+    entityId: userId,
+    metadata: { event: "set_password", email },
+  })
+  return { ok: true }
+}
+
+/**
+ * Turn an invite (no account yet) into a working login: create the account with
+ * the owner's password, pre-confirmed, and attach it as an active member so the
+ * person can sign in straight away without an approval round trip.
+ */
+export async function createInviteLogin(email: string, password: string): Promise<TeamState> {
+  const tenant = await requirePermission("staff.edit")
+  const problem = passwordProblem(password)
+  if (problem) return { error: problem }
+
+  const supabase = await createClient()
+  const { data: invite, error: gateErr } = await supabase.rpc("assert_can_create_invite_login", {
+    _tenant: tenant.tenantId,
+    _email: email,
+  })
+  if (gateErr || !invite) return { error: gateErr?.message ?? "Invite not found." }
+
+  const admin = createAdminClient()
+  if (!admin) return { error: "Creating logins isn't configured on this server." }
+  const { data: created, error } = await admin.auth.admin.createUser({
+    email: invite.email,
+    password,
+    email_confirm: true,
+  })
+  if (error || !created.user) return { error: friendlyPasswordError(error?.message ?? "Could not create the login.") }
+
+  const { error: memberErr } = await admin.from("user_tenants").upsert(
+    {
+      user_id: created.user.id,
+      tenant_id: tenant.tenantId,
+      role: invite.base_role,
+      role_id: invite.role_id,
+      status: "active",
+    },
+    { onConflict: "user_id,tenant_id", ignoreDuplicates: true },
+  )
+  if (memberErr) {
+    // No membership means an orphan login nobody can use — take it back out.
+    await admin.auth.admin.deleteUser(created.user.id)
+    return { error: memberErr.message }
+  }
+  await admin.from("staff_invites").delete().eq("id", invite.id)
+
+  await writeAudit({
+    tenantId: tenant.tenantId,
+    action: "password_reset",
+    entityType: "user_tenant",
+    entityId: created.user.id,
+    metadata: { event: "create_login", email: invite.email },
+  })
   revalidatePath("/team")
   return { ok: true }
 }

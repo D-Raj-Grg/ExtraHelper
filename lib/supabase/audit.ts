@@ -17,6 +17,7 @@ export type AuditAction =
   | "ownership_transfer"
   | "tenant_delete_requested"
   | "tenant_delete_cancelled"
+  | "password_reset"
 
 export type AuditEntry = {
   tenantId: string

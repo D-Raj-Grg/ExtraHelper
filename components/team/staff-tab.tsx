@@ -35,12 +35,15 @@ import {
 } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
 import { JoinCodeCard } from "./join-code-card"
+import { PasswordDialog } from "./password-dialog"
 import { MEMBER_STATUS_LABEL, STATUS_STYLES, type Member, type RoleOption } from "./types"
 
 export function StaffTab({
   members,
   roleOptions,
   canEdit,
+  canManagePasswords,
+  currentUserId,
   pending,
   onAdd,
   onSetRole,
@@ -51,6 +54,9 @@ export function StaffTab({
   members: Member[]
   roleOptions: RoleOption[]
   canEdit: boolean
+  /** Owner only — setting a password is account takeover by design. */
+  canManagePasswords: boolean
+  currentUserId: string
   pending: boolean
   onAdd: (email: string, roleId: string) => void
   onSetRole: (userId: string, roleId: string) => void
@@ -121,7 +127,7 @@ export function StaffTab({
                   </TableCell>
                   {canEdit ? (
                     <TableCell className="px-3 py-2">
-                      <div className="flex justify-end gap-2">
+                      <div className="flex flex-wrap justify-end gap-2">
                         {m.status === "pending" && m.user_id ? (
                           <Button
                             size="sm"
@@ -132,6 +138,9 @@ export function StaffTab({
                             Approve
                             <span className="sr-only"> {m.email}</span>
                           </Button>
+                        ) : null}
+                        {canManagePasswords && m.base_role !== "owner" && m.user_id !== currentUserId ? (
+                          <PasswordDialog member={m} disabled={pending} />
                         ) : null}
                         <RemoveMemberButton
                           member={m}

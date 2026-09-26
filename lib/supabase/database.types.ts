@@ -3829,6 +3829,28 @@ export type Database = {
         Args: { _id: string; _tenant: string }
         Returns: undefined
       }
+      assert_can_create_invite_login: {
+        Args: { _email: string; _tenant: string }
+        Returns: {
+          base_role: Database["public"]["Enums"]["app_role"]
+          created_at: string
+          email: string
+          id: string
+          invited_by: string | null
+          role_id: string | null
+          tenant_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "staff_invites"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      assert_can_set_member_password: {
+        Args: { _tenant: string; _user_id: string }
+        Returns: string
+      }
       assert_may_change_expense: {
         Args: { _e: Database["public"]["Tables"]["expenses"]["Row"] }
         Returns: undefined

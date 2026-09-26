@@ -24,11 +24,15 @@ export function TeamManager({
   permissions,
   members,
   canEdit,
+  canManagePasswords,
+  currentUserId,
 }: {
   roles: Role[]
   permissions: Permission[]
   members: Member[]
   canEdit: boolean
+  canManagePasswords: boolean
+  currentUserId: string
 }) {
   const [tab, setTab] = useState("roles")
   const [editorOpen, setEditorOpen] = useState(false)
@@ -97,6 +101,8 @@ export function TeamManager({
             members={members}
             roleOptions={roleOptions}
             canEdit={canEdit}
+            canManagePasswords={canManagePasswords}
+            currentUserId={currentUserId}
             pending={pending}
             onAdd={handleAdd}
             onSetRole={(userId, roleId) => run(() => setMemberRole(userId, roleId), "Role updated.")}

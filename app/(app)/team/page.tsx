@@ -4,12 +4,14 @@ import { PageShell, PageHeader } from "@/components/page-header"
 import { TeamManager } from "@/components/team/team-manager"
 import type { Member, Permission } from "@/components/team/types"
 import { getMyPermissions } from "@/lib/supabase/permissions"
+import { getCurrentUser } from "@/lib/supabase/user"
 
 export const dynamic = "force-dynamic"
 
 export default async function TeamPage() {
   const tenant = await requirePermission("staff.view")
   const supabase = await createClient()
+  const user = await getCurrentUser()
 
   const [{ data: roles }, { data: perms }, { data: members }, { data: memberRoles }, permissionKeys] =
     await Promise.all([
@@ -64,6 +66,8 @@ export default async function TeamPage() {
         permissions={(perms ?? []) as Permission[]}
         members={(members ?? []) as Member[]}
         canEdit={permissionKeys.includes("staff.edit")}
+        canManagePasswords={tenant.role === "owner"}
+        currentUserId={user?.id ?? ""}
       />
     </PageShell>
   )

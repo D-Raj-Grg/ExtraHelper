@@ -8,7 +8,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
-_Nothing yet._
+### Added
+- **Owners can set a staff member's password.** Staff forget passwords and many never check email, so the reset link doesn't help mid-shift. On **Users & Roles → Staff**, the owner now has a **Set password** button on each member: type a new one or tap **Generate one** (easy to read out — no 0/O or 1/l), copy it, and hand it over in person. Their old password stops working straight away. Nothing is emailed.
+- **Create a login for someone who was invited but never signed up.** Invited rows get **Create login** instead: the owner picks the password, the account is made ready to use (no email confirmation), and the person joins the team as active — they can sign in on the spot with no approval step.
+- Every password set or login created is written to the audit log (who did it, for whom — never the password).
+
+### Security
+- **Owner only**, not anyone with "Edit staff": a custom role can't hand this out. It refuses **other owners**, **yourself**, **platform admins**, and anyone who **also works at another restaurant** — otherwise an owner could add a stranger's existing account by email and then take it over. Those people reset their own password by email.
+
+### Known gaps
+- There's still no "change my password" on the profile page, so staff can't swap the owner's password for their own yet.
+- Needs `SUPABASE_SERVICE_ROLE_KEY` set on the deployment (already used by the payment webhook). Without it, the buttons answer "isn't configured on this server".
+
+<details><summary>Technical</summary>
+
+- Migration `20260926140000_member_password_admin.sql`: `assert_can_set_member_password(_tenant, _user_id) → text` (email) and `assert_can_create_invite_login(_tenant, _email) → staff_invites`. Both `security definer`, `stable`, run under the caller's JWT; EXECUTE revoked from `public, anon`, granted to `authenticated`. Checks `has_tenant_role(_tenant,'owner')`, not `has_permission('staff.edit')` — deliberate exception to [team gating on permission keys].
+- Server actions `setMemberPassword` / `createInviteLogin` in `app/(app)/team/actions.ts` call the gate RPC first, then the new service-role client `lib/supabase/admin.ts` (`auth.admin.updateUserById` / `auth.admin.createUser({ email_confirm: true })`). Invite path upserts `user_tenants` as `active` and deletes the invite; if the membership insert fails, the new auth user is deleted so no orphan login is left.
+- Password rule: 8–72 chars, letters + digits (72 = bcrypt limit). New audit action `password_reset` (`metadata.event` = `set_password` | `create_login`), amber pill in `lib/audit-constants.ts`.
+- UI: `components/team/password-dialog.tsx`, shown in the Staff table when `tenant.role === 'owner'` and the row isn't an owner or the viewer.
+- Verified guards over `execute_sql` on the live tenant: owner → kitchen/manager pass; owner → self, owner → co-owner, manager → kitchen, kitchen → manager, owner → non-member, missing invite all refused. `tsc`, `eslint`, `npm run build` clean.
+
+</details>
 
 ---
 
