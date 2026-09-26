@@ -1,6 +1,10 @@
 import { createClient } from "@/lib/supabase/server"
 import { requirePermission } from "@/lib/supabase/guards"
+import { getMyPermissions } from "@/lib/supabase/permissions"
+import { getCurrentUser } from "@/lib/supabase/user"
+import { FEED_LIMIT, NOTIFICATION_SELECT, type AppNotification } from "@/lib/notification-constants"
 import { PageShell, PageHeader } from "@/components/page-header"
+import { PermissionProvider } from "@/components/permission-provider"
 import { NotificationTabs } from "@/components/notification-tabs"
 
 export const dynamic = "force-dynamic"
@@ -10,13 +14,17 @@ export default async function NotificationsPage() {
   const supabase = await createClient()
   const canSeeActivity = tenant.role === "owner" || tenant.role === "manager"
 
-  const [{ data: orders }, activityRes] = await Promise.all([
+  const [permissions, user, { data: updates }, activityRes] = await Promise.all([
+    // Request-cached: the guard above already read this set.
+    getMyPermissions(tenant.tenantId),
+    // Request-cached: the layout already read it.
+    getCurrentUser(),
     supabase
-      .from("orders")
-      .select("id, order_type, status, created_at, restaurant_tables!orders_table_id_fkey(label)")
+      .from("notifications")
+      .select(NOTIFICATION_SELECT)
       .eq("tenant_id", tenant.tenantId)
       .order("created_at", { ascending: false })
-      .limit(50),
+      .limit(FEED_LIMIT),
     canSeeActivity
       ? supabase
           .from("audit_logs")
@@ -31,15 +39,19 @@ export default async function NotificationsPage() {
     <PageShell>
       <PageHeader
         title="Notifications"
-        description="New orders and sensitive activity for your restaurant."
+        description="Every step of every order — placed, cooking, ready, served, billed, paid — plus sensitive activity."
       />
-      <NotificationTabs
-        orders={(orders ?? []) as never}
-        activity={(activityRes.data ?? null) as never}
-        tenantId={tenant.tenantId}
-        timezone={tenant.timezone}
-        canSeeActivity={canSeeActivity}
-      />
+      <PermissionProvider permissions={permissions}>
+        <NotificationTabs
+          updates={(updates ?? []) as AppNotification[]}
+          activity={(activityRes.data ?? null) as never}
+          tenantId={tenant.tenantId}
+          timezone={tenant.timezone}
+          currency={tenant.currency}
+          canSeeActivity={canSeeActivity}
+          userId={user?.id ?? ""}
+        />
+      </PermissionProvider>
     </PageShell>
   )
 }

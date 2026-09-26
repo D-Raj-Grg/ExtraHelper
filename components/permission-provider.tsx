@@ -13,6 +13,11 @@ const PermissionContext = createContext<Set<string>>(new Set())
  * subtree reads the empty default set, so page-level gating belongs in the
  * server component (`requirePermission` / `getMyPermissions`), which is the
  * honest place for it anyway. Widen this provider if that ever changes.
+ *
+ * Other islands that need client gating mount their own copy rather than
+ * widening this one: the header bell unwraps the layout's unawaited
+ * `getMyPermissions` promise behind its own Suspense boundary, and
+ * /notifications wraps its feed with the keys its guard already read.
  */
 export function PermissionProvider({
   permissions,

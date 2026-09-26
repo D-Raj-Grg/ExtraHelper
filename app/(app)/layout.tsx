@@ -16,6 +16,7 @@ import { NewOrderProvider } from "@/components/pos/new-order-provider"
 import { getActiveTenant } from "@/lib/supabase/tenant"
 import { getUserPreferences } from "@/lib/supabase/preferences"
 import { getCurrentUser } from "@/lib/supabase/user"
+import { getMyPermissions } from "@/lib/supabase/permissions"
 
 /**
  * Shared shell for all authenticated staff pages: sidebar + header. Auth is
@@ -40,6 +41,11 @@ export default async function AppLayout({
   // Neither read depends on the other, so they go together rather than serially.
   const [tenant, prefs] = await Promise.all([getActiveTenant(), getUserPreferences()])
   if (!tenant) redirect("/onboarding")
+
+  // Deliberately not awaited: the header bell unwraps it behind its own
+  // Suspense boundary. `getMyPermissions` is request-cached, so the sidebar's
+  // read below is the same query, not a second one.
+  const permissions = getMyPermissions(tenant.tenantId)
 
   const fallbackName =
     (user.user_metadata?.restaurant_name as string) ?? user.email?.split("@")[0] ?? "User"
@@ -73,7 +79,7 @@ export default async function AppLayout({
         </Suspense>
         <SidebarInset>
           {tenant.impersonating ? <ImpersonationBanner name={tenant.name} /> : null}
-          <SiteHeader />
+          <SiteHeader permissions={permissions} userId={user.id} />
           {/* Below the header, above the page — a page-level warning, not app chrome. */}
           {tenant.deletionScheduledAt ? (
             <DeletionBanner
