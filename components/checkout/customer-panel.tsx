@@ -63,6 +63,12 @@ export function CheckoutCustomerPanel({
             <Badge className="border-transparent bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">
               {customer.points} pts · {money(customer.points * Math.max(1, pointsValueCents), currency)}
             </Badge>
+            {customer.owesCents > 0 ? (
+              <Badge variant="destructive" className="border-transparent">
+                Owes {money(customer.owesCents, currency)} · {customer.unpaidBills} unpaid{" "}
+                {customer.unpaidBills === 1 ? "bill" : "bills"}
+              </Badge>
+            ) : null}
           </div>
         ) : settled ? (
           <p className="text-sm text-muted-foreground">Walk-in — no customer attached.</p>

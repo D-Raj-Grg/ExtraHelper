@@ -57,6 +57,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table"
+import { money } from "@/lib/format"
+import { CustomerDrawer, type DrawerCustomer } from "@/components/customer-drawer"
 
 type Customer = {
   id: string
@@ -64,6 +66,8 @@ type Customer = {
   phone: string | null
   email: string | null
   loyalty_accounts: { points_balance: number; tier: string | null }[]
+  outstanding_cents: number
+  unpaid_bills: number
 }
 type Feedback = {
   id: string
@@ -92,13 +96,17 @@ function describe(c: Customer): string {
 
 function CustomerRow({
   c,
+  currency,
   canManage,
+  onOpen,
   onEdit,
   onMerge,
   onDelete,
 }: {
   c: Customer
+  currency: string
   canManage: boolean
+  onOpen: (c: DrawerCustomer) => void
   onEdit: (id: string) => void
   onMerge: (id: string) => void
   onDelete: (id: string) => void
@@ -126,12 +134,40 @@ function CustomerRow({
   return (
     <TableRow className="border-t">
       <TableCell className="px-3 py-2">
-        {name}
-        {c.phone || c.email ? (
-          <span className="block text-xs text-muted-foreground">{c.phone ?? c.email}</span>
-        ) : null}
+        <button
+          type="button"
+          className="text-left hover:underline"
+          onClick={() =>
+            onOpen({
+              id: c.id,
+              name: c.name,
+              phone: c.phone,
+              points: balance,
+              tier,
+              outstanding_cents: c.outstanding_cents,
+              unpaid_bills: c.unpaid_bills,
+            })
+          }
+        >
+          {name}
+          {c.phone || c.email ? (
+            <span className="block text-xs text-muted-foreground">{c.phone ?? c.email}</span>
+          ) : null}
+        </button>
       </TableCell>
       <TableCell className="px-3 py-2 text-right font-medium tabular-nums">{balance} pts</TableCell>
+      <TableCell className="px-3 py-2 text-right tabular-nums">
+        {c.outstanding_cents > 0 ? (
+          <span className="font-medium text-destructive">
+            {money(c.outstanding_cents, currency)}
+            <span className="block text-xs font-normal">
+              {c.unpaid_bills} unpaid {c.unpaid_bills === 1 ? "bill" : "bills"}
+            </span>
+          </span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        )}
+      </TableCell>
       <TableCell className="px-3 py-2">
         <Badge variant="outline">{TIER_LABEL[tier] ?? TIER_LABEL.bronze}</Badge>
       </TableCell>
@@ -434,14 +470,27 @@ export function LoyaltyManager({
   customers,
   feedback,
   timezone,
+  currency,
+  totalOutstandingCents,
+  debtors,
   canManage,
+  canCollect,
 }: {
   customers: Customer[]
   feedback: Feedback[]
   timezone: string
+  currency: string
+  totalOutstandingCents: number
+  debtors: number
   /** Holds `loyalty.edit`: may edit, merge, delete, and adjust points. */
   canManage: boolean
+  /** Holds `payment.take`: the drawer offers Collect on unpaid bills. */
+  canCollect: boolean
 }) {
+  const [open, setOpen] = useState<DrawerCustomer | null>(null)
+  // Debtors first — that is what the page is opened for on a slow afternoon.
+  const sorted = [...customers].sort((a, b) => b.outstanding_cents - a.outstanding_cents)
+
   // Editors are held by id, so a revalidated row shows up while the dialog is
   // open instead of a snapshot from when it was clicked.
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -453,8 +502,35 @@ export function LoyaltyManager({
 
   return (
     <div className="flex flex-col gap-8">
+      <CustomerDrawer
+        customer={open}
+        currency={currency}
+        timezone={timezone}
+        canCollect={canCollect}
+        onOpenChange={(o) => {
+          if (!o) setOpen(null)
+        }}
+      />
       <section>
-        <h2 className="mb-2 text-lg font-semibold">Customers</h2>
+        <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="text-lg font-semibold">Customers</h2>
+          <p className="text-sm">
+            <span className="text-muted-foreground">Outstanding credit: </span>
+            <span
+              className={
+                totalOutstandingCents > 0 ? "font-semibold tabular-nums text-destructive" : "font-semibold tabular-nums"
+              }
+            >
+              {money(totalOutstandingCents, currency)}
+            </span>
+            {debtors > 0 ? (
+              <span className="text-muted-foreground">
+                {" "}
+                across {debtors} {debtors === 1 ? "customer" : "customers"}
+              </span>
+            ) : null}
+          </p>
+        </div>
         {customers.length === 0 ? (
           <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed px-6 py-12 text-center">
             <UsersIcon className="size-8 text-muted-foreground" aria-hidden />
@@ -471,6 +547,7 @@ export function LoyaltyManager({
                 <TableRow>
                   <TableHead className="px-3 py-2 font-medium">Customer</TableHead>
                   <TableHead className="px-3 py-2 text-right font-medium">Balance</TableHead>
+                  <TableHead className="px-3 py-2 text-right font-medium">Credit</TableHead>
                   <TableHead className="px-3 py-2 font-medium">Tier</TableHead>
                   <TableHead className="px-3 py-2 text-right font-medium">Points</TableHead>
                   {canManage ? (
@@ -481,11 +558,13 @@ export function LoyaltyManager({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {customers.map((c) => (
+                {sorted.map((c) => (
                   <CustomerRow
                     key={c.id}
                     c={c}
+                    currency={currency}
                     canManage={canManage}
+                    onOpen={setOpen}
                     onEdit={setEditingId}
                     onMerge={setMergingId}
                     onDelete={setDeletingId}

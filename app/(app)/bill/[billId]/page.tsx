@@ -5,6 +5,7 @@ import { CheckoutView } from "@/components/checkout/checkout-view"
 import { PageShell } from "@/components/page-header"
 import type { CheckoutItem } from "@/components/checkout/types"
 import type { ReceiptTemplate } from "@/lib/print/branding"
+import { indexCredit } from "@/lib/customer-credit"
 
 export const dynamic = "force-dynamic"
 
@@ -193,12 +194,25 @@ export default async function BillPage({
       }
     | null
     | undefined
+  // What this guest already owes on other bills. This bill is excluded so an
+  // unpaid one being settled doesn't warn about itself.
+  const credit = cust
+    ? indexCredit((await supabase.rpc("customer_credit_summary", { _tenant: tenant.tenantId })).data).byCustomer.get(
+        cust.id,
+      )
+    : undefined
+  const thisBillOwed =
+    bill.status === "open" || bill.status === "partial"
+      ? Math.max(bill.total_cents - (payments ?? []).reduce((s, p) => s + p.amount_cents, 0), 0)
+      : 0
   const customer = cust
     ? {
         id: cust.id,
         name: cust.name,
         phone: cust.phone,
         points: cust.loyalty_accounts?.[0]?.points_balance ?? 0,
+        owesCents: Math.max(Number(credit?.outstanding_cents ?? 0) - thisBillOwed, 0),
+        unpaidBills: Math.max(Number(credit?.unpaid_bills ?? 0) - (thisBillOwed > 0 ? 1 : 0), 0),
       }
     : null
 

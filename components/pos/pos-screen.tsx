@@ -46,7 +46,7 @@ export function PosScreen({
   openOrderId = null,
   startNew = false,
   initialDetail = null,
-  initialTab = "orders",
+  initialTab = "table",
 }: {
   data: PosData
   currency: string
@@ -75,7 +75,7 @@ export function PosScreen({
     (next: PosTab) => {
       setTab(next)
       if (typeof window !== "undefined") {
-        const url = next === "orders" ? pathname : `${pathname}?tab=${next}`
+        const url = next === "table" ? pathname : `${pathname}?tab=${next}`
         window.history.replaceState(null, "", url)
       }
     },

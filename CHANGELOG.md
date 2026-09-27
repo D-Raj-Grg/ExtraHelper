@@ -8,6 +8,33 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Changed
+- **POS opens on the Table view.** The floor is where a shift starts, so `/pos` now lands on **Table** instead of Orders. The Orders pane is still one tap away and `/pos?tab=orders` deep-links to it.
+
+### Added
+- **See what a guest owes.** Leaving a bill unpaid always required a guest, but nothing showed what they owed afterwards. **Loyalty & CRM** now has a **Credit** column (amount and number of unpaid bills), the total outstanding across all customers at the top of the list, and debtors sort first. Customers who owe money appear on the page even if they aren't among the newest 50.
+- **Customer drawer.** Tap a customer's name to open their history: outstanding credit, each **unpaid bill** (date, table, top items, amount owed, what's already been paid) with a **Collect** button that opens the checkout, and their **past paid orders**. Collect shows only for people who can take payments.
+- **Checkout warns before extending more credit.** When the attached customer already owes on other bills, the customer panel shows a red **Owes …** badge with the amount and how many bills, so the cashier decides with eyes open. The bill being settled is not counted against itself.
+- **Reports → Customers** gains a **Credit outstanding now** tile and an **Outstanding now** column. These are not bounded by the report dates — a debt is owed today whenever it was run up.
+
+### Known gaps
+- Credit lives on the Loyalty page, so it needs the loyalty feature and `loyalty.view`. There is no separate Customers page yet.
+- Partial repayment still happens through the bill's checkout; there is no standalone "pay down credit" ledger.
+- The mobile app doesn't show credit yet.
+
+<details><summary>Technical</summary>
+
+- Migration `20260927100000_customer_credit.sql`: two `security invoker`, `stable` SQL functions. `customer_credit_summary(_tenant) → (customer_id, outstanding_cents, unpaid_bills, oldest_unpaid)` sums `bills.total_cents − completed payments` over `open|partial` bills, attributing each bill to the first non-cancelled order's `customer_id`; gated on `checkout.view` OR `loyalty.view`. `customer_bill_history(_tenant, _customer, _limit=50) → (bill_id, created_at, status, total_cents, paid_cents, outstanding_cents, table_label, items_summary)` lists non-void bills newest first with a top-3 `bill_items` summary; gated on `loyalty.view`. EXECUTE revoked from `public, anon`, granted to `authenticated`. No ledger table — the debt is inferred, exactly as `leave_bill_on_credit` leaves it.
+- `lib/customer-credit.ts` `indexCredit()` normalises the summary rows into a `Map` + total; used by `app/(app)/loyalty/page.tsx`, `app/(app)/bill/[billId]/page.tsx` and `components/reports/customers-tab.tsx`.
+- New `components/customer-drawer.tsx` (Sheet) fed by server action `customerHistory` in `app/(app)/loyalty/actions.ts`. `components/loyalty-manager.tsx` gains the Credit column, total line, debtor-first sort and the drawer trigger; page passes `currency` and `canCollect` (`payment.take` via `getMyPermissions`).
+- `CheckoutCustomer` gains `owesCents` / `unpaidBills`; the bill page subtracts the current bill's own outstanding before passing them. `components/checkout/customer-panel.tsx` renders the destructive badge.
+- POS: default `"table"` in `app/(app)/pos/page.tsx`, `components/pos/pos-screen.tsx` (initial state and the bare-URL branch of `selectTab`), and `table` moved first in `components/pos/pos-tabs.tsx`.
+- `lib/supabase/database.types.ts` regenerated. Verified both RPCs over `execute_sql` as the Sekuwa owner (two debtors, totals match bill − payments). `tsc`, `eslint`, `check:rsc`, `npm run build` clean.
+
+</details>
+
+---
+
 ### Added
 - **Customers can be edited, merged and deleted.** On **Loyalty & CRM**, every customer row has an actions menu: **Edit** (name, phone, email), **Merge into another customer** (when one person was saved twice — their orders, reservations, feedback and points move to the one you keep), and **Delete** (asks first, and says what is lost: past orders keep their totals but lose the name; points and points history go). Owners and managers by default, via the **Manage customers** permission. Every change is in the audit log.
 - **One phone number is one customer.** Typing a phone with the country code, without it, or with spaces and dashes now finds the same customer at the POS, on the bill, in the storefront and in reservations, instead of creating a duplicate. **Settings → General → Phone country code** tells the app which prefix to ignore (filled in from your currency for existing restaurants; blank means compare as typed).

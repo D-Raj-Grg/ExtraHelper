@@ -3996,6 +3996,28 @@ export type Database = {
         Returns: string
       }
       current_tenant_ids: { Args: never; Returns: string[] }
+      customer_bill_history: {
+        Args: { _customer: string; _limit?: number; _tenant: string }
+        Returns: {
+          bill_id: string
+          created_at: string
+          items_summary: string
+          outstanding_cents: number
+          paid_cents: number
+          status: Database["public"]["Enums"]["bill_status"]
+          table_label: string
+          total_cents: number
+        }[]
+      }
+      customer_credit_summary: {
+        Args: { _tenant: string }
+        Returns: {
+          customer_id: string
+          oldest_unpaid: string
+          outstanding_cents: number
+          unpaid_bills: number
+        }[]
+      }
       customer_for_phone: {
         Args: { _name: string; _phone: string; _tenant: string }
         Returns: string

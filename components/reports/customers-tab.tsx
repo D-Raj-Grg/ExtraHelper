@@ -1,10 +1,12 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { money } from "@/lib/format"
+import { indexCredit } from "@/lib/customer-credit"
 import { ReportSection } from "./report-section"
 import { StatTiles } from "./stat-tiles"
 import type { ReportCtx } from "./types"
 
 type Row = {
+  customer_id: string
   name: string | null
   orders: number
   spend_cents: number
@@ -12,7 +14,13 @@ type Row = {
 }
 
 export async function CustomersTab({ supabase, tenantId, F, T, cur }: ReportCtx) {
-  const { data } = await supabase.rpc("report_customers", { _tenant: tenantId, _from: F, _to: T })
+  const [{ data }, { data: credit }] = await Promise.all([
+    supabase.rpc("report_customers", { _tenant: tenantId, _from: F, _to: T }),
+    // Not date-bounded on purpose: a debt is owed today whenever it was run up.
+    supabase.rpc("customer_credit_summary", { _tenant: tenantId }),
+  ])
+  const { byCustomer, totalCents: totalOwed } = indexCredit(credit)
+  const owed = new Map([...byCustomer].map(([id, c]) => [id, c.outstanding_cents]))
   const rows = (data ?? []) as Row[]
 
   const withOrders = rows.filter((r) => Number(r.orders) > 0)
@@ -24,6 +32,7 @@ export async function CustomersTab({ supabase, tenantId, F, T, cur }: ReportCtx)
     orders: Number(r.orders),
     spend: money(r.spend_cents, cur),
     redeemed: Number(r.points_redeemed),
+    outstanding: money(owed.get(r.customer_id) ?? 0, cur),
   }))
 
   return (
@@ -36,6 +45,7 @@ export async function CustomersTab({ supabase, tenantId, F, T, cur }: ReportCtx)
             label: "Points redeemed",
             value: String(rows.reduce((s, r) => s + Number(r.points_redeemed), 0)),
           },
+          { label: "Credit outstanding now", value: money(totalOwed, cur), warn: totalOwed > 0 },
         ]}
       />
 
@@ -47,6 +57,7 @@ export async function CustomersTab({ supabase, tenantId, F, T, cur }: ReportCtx)
           { key: "orders", label: "Orders" },
           { key: "spend", label: "Spend" },
           { key: "redeemed", label: "Points redeemed" },
+          { key: "outstanding", label: "Outstanding now" },
         ]}
         filename="customer-report"
         empty="No customer activity in this period."
@@ -58,6 +69,7 @@ export async function CustomersTab({ supabase, tenantId, F, T, cur }: ReportCtx)
               <TableHead className="px-3 py-2 text-right font-medium">Orders</TableHead>
               <TableHead className="px-3 py-2 text-right font-medium">Spend</TableHead>
               <TableHead className="px-3 py-2 text-right font-medium">Redeemed</TableHead>
+              <TableHead className="px-3 py-2 text-right font-medium">Outstanding now</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -72,6 +84,13 @@ export async function CustomersTab({ supabase, tenantId, F, T, cur }: ReportCtx)
                 </TableCell>
                 <TableCell className="px-3 py-2 text-right tabular-nums text-muted-foreground">
                   {Number(r.points_redeemed)}
+                </TableCell>
+                <TableCell className="px-3 py-2 text-right tabular-nums">
+                  {(owed.get(r.customer_id) ?? 0) > 0 ? (
+                    <span className="font-medium text-destructive">{money(owed.get(r.customer_id) ?? 0, cur)}</span>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
                 </TableCell>
               </TableRow>
             ))}

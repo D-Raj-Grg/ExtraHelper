@@ -73,3 +73,34 @@ export async function mergeCustomers(keepId: string, dropId: string): Promise<Lo
   revalidatePath("/loyalty")
   return { ok: true }
 }
+
+export type CustomerBill = {
+  bill_id: string
+  created_at: string
+  status: "open" | "partial" | "paid" | "void"
+  total_cents: number
+  paid_cents: number
+  outstanding_cents: number
+  table_label: string | null
+  items_summary: string | null
+}
+
+/** Every bill a customer has been on — unpaid first-class, so credit can be chased. */
+export async function customerHistory(customerId: string): Promise<{ bills: CustomerBill[] } | { error: string }> {
+  const tenant = await requirePermission("loyalty.view")
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc("customer_bill_history", {
+    _tenant: tenant.tenantId,
+    _customer: customerId,
+    _limit: 50,
+  })
+  if (error) return { error: error.message }
+  return {
+    bills: ((data ?? []) as CustomerBill[]).map((b) => ({
+      ...b,
+      total_cents: Number(b.total_cents),
+      paid_cents: Number(b.paid_cents),
+      outstanding_cents: Number(b.outstanding_cents),
+    })),
+  }
+}

@@ -50,6 +50,9 @@ export type CheckoutCustomer = {
   name: string | null
   phone: string | null
   points: number
+  /** Unpaid credit on OTHER bills — the cashier should know before extending more. */
+  owesCents: number
+  unpaidBills: number
 }
 
 export type MergeableOrder = {

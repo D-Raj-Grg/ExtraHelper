@@ -19,7 +19,7 @@ export default async function PosPage({
     loadPosData(tenant.tenantId, tenant.timezone, tenant.dayCutoffMinutes),
     searchParams,
   ])
-  const initialTab: PosTab = TABS.includes(params.tab as PosTab) ? (params.tab as PosTab) : "orders"
+  const initialTab: PosTab = TABS.includes(params.tab as PosTab) ? (params.tab as PosTab) : "table"
 
   return (
     <PageShell>

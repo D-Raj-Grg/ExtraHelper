@@ -9,7 +9,7 @@ export type PosTab = "orders" | "table" | "kot" | "completed"
 /**
  * Table leads: a shift starts by looking at the floor and tapping a seat, so
  * the board is the first thing under the thumb. Orders is the running list
- * behind it. The default pane (the one with no `?tab=`) is still Orders — see
+ * behind it. Table is also the default pane (the one with no `?tab=`) — see
  * `selectTab` in pos-screen.tsx.
  */
 const TABS: { key: PosTab; label: string; icon: SegmentedItem<PosTab>["icon"] }[] = [
