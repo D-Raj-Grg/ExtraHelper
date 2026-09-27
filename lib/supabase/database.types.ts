@@ -520,6 +520,7 @@ export type Database = {
           id: string
           name: string | null
           phone: string | null
+          phone_norm: string | null
           tenant_id: string
         }
         Insert: {
@@ -529,6 +530,7 @@ export type Database = {
           id?: string
           name?: string | null
           phone?: string | null
+          phone_norm?: string | null
           tenant_id: string
         }
         Update: {
@@ -538,6 +540,7 @@ export type Database = {
           id?: string
           name?: string | null
           phone?: string | null
+          phone_norm?: string | null
           tenant_id?: string
         }
         Relationships: [
@@ -3517,6 +3520,7 @@ export type Database = {
           order_type_fees: Json
           packaging_fee: number
           payment_gateway: string
+          phone_country_code: string | null
           points_value_cents: number
           printing_mode: string
           qr_auto_fire: boolean
@@ -3535,6 +3539,7 @@ export type Database = {
           order_type_fees?: Json
           packaging_fee?: number
           payment_gateway?: string
+          phone_country_code?: string | null
           points_value_cents?: number
           printing_mode?: string
           qr_auto_fire?: boolean
@@ -3553,6 +3558,7 @@ export type Database = {
           order_type_fees?: Json
           packaging_fee?: number
           payment_gateway?: string
+          phone_country_code?: string | null
           points_value_cents?: number
           printing_mode?: string
           qr_auto_fire?: boolean
@@ -3990,6 +3996,10 @@ export type Database = {
         Returns: string
       }
       current_tenant_ids: { Args: never; Returns: string[] }
+      customer_for_phone: {
+        Args: { _name: string; _phone: string; _tenant: string }
+        Returns: string
+      }
       daily_report: { Args: { _day?: string; _tenant: string }; Returns: Json }
       daily_report_build: {
         Args: { _day: string; _tenant: string }
@@ -4008,6 +4018,7 @@ export type Database = {
         Args: { _base: Database["public"]["Enums"]["app_role"] }
         Returns: string[]
       }
+      delete_customer: { Args: { _customer_id: string }; Returns: undefined }
       delete_my_account: { Args: never; Returns: undefined }
       delete_po: { Args: { _po_id: string }; Returns: undefined }
       delete_po_line: { Args: { _line_id: string }; Returns: undefined }
@@ -4038,6 +4049,10 @@ export type Database = {
         Returns: string
       }
       expenses_day: { Args: { _day?: string; _tenant: string }; Returns: Json }
+      find_or_create_customer: {
+        Args: { _name: string; _phone: string; _tenant: string }
+        Returns: string
+      }
       fire_order: { Args: { _order_id: string }; Returns: number }
       fire_order_kots: {
         Args: { _order_id: string; _tenant: string }
@@ -4093,6 +4108,10 @@ export type Database = {
       mark_order_served: { Args: { _order_id: string }; Returns: undefined }
       may_read_expense_receipt: { Args: { _name: string }; Returns: boolean }
       may_touch_expense_receipt: { Args: { _name: string }; Returns: boolean }
+      merge_customers: {
+        Args: { _drop_id: string; _keep_id: string }
+        Returns: undefined
+      }
       merge_receipt_template: {
         Args: { _patch: Json; _tenant: string }
         Returns: Json
@@ -4100,6 +4119,10 @@ export type Database = {
       move_variant: {
         Args: { _direction: string; _variant_id: string }
         Returns: number
+      }
+      normalize_phone: {
+        Args: { _phone: string; _tenant: string }
+        Returns: string
       }
       open_cash_session: {
         Args: {
@@ -4565,6 +4588,15 @@ export type Database = {
           marked_past_due: number
           suspended: number
         }[]
+      }
+      update_customer: {
+        Args: {
+          _customer_id: string
+          _email: string
+          _name: string
+          _phone: string
+        }
+        Returns: undefined
       }
       update_expense: {
         Args: {

@@ -352,34 +352,20 @@ export async function setOrderDetails(
   }
   if (fields.waiterId !== undefined) patch.waiter_id = fields.waiterId
 
-  // Customer: an explicit id, else find-or-create by phone — same rule as
-  // place_staff_order and attach_bill_customer.
+  // Customer: an explicit id, else find-or-create by phone through the same
+  // RPC place_staff_order and attach_bill_customer use, so "+977 98…" and
+  // "98…" are one customer everywhere (normalised on the server).
   if (fields.customerId !== undefined) {
     patch.customer_id = fields.customerId
   } else {
     const name = fields.customerName?.trim() || null
     const phone = fields.customerPhone?.trim() || null
     if (name || phone) {
-      let customerId: string | null = null
-      if (phone) {
-        const { data: found } = await supabase
-          .from("customers")
-          .select("id")
-          .eq("tenant_id", tenant.tenantId)
-          .eq("phone", phone)
-          .limit(1)
-          .maybeSingle()
-        customerId = found?.id ?? null
-      }
-      if (!customerId) {
-        const { data: created, error: custErr } = await supabase
-          .from("customers")
-          .insert({ tenant_id: tenant.tenantId, name: name ?? "Guest", phone })
-          .select("id")
-          .single()
-        if (custErr || !created) return { error: custErr?.message ?? "Could not save the customer." }
-        customerId = created.id
-      }
+      const { data: customerId, error: custErr } = await supabase.rpc(
+        "find_or_create_customer",
+        { _tenant: tenant.tenantId, _name: name ?? "", _phone: phone ?? "" },
+      )
+      if (custErr || !customerId) return { error: custErr?.message ?? "Could not save the customer." }
       patch.customer_id = customerId
     }
   }

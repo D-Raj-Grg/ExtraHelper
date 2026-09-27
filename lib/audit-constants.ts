@@ -16,4 +16,7 @@ export const ACTION_STYLES: Record<string, string> = {
   tenant_delete_requested: "bg-red-500/10 text-red-600 dark:text-red-400",
   tenant_delete_cancelled: "bg-green-500/10 text-green-600 dark:text-green-400",
   password_reset: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+  customer_update: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
+  customer_merge: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
+  customer_delete: "bg-red-500/10 text-red-600 dark:text-red-400",
 }

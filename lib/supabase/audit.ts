@@ -18,6 +18,9 @@ export type AuditAction =
   | "tenant_delete_requested"
   | "tenant_delete_cancelled"
   | "password_reset"
+  | "customer_update"
+  | "customer_delete"
+  | "customer_merge"
 
 export type AuditEntry = {
   tenantId: string

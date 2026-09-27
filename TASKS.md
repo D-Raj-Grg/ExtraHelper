@@ -6,6 +6,36 @@
 
 ---
 
+## Customers — edit, merge, delete, and one phone = one customer (2026-09-27, web + DB)
+
+The Loyalty page listed customers with no way to change one, and the single `tenant_all` policy
+let any staff member update or delete a row over the API with no role check and no audit entry.
+Every find-or-create matched the phone as typed, so "+9779767288510" and "9767288510" were two
+people. Migration `20260927090000_customer_manage.sql` (applied via MCP as `20260927081353`).
+
+- [x] `tenant_settings.phone_country_code` (Settings → General, digits only, blank = compare as
+      typed; seeded from currency for existing tenants) and `normalize_phone(tenant, text)`.
+      `customers.phone_norm` kept by trigger, backfilled, indexed, re-normalised when the code changes.
+- [x] One `customer_for_phone(tenant, name, phone)` (internal, no API grant) behind
+      `place_staff_order`, `attach_bill_customer`, `place_online_order`, `create_public_reservation`
+      and the web's `updateOrderDetails` (via the member-checked `find_or_create_customer` RPC).
+      A `Guest` placeholder learns the real name; a real name is never clobbered.
+- [x] RPCs `update_customer` (refuses a phone another customer already has), `delete_customer`,
+      `merge_customers` (orders, reservations, online orders, feedback, points + transactions move;
+      tier recomputed; blanks on the keeper filled). All gated on `loyalty.edit` (relabelled), all
+      write `audit_logs` (`customer_update` / `customer_delete` / `customer_merge`).
+- [x] `customers` RLS: `tenant_all` → `customers_select` + `customers_insert`; UPDATE/DELETE grants
+      revoked from `authenticated`, everything from `anon`. Verified as the owner in a rolled-back
+      transaction: dedupe, name upgrade, edit, duplicate refusal, merge, delete, 3 audit rows, direct
+      update → 42501.
+- [x] Loyalty page: row actions menu (Edit dialog, Merge into…, Delete with `AlertDialog`) for
+      `loyalty.edit`; tier as `Badge` via a label map; lucide stars instead of ★☆; empty state
+      teaches the next step.
+- [x] The Sekuwa Station's two "Max" rows merged through the RPC as the owner (both orders now on
+      one customer). The other rows were left for the owner to tidy from the new UI.
+- [ ] Flutter: if the mobile app updates `customers` directly anywhere, it now gets 42501 — switch it
+      to `update_customer`. (Repo not in this checkout; unverified.)
+
 ## POS board — Table tab first, Takeaway on the board (2026-09-27, web)
 
 - [x] POS tabs reorder to Table · Orders · KOT · Completed (`pos-tabs.tsx`, `/pos` `?tab=` allow-list).
