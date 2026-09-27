@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
-import { requireRole } from "@/lib/supabase/guards"
+import { requireRole, requireTenant } from "@/lib/supabase/guards"
 
 export type InvState = { error: string } | { ok: true } | undefined
 
@@ -289,6 +289,101 @@ export async function updateVariantScale(variantId: string, scale: number): Prom
   if (error) return { error: error.message }
   revalidatePath("/inventory")
   return { ok: true }
+}
+
+// ============================================================================
+// Dish costing — what a dish costs to make, for gross profit
+//
+// All three RPCs gate on `profit.view` inside Postgres and raise 42501 without
+// it; `requireTenant` here only resolves the tenant. Null clears a cost, and
+// the trigger that stamps `order_items.cost_cents` at sale time falls back
+// variant → dish × scale → recipe, so an owner who never weighs an ingredient
+// still sees profit.
+// ============================================================================
+
+/** Upper bound on a cost, in cents: 1,000,000.00 in any currency. */
+const MAX_COST_CENTS = 100_000_000
+
+function checkCents(costCents: number | null): string | null {
+  if (costCents === null) return null
+  if (!Number.isInteger(costCents) || costCents < 0) return "Cost must be zero or more."
+  if (costCents > MAX_COST_CENTS) return "That cost is too large."
+  return null
+}
+
+/** A 42501 from the RPC means the role lacks `profit.view`; say so plainly. */
+function costError(error: { code?: string; message: string }): string {
+  return error.code === "42501" ? "You don't have permission to set costs." : error.message
+}
+
+function revalidateCosts() {
+  revalidatePath("/inventory")
+  revalidatePath("/menu")
+  revalidatePath("/reports")
+  revalidatePath("/reports/day")
+}
+
+/** Set (or clear, with null) what a dish costs to make. */
+export async function setItemCost(itemId: string, costCents: number | null): Promise<InvState> {
+  await requireTenant()
+  if (!UUID_RE.test(itemId)) return { error: "Dish not found." }
+  const bad = checkCents(costCents)
+  if (bad) return { error: bad }
+  const supabase = await createClient()
+  const { error } = await supabase.rpc("set_item_cost", {
+    _item_id: itemId,
+    // Generated types say `number`; the function accepts null to clear.
+    _cost_cents: costCents as number,
+  })
+  if (error) return { error: costError(error) }
+  revalidateCosts()
+  return { ok: true }
+}
+
+/** Set (or clear, with null) a variant's own cost, overriding the dish cost × scale. */
+export async function setVariantCost(variantId: string, costCents: number | null): Promise<InvState> {
+  await requireTenant()
+  if (!UUID_RE.test(variantId)) return { error: "Variant not found." }
+  const bad = checkCents(costCents)
+  if (bad) return { error: bad }
+  const supabase = await createClient()
+  const { error } = await supabase.rpc("set_variant_cost", {
+    _variant_id: variantId,
+    _cost_cents: costCents as number,
+  })
+  if (error) return { error: costError(error) }
+  revalidateCosts()
+  return { ok: true }
+}
+
+/** Set (or clear, with null) an add-on's cost — added to every sold line that carries it. */
+export async function setModifierCost(modifierId: string, costCents: number | null): Promise<InvState> {
+  await requireTenant()
+  if (!UUID_RE.test(modifierId)) return { error: "Add-on not found." }
+  const bad = checkCents(costCents)
+  if (bad) return { error: bad }
+  const supabase = await createClient()
+  const { error } = await supabase.rpc("set_modifier_cost", {
+    _modifier_id: modifierId,
+    _cost_cents: costCents as number,
+  })
+  if (error) return { error: costError(error) }
+  revalidateCosts()
+  return { ok: true }
+}
+
+/**
+ * Stamp today's costs onto past order lines that have none, so reports for
+ * earlier days show profit. Lines that already carry a cost are untouched.
+ * Returns how many lines were updated.
+ */
+export async function backfillOrderItemCosts(): Promise<InvState & { updated?: number }> {
+  const tenant = await requireTenant()
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc("backfill_order_item_costs", { _tenant: tenant.tenantId })
+  if (error) return { error: costError(error) }
+  revalidateCosts()
+  return { ok: true, updated: Number(data ?? 0) }
 }
 
 /** Remove one recipe line by id. */

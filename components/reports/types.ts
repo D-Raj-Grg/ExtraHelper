@@ -18,6 +18,33 @@ export type Sales = {
   tax_cents: number
   service_cents: number
   discount_cents: number
+  /**
+   * Gross profit on net item sales after refunds — Σ(subtotal − discount) on
+   * paid bills, minus refunds, minus the cost snapshot on each sold line. Tax,
+   * service and tips are excluded. All six are null when the caller lacks
+   * `profit.view`.
+   */
+  net_sales_cents: number | null
+  refunds_cents: number | null
+  cogs_cents: number | null
+  gross_profit_cents: number | null
+  /** One decimal place, already ×100 (e.g. 62.5). */
+  margin_pct: number | null
+  /** Sold lines with no cost snapshot; the profit figures above exclude them. */
+  uncosted_lines: number | null
+}
+
+/** One row of `report_top_items`. */
+export type TopItem = {
+  description: string
+  qty: number
+  revenue_cents: number
+  /**
+   * null/absent when the caller lacks profit.view, or when any line of this
+   * item in the range had no cost snapshot.
+   */
+  cost_cents: number | null
+  profit_cents: number | null
 }
 
 export type Breakdown = { label: string; orders: number; revenue_cents: number }

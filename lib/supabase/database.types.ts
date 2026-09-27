@@ -1160,6 +1160,42 @@ export type Database = {
           },
         ]
       }
+      item_variant_costs: {
+        Row: {
+          cost_cents: number
+          tenant_id: string
+          updated_at: string
+          variant_id: string
+        }
+        Insert: {
+          cost_cents: number
+          tenant_id: string
+          updated_at?: string
+          variant_id: string
+        }
+        Update: {
+          cost_cents?: number
+          tenant_id?: string
+          updated_at?: string
+          variant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "item_variant_costs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "item_variant_costs_variant_id_fkey"
+            columns: ["variant_id"]
+            isOneToOne: true
+            referencedRelation: "item_variants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       item_variants: {
         Row: {
           id: string
@@ -1480,6 +1516,42 @@ export type Database = {
           },
         ]
       }
+      menu_item_costs: {
+        Row: {
+          cost_cents: number
+          item_id: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          cost_cents: number
+          item_id: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          cost_cents?: number
+          item_id?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "menu_item_costs_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: true
+            referencedRelation: "menu_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "menu_item_costs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       menu_item_prices: {
         Row: {
           id: string
@@ -1665,6 +1737,42 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "menus_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      modifier_costs: {
+        Row: {
+          cost_cents: number
+          modifier_id: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          cost_cents: number
+          modifier_id: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          cost_cents?: number
+          modifier_id?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "modifier_costs_modifier_id_fkey"
+            columns: ["modifier_id"]
+            isOneToOne: true
+            referencedRelation: "modifiers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "modifier_costs_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -1913,6 +2021,42 @@ export type Database = {
           },
           {
             foreignKeyName: "online_orders_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      order_item_costs: {
+        Row: {
+          created_at: string
+          order_item_id: string
+          tenant_id: string
+          unit_cost_cents: number
+        }
+        Insert: {
+          created_at?: string
+          order_item_id: string
+          tenant_id: string
+          unit_cost_cents: number
+        }
+        Update: {
+          created_at?: string
+          order_item_id?: string
+          tenant_id?: string
+          unit_cost_cents?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_item_costs_order_item_id_fkey"
+            columns: ["order_item_id"]
+            isOneToOne: true
+            referencedRelation: "order_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_item_costs_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -3878,6 +4022,7 @@ export type Database = {
         Args: { _bill_id: string; _customer_id: string }
         Returns: string
       }
+      backfill_order_item_costs: { Args: { _tenant: string }; Returns: number }
       bill_discount_total: {
         Args: { _bill_id: string; _subtotal: number }
         Returns: number
@@ -4032,6 +4177,7 @@ export type Database = {
         Returns: Json
       }
       daily_report_for_print: { Args: { _job_id: string }; Returns: Json }
+      daily_report_strip_profit: { Args: { _r: Json }; Returns: Json }
       dashboard_summary: {
         Args: { _days?: number; _tenant: string }
         Returns: Json
@@ -4047,6 +4193,14 @@ export type Database = {
       delete_printer: { Args: { _printer_id: string }; Returns: undefined }
       delete_supplier: { Args: { _supplier_id: string }; Returns: undefined }
       delete_variant: { Args: { _variant_id: string }; Returns: undefined }
+      effective_item_cost_cents: {
+        Args: { _item_id: string; _variant_id: string }
+        Returns: number
+      }
+      effective_modifier_cost_cents: {
+        Args: { _modifier_id: string }
+        Returns: number
+      }
       enqueue_day_report_job: {
         Args: {
           _copies: number
@@ -4154,6 +4308,10 @@ export type Database = {
         }
         Returns: string
       }
+      order_item_unit_cost_cents: {
+        Args: { _order_item_id: string }
+        Returns: number
+      }
       place_online_order: {
         Args: {
           _address: Json
@@ -4224,6 +4382,10 @@ export type Database = {
         Returns: number
       }
       recompute_bill: { Args: { _bill_id: string }; Returns: undefined }
+      recompute_order_item_cost: {
+        Args: { _order_item_id: string }
+        Returns: undefined
+      }
       record_cash_movement: {
         Args: {
           _amount_cents: number
@@ -4372,11 +4534,17 @@ export type Database = {
       report_sales: {
         Args: { _from: string; _tenant: string; _to: string }
         Returns: {
+          cogs_cents: number
           discount_cents: number
+          gross_profit_cents: number
+          margin_pct: number
+          net_sales_cents: number
           orders: number
+          refunds_cents: number
           revenue_cents: number
           service_cents: number
           tax_cents: number
+          uncosted_lines: number
         }[]
       }
       report_sales_by_bill: {
@@ -4431,7 +4599,9 @@ export type Database = {
           _to: string
         }
         Returns: {
+          cost_cents: number
           description: string
+          profit_cents: number
           qty: number
           revenue_cents: number
         }[]
@@ -4501,6 +4671,10 @@ export type Database = {
         Args: { _is_86: boolean; _item_id: string }
         Returns: undefined
       }
+      set_item_cost: {
+        Args: { _cost_cents: number; _item_id: string }
+        Returns: undefined
+      }
       set_kot_item_status: {
         Args: {
           _kot_item_id: string
@@ -4517,6 +4691,10 @@ export type Database = {
       }
       set_member_role: {
         Args: { _role_id: string; _tenant: string; _user_id: string }
+        Returns: undefined
+      }
+      set_modifier_cost: {
+        Args: { _cost_cents: number; _modifier_id: string }
         Returns: undefined
       }
       set_po_supplier: {
@@ -4551,6 +4729,10 @@ export type Database = {
           _state: Database["public"]["Enums"]["table_state"]
           _table_id: string
         }
+        Returns: undefined
+      }
+      set_variant_cost: {
+        Args: { _cost_cents: number; _variant_id: string }
         Returns: undefined
       }
       set_variant_recipe_scale: {

@@ -1,4 +1,4 @@
-import { AlertTriangleIcon, ImageIcon, ZapIcon } from "lucide-react"
+import { AlertTriangleIcon, ImageIcon, ScaleIcon, ZapIcon } from "lucide-react"
 
 import { ExportButtons } from "@/components/export-buttons"
 import { PrintDayReportButton } from "@/components/reports/print-day-report-button"
@@ -15,8 +15,15 @@ import { formatDateTime, money } from "@/lib/format"
 import { paymentMethodLabel } from "@/lib/payment-constants"
 import { cn } from "@/lib/utils"
 import { ReportEmpty, ReportSection, TableFrame } from "./report-section"
-import { StatTiles } from "./stat-tiles"
+import { StatTiles, type Tile } from "./stat-tiles"
 import { CashBook } from "./cash-book"
+import {
+  marginLabel,
+  topItemColumns,
+  topItemRows,
+  TopItemsTable,
+  UncostedHint,
+} from "./profit"
 import { paidFromLabel } from "@/lib/expense-constants"
 import { DayOrders } from "./day-orders"
 import type { DayOrder } from "./day-order-utils"
@@ -37,10 +44,13 @@ export function DayClose({
   r,
   orders,
   ordersTruncated,
+  canViewProfit,
 }: {
   r: DayReport
   orders: DayOrder[]
   ordersTruncated: boolean
+  /** profit.view — the order rows carry cost snapshots only when true. */
+  canViewProfit: boolean
 }) {
   const cur = r.currency
   const s = r.sales
@@ -49,8 +59,24 @@ export function DayClose({
   const exp = r.expenses
   const cut = cutoffLabel(r.cutoff_minutes)
 
+  // The payload strips every profit key for callers without profit.view, so
+  // presence is the permission check; a missing figure is not a zero.
+  const gross = s.gross_profit_cents ?? null
+  // Gross profit minus what was logged as spent today. Not a P&L — expenses
+  // here are the day's petty ledger, not rent or wages — so it is labelled as
+  // exactly that sum and nothing grander.
+  const afterExpenses = gross != null && exp.total_cents > 0 ? gross - exp.total_cents : null
+
   // The reconciliation gap, stated rather than hidden — see DayReport.carried_cents.
   const carried = r.carried_cents
+
+  const profitTiles: Tile[] =
+    gross != null
+      ? [
+          { label: "Gross profit", value: money(gross, cur) },
+          { label: "Margin", value: marginLabel(s.margin_pct), hint: "on net item sales after refunds" },
+        ]
+      : []
 
   // One flat CSV for the whole sheet: a manager filing a day wants one file,
   // not eight. The per-section buttons still export their own table.
@@ -63,6 +89,25 @@ export function DayClose({
     { section: "Sales", label: "Rounding", count: "", amount: money(s.rounding_cents, cur) },
     { section: "Sales", label: "Revenue", count: String(s.bills), amount: money(s.revenue_cents, cur) },
     { section: "Sales", label: "Average ticket", count: "", amount: money(s.avg_cents, cur) },
+    ...(gross != null
+      ? [
+          {
+            section: "Sales",
+            label: "Cost of goods",
+            count: "",
+            amount: money(s.cogs_cents ?? 0, cur),
+          },
+          ...((s.refunds_cents ?? 0) > 0
+            ? [{ section: "Sales", label: "Refunds", count: "", amount: money(-(s.refunds_cents ?? 0), cur) }]
+            : []),
+          {
+            section: "Sales",
+            label: `Gross profit (${marginLabel(s.margin_pct)} on net item sales after refunds)`,
+            count: "",
+            amount: money(gross, cur),
+          },
+        ]
+      : []),
     ...r.payments.map((p) => ({
       section: "Payments",
       label: paymentMethodLabel(p.method),
@@ -154,6 +199,7 @@ export function DayClose({
           { label: "Revenue", value: money(s.revenue_cents, cur) },
           { label: "Bills", value: String(s.bills) },
           { label: "Avg ticket", value: money(s.avg_cents, cur) },
+          ...profitTiles,
           { label: "Tax", value: money(s.tax_cents, cur) },
           { label: "Service", value: money(s.service_cents, cur) },
           { label: "Discounts", value: money(s.discount_cents, cur) },
@@ -174,6 +220,7 @@ export function DayClose({
           },
         ]}
       />
+      <UncostedHint n={s.uncosted_lines} />
 
       <DayOrders
         orders={orders}
@@ -181,6 +228,7 @@ export function DayClose({
         timezone={r.timezone}
         truncated={ordersTruncated}
         revenueCents={s.revenue_cents}
+        showProfit={canViewProfit}
       />
 
       <ReportSection
@@ -213,6 +261,25 @@ export function DayClose({
                 {money(s.revenue_cents, cur)}
               </TableCell>
             </TableRow>
+            {gross != null ? (
+              <>
+                <MoneyRow label="Cost of goods" cents={-(s.cogs_cents ?? 0)} cur={cur} />
+                {(s.refunds_cents ?? 0) > 0 ? (
+                  <MoneyRow label="Refunds" cents={-(s.refunds_cents ?? 0)} cur={cur} />
+                ) : null}
+                <TableRow>
+                  <TableCell className="px-3 py-2 font-semibold">
+                    Gross profit
+                    <span className="ml-2 text-xs font-normal text-muted-foreground">
+                      {marginLabel(s.margin_pct)} on net item sales after refunds
+                    </span>
+                  </TableCell>
+                  <TableCell className="px-3 py-2 text-right font-semibold tabular-nums">
+                    {money(gross, cur)}
+                  </TableCell>
+                </TableRow>
+              </>
+            ) : null}
           </TableBody>
         </Table>
       </ReportSection>
@@ -354,6 +421,20 @@ export function DayClose({
         </Table>
       </ReportSection>
 
+      {afterExpenses != null ? (
+        <p className="flex items-center gap-2 text-sm text-muted-foreground">
+          <ScaleIcon className="size-4 shrink-0" aria-hidden />
+          <span>
+            <span className="font-medium text-foreground">After expenses</span>{" "}
+            <span className="font-semibold text-foreground tabular-nums">
+              {money(afterExpenses, cur)}
+            </span>{" "}
+            — gross profit ({money(gross ?? 0, cur)}) minus today&apos;s logged expenses (
+            {money(exp.total_cents, cur)}). Not a full P&amp;L: only what was logged here counts.
+          </span>
+        </p>
+      ) : null}
+
       {/* The shift drawer only shows for tenants that use it, or on a day one ran. */}
       {r.cash_drawer_enabled || cash.sessions.length > 0 ? (
         <ReportSection
@@ -438,41 +519,12 @@ export function DayClose({
 
       <ReportSection
         title="Top items"
-        rows={r.top_items.map((t) => ({
-          item: t.description,
-          qty: Number(t.qty),
-          revenue: money(t.revenue_cents, cur),
-        }))}
-        columns={[
-          { key: "item", label: "Item" },
-          { key: "qty", label: "Qty" },
-          { key: "revenue", label: "Revenue" },
-        ]}
+        rows={topItemRows(r.top_items, cur, canViewProfit)}
+        columns={topItemColumns(canViewProfit)}
         filename={`day-close-top-items-${r.day}`}
         empty="Nothing was sold on this day."
       >
-        <Table className="w-full text-sm">
-          <TableHeader className="bg-muted/50">
-            <TableRow>
-              <TableHead className="px-3 py-2 font-medium">Item</TableHead>
-              <TableHead className="px-3 py-2 text-right font-medium">Qty</TableHead>
-              <TableHead className="px-3 py-2 text-right font-medium">Revenue</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {r.top_items.map((t) => (
-              <TableRow key={t.description}>
-                <TableCell className="px-3 py-2">{t.description}</TableCell>
-                <TableCell className="px-3 py-2 text-right tabular-nums text-muted-foreground">
-                  {Number(t.qty)}
-                </TableCell>
-                <TableCell className="px-3 py-2 text-right tabular-nums">
-                  {money(t.revenue_cents, cur)}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+        <TopItemsTable items={r.top_items} cur={cur} showProfit={canViewProfit} />
       </ReportSection>
 
       {/* A quiet day is a real answer, not a missing one — the tiles above still

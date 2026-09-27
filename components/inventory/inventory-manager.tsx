@@ -5,6 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { StockTab } from "./stock-tab"
 import { RecipesTab } from "./recipes-tab"
 import { CountsTab } from "./counts-tab"
+import { CostingTab } from "./costing-tab"
 import type {
   CostRow,
   CountRow,
@@ -32,6 +33,8 @@ export function InventoryManager({
   counts,
   units,
   canCount,
+  canViewProfit,
+  defaultTab = "stock",
 }: {
   currency: string
   timezone: string
@@ -46,7 +49,15 @@ export function InventoryManager({
   counts: CountRow[]
   units: UnitOpt[]
   canCount: boolean
+  /** `profit.view` — the Costing tab shows cost prices and margins. */
+  canViewProfit: boolean
+  /** Deep link (`?tab=costing`); already validated by the page. */
+  defaultTab?: "stock" | "recipes" | "costing" | "counts"
 }) {
+  // A tab this role can't see falls back to Stock rather than an empty panel.
+  const initialTab =
+    (defaultTab === "costing" && !canViewProfit) || (defaultTab === "counts" && !canCount) ? "stock" : defaultTab
+
   // Cost history grouped by item, newest first (input already sorted newest-first).
   const historyByItem = useMemo(() => {
     const map = new Map<string, CostRow[]>()
@@ -60,10 +71,11 @@ export function InventoryManager({
 
   return (
     <div className="flex flex-col gap-6">
-      <Tabs defaultValue="stock">
+      <Tabs defaultValue={initialTab}>
         <TabsList variant="line" className="mb-6 w-full justify-start overflow-x-auto">
           <TabsTrigger value="stock">Stock</TabsTrigger>
           <TabsTrigger value="recipes">Recipes</TabsTrigger>
+          {canViewProfit ? <TabsTrigger value="costing">Costing</TabsTrigger> : null}
           {canCount ? <TabsTrigger value="counts">Stock counts</TabsTrigger> : null}
         </TabsList>
 
@@ -88,6 +100,19 @@ export function InventoryManager({
             currency={currency}
           />
         </TabsContent>
+        {canViewProfit ? (
+          <TabsContent value="costing">
+            <CostingTab
+              menu={menu}
+              variants={variants}
+              recipes={recipes}
+              items={items}
+              modifiers={modifiers}
+              modifierIngredients={modifierIngredients}
+              currency={currency}
+            />
+          </TabsContent>
+        ) : null}
         {canCount ? (
           <TabsContent value="counts">
             <CountsTab counts={counts} timezone={timezone} />

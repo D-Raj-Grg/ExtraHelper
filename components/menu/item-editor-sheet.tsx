@@ -41,6 +41,11 @@ const textareaClass =
 /** Matches the server-side cap in uploadItemImage. */
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024
 
+/** Typed amount → integer cents. NaN passes through so the server can reject it with a message. */
+function toCents(raw: string): number {
+  return Math.round(Number(raw.trim()) * 100)
+}
+
 // ============================================================================
 // Add-item sheet — create form (opened from the "+ Add item" button)
 // ============================================================================
@@ -50,11 +55,14 @@ export function AddItemSheet({
   onOpenChange,
   categories,
   stations,
+  canViewProfit,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   categories: Category[]
   stations: Station[]
+  /** `profit.view` — shows the optional Cost price field. */
+  canViewProfit: boolean
 }) {
   const [state, action, pending] = useActionState<MenuState, FormData>(createItem, undefined)
 
@@ -81,6 +89,13 @@ export function AddItemSheet({
             <FieldLabel htmlFor="add-item-price">Price</FieldLabel>
             <Input id="add-item-price" name="price" type="number" min={0} step="0.01" placeholder="12.00" required />
           </Field>
+          {canViewProfit ? (
+            <Field>
+              <FieldLabel htmlFor="add-item-cost">Cost price</FieldLabel>
+              <FieldDescription>What it costs you to make. Used for profit reports.</FieldDescription>
+              <Input id="add-item-cost" name="cost" type="number" min={0} step="0.01" placeholder="4.50" />
+            </Field>
+          ) : null}
           <Field>
             <FieldLabel htmlFor="add-item-category">Category</FieldLabel>
             <Select name="categoryId" defaultValue="">
@@ -137,6 +152,7 @@ export function ItemEditorSheet({
   stations,
   modifiers,
   currency,
+  canViewProfit,
 }: {
   item: Item | null
   open: boolean
@@ -145,6 +161,8 @@ export function ItemEditorSheet({
   stations: Station[]
   modifiers: Modifier[]
   currency: string
+  /** `profit.view` — shows the Cost price field in Details. */
+  canViewProfit: boolean
 }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -166,6 +184,7 @@ export function ItemEditorSheet({
                 stations={stations}
                 modifiers={modifiers}
                 currency={currency}
+                canViewProfit={canViewProfit}
               />
             </div>
           </>
@@ -198,16 +217,21 @@ function ItemEditorBody({
   stations,
   modifiers,
   currency,
+  canViewProfit,
 }: {
   item: Item
   categories: Category[]
   stations: Station[]
   modifiers: Modifier[]
   currency: string
+  canViewProfit: boolean
 }) {
   // Core fields
   const [name, setName] = useState(item.name)
   const [price, setPrice] = useState((item.base_price_cents / 100).toFixed(2))
+  // Blank = no cost entered (null), distinct from 0. Per-size costs live in
+  // Inventory → Costing.
+  const [cost, setCost] = useState(item.cost_cents == null ? "" : (item.cost_cents / 100).toFixed(2))
   const [categoryId, setCategoryId] = useState(item.category_id ?? "")
   const [description, setDescription] = useState(item.description ?? "")
   // Tri-state as a string because a Select value must be one. VEG_UNMARKED is
@@ -261,6 +285,21 @@ function ItemEditorBody({
           <FieldLabel htmlFor="edit-price">Price</FieldLabel>
           <Input id="edit-price" type="number" min={0} step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} />
         </Field>
+        {canViewProfit ? (
+          <Field>
+            <FieldLabel htmlFor="edit-cost">Cost price</FieldLabel>
+            <FieldDescription>What it costs you to make. Used for profit reports.</FieldDescription>
+            <Input
+              id="edit-cost"
+              type="number"
+              min={0}
+              step="0.01"
+              value={cost}
+              placeholder="4.50"
+              onChange={(e) => setCost(e.target.value)}
+            />
+          </Field>
+        ) : null}
         <Field>
           <FieldLabel htmlFor="edit-category">Category</FieldLabel>
           <Select value={categoryId} onValueChange={(v) => setCategoryId(v ?? "")}>
@@ -316,6 +355,8 @@ function ItemEditorBody({
                   categoryId: categoryId || null,
                   description,
                   isVeg: valueToVeg(isVeg),
+                  // Only when the field is shown — undefined leaves the cost alone.
+                  costCents: canViewProfit ? (cost.trim() === "" ? null : toCents(cost)) : undefined,
                 })
                 if (res && "error" in res) setCoreErr(res.error)
               })

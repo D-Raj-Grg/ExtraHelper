@@ -6,6 +6,38 @@
 
 ---
 
+## Dish cost price → gross profit (2026-09-27, web + DB + Flutter)
+
+The owner keeps a handwritten cost per dish and wanted profit on the daily report without weighing
+ingredients. Direct cost per dish and per size, snapshotted on every order line by a trigger, surfaced
+on Sales / Day close / per order, all behind a new owner-only `profit.view` key.
+
+- [x] Schema: `menu_items.cost_cents`, `item_variants.cost_cents`, `order_items.unit_cost_cents`; `effective_item_cost_cents`; `trg_order_item_cost`; `set_item_cost` / `set_variant_cost` / `backfill_order_item_costs` (`20260928090000`)
+- [x] Permission `profit.view` — owner default, manager excluded, grantable in Users & Roles
+- [x] Reports: `report_sales`, `report_top_items` (drop + recreate), `daily_report_core` + `daily_report_strip_profit`; print path always stripped (`20260928091000`)
+- [x] Web: Inventory → Costing tab (bulk table, per-size rows, margin bands, backfill button); Cost price in item editor; Sales + Day close tiles/columns; per-order profit on the day ledger
+- [x] Flutter: Cost price on dish editor (gated); Gross profit / Margin on Day close; profit per top item; uncosted-lines caption. Not on Flutter: Costing table, per-size and add-on costs, backfill button, Sales-range report (web only)
+- [x] Review round: costs moved to `menu_item_costs` / `item_variant_costs` / `order_item_costs` with `profit.view` RLS (table API no longer leaks or accepts cost writes); bigint COGS sums; create-then-cost-fails no longer invites a duplicate dish; Costing tab Saved hint, variant-dish coverage, `?tab=costing` deep link; Flutter null margin (`20260928092000`)
+- [x] Both CHANGELOGs, types regenerated, tsc / eslint / check:rsc / build / flutter analyze+test clean
+
+### Decisions worth not relitigating
+- **Direct cost wins over recipe cost.** The ledger number is authoritative; recipe cost is the fallback for dishes with no direct cost. Variant: own cost → dish cost × `recipe_scale`.
+- **Snapshot at insert, by trigger.** Fourteen placement paths insert order lines; one BEFORE INSERT trigger beats patching each RPC. Cost edits never rewrite existing lines — backfill only fills nulls.
+- **Uncosted ≠ zero.** Null cost is counted and flagged; a top item with any uncosted line shows no margin rather than a flattering one.
+- **Margin is on net item sales** (subtotal − discount). Tax, service, tip are pass-through.
+- **Costs live in their own RLS-gated tables.** `profit.view` has to hold at the data layer, not just in RPCs — a column on a tenant-readable table is readable by every member.
+- **Degrade, don't error.** Without `profit.view` the same RPCs return null columns / stripped keys; UI hides the tiles, columns, tab and field.
+
+- [x] Follow-ups: add-on costs (`modifier_costs` + `order_item_modifiers` trigger), refunds deducted, discount allocated pro rata on top items, copied-Owner roles granted (`20260928093000`)
+
+### Open follow-ups
+- [ ] `dashboard_summary` gross profit for the owner glance
+- [ ] Bill page profit line (gated)
+- [ ] Flutter Costing table (currently web only; per-size and add-on costs and the backfill button are web only)
+- [ ] Optional: cost history (audit already records `cost_change` from/to)
+
+---
+
 ## Customers — edit, merge, delete, and one phone = one customer (2026-09-27, web + DB)
 
 The Loyalty page listed customers with no way to change one, and the single `tenant_all` policy

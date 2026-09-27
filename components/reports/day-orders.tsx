@@ -7,8 +7,14 @@ import {
   destination,
   lineCount,
   lineTotal,
+  orderProfit,
   type DayOrder,
 } from "./day-order-utils"
+
+function profitCell(o: DayOrder, currency: string): string {
+  const p = orderProfit(o)
+  return p == null ? "—" : money(p, currency)
+}
 
 /**
  * Every order of the business day, under the totals it adds up to.
@@ -28,6 +34,7 @@ export function DayOrders({
   timezone,
   truncated,
   revenueCents,
+  showProfit,
 }: {
   orders: DayOrder[]
   currency: string
@@ -36,6 +43,8 @@ export function DayOrders({
   truncated: boolean
   /** The day's settled revenue, only so the two can be told apart in words. */
   revenueCents: number
+  /** The viewer holds profit.view and the rows carry cost snapshots. */
+  showProfit: boolean
 }) {
   const ordered = orders
     .filter((o) => o.status !== "cancelled")
@@ -48,6 +57,7 @@ export function DayOrders({
     guests: o.guests ?? "",
     items: lineCount(o),
     amount: money(lineTotal(o), currency),
+    ...(showProfit ? { profit: profitCell(o, currency) } : {}),
     status: orderStatusLabel(o.status),
     bill: o.bills ? billStatusLabel(o.bills.status) : "No bill",
   }))
@@ -63,13 +73,19 @@ export function DayOrders({
         { key: "guests", label: "Guests" },
         { key: "items", label: "Items" },
         { key: "amount", label: "Amount" },
+        ...(showProfit ? [{ key: "profit", label: "Profit" }] : []),
         { key: "status", label: "Status" },
         { key: "bill", label: "Bill" },
       ]}
       filename="day-close-orders"
       empty="No orders were taken on this day."
     >
-      <DayOrdersTable orders={orders} currency={currency} timezone={timezone} />
+      <DayOrdersTable
+        orders={orders}
+        currency={currency}
+        timezone={timezone}
+        showProfit={showProfit}
+      />
 
       <div className="space-y-1 px-3 py-2 text-xs text-muted-foreground">
         {/* This column will not add up to Revenue, and a reader will try. Amount

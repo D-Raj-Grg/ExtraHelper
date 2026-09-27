@@ -33,6 +33,12 @@ export type DayOrder = {
     unit_price_cents: number
     is_void: boolean
     notes: string | null
+    /**
+     * Cost snapshot at order time, flattened by the page from the
+     * `order_item_costs` embed. Only fetched when the viewer holds
+     * profit.view; null on a line that had no cost when it was ordered.
+     */
+    unit_cost_cents: number | null
   }[]
   bills: { status: string; total_cents: number } | null
 }
@@ -55,6 +61,33 @@ export function lineTotal(o: DayOrder): number {
 
 export function lineCount(o: DayOrder): number {
   return (o.order_items ?? []).filter((l) => !l.is_void).reduce((sum, l) => sum + l.qty, 0)
+}
+
+/**
+ * What the order's non-void lines cost to make, or null when that is unknown:
+ * no lines, or any line missing its cost snapshot. A partial sum would read as
+ * a real figure, so it is withheld rather than understated.
+ */
+export function orderCost(o: DayOrder): number | null {
+  const live = (o.order_items ?? []).filter((l) => !l.is_void)
+  if (live.length === 0) return null
+  let sum = 0
+  for (const l of live) {
+    if (l.unit_cost_cents == null) return null
+    sum += l.unit_cost_cents * l.qty
+  }
+  return sum
+}
+
+/** Ordered value minus cost; null whenever the cost is unknown. */
+export function orderProfit(o: DayOrder): number | null {
+  const cost = orderCost(o)
+  return cost == null ? null : lineTotal(o) - cost
+}
+
+/** Non-void lines with no cost snapshot — the reason a profit reads unknown. */
+export function uncostedLineCount(o: DayOrder): number {
+  return (o.order_items ?? []).filter((l) => !l.is_void && l.unit_cost_cents == null).length
 }
 
 export function destination(o: DayOrder): string {

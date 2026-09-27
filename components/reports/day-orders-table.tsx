@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { ReceiptTextIcon } from "lucide-react"
+import { CalculatorIcon, ReceiptTextIcon } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
@@ -33,7 +33,10 @@ import {
   destination,
   lineCount,
   lineTotal,
+  orderCost,
+  orderProfit,
   shortId,
+  uncostedLineCount,
   type DayOrder,
 } from "./day-order-utils"
 
@@ -54,10 +57,13 @@ export function DayOrdersTable({
   orders,
   currency,
   timezone,
+  showProfit,
 }: {
   orders: DayOrder[]
   currency: string
   timezone: string
+  /** The viewer holds profit.view, so the rows carry cost snapshots. */
+  showProfit: boolean
 }) {
   // Held by id, not by the object: the row is derived from the live list, so a
   // revalidated order shows its new state instead of a frozen snapshot.
@@ -78,6 +84,9 @@ export function DayOrdersTable({
               Items
             </TableHead>
             <TableHead className="px-3 py-2 text-right font-medium">Amount</TableHead>
+            {showProfit ? (
+              <TableHead className="px-3 py-2 text-right font-medium">Profit</TableHead>
+            ) : null}
             <TableHead className="px-3 py-2 font-medium">Status</TableHead>
             <TableHead className="hidden px-3 py-2 font-medium md:table-cell">Bill</TableHead>
           </TableRow>
@@ -85,6 +94,7 @@ export function DayOrdersTable({
         <TableBody>
           {orders.map((o) => {
             const cancelled = o.status === "cancelled"
+            const profit = showProfit ? orderProfit(o) : null
             return (
               <TableRow
                 key={o.id}
@@ -124,6 +134,17 @@ export function DayOrdersTable({
                 >
                   {money(lineTotal(o), currency)}
                 </TableCell>
+                {showProfit ? (
+                  <TableCell
+                    className={cn(
+                      "px-3 py-3 text-right tabular-nums",
+                      (profit == null || cancelled) && "text-muted-foreground",
+                      cancelled && "line-through",
+                    )}
+                  >
+                    {profit == null ? "—" : money(profit, currency)}
+                  </TableCell>
+                ) : null}
                 <TableCell className="px-3 py-3">
                   <Badge
                     className={ORDER_STATUS_STYLE[o.status] ?? "bg-muted text-muted-foreground"}
@@ -152,7 +173,14 @@ export function DayOrdersTable({
 
       <Sheet open={open !== null} onOpenChange={(v) => !v && setOpenId(null)}>
         <SheetContent size="md" className="flex flex-col gap-0 p-0">
-          {open ? <OrderDetail o={open} currency={currency} timezone={timezone} /> : null}
+          {open ? (
+            <OrderDetail
+              o={open}
+              currency={currency}
+              timezone={timezone}
+              showProfit={showProfit}
+            />
+          ) : null}
         </SheetContent>
       </Sheet>
     </>
@@ -163,14 +191,21 @@ function OrderDetail({
   o,
   currency,
   timezone,
+  showProfit,
 }: {
   o: DayOrder
   currency: string
   timezone: string
+  showProfit: boolean
 }) {
   const lines = o.order_items ?? []
   const live = lines.filter((l) => !l.is_void)
   const voided = lines.filter((l) => l.is_void)
+  const cost = showProfit ? orderCost(o) : null
+  const profit = showProfit ? orderProfit(o) : null
+  const uncosted = showProfit ? uncostedLineCount(o) : 0
+  const total = lineTotal(o)
+  const marginPct = profit != null && total > 0 ? ((profit / total) * 100).toFixed(1) : null
 
   return (
     <>
@@ -252,6 +287,24 @@ function OrderDetail({
             {money(lineTotal(o), currency)}
           </span>
         </div>
+        {/* Profit on what was ordered, at the cost snapshotted when each line
+            was placed. Withheld rather than understated when a line has no
+            cost — a partial figure would read as the real one. */}
+        {showProfit && live.length > 0 ? (
+          <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground tabular-nums">
+            <CalculatorIcon className="size-3.5 shrink-0" aria-hidden />
+            {profit != null && cost != null ? (
+              <span>
+                Cost {money(cost, currency)} · Profit {money(profit, currency)}
+                {marginPct != null ? ` (${marginPct}% margin)` : ""}
+              </span>
+            ) : (
+              <span>
+                Profit unknown — {uncosted} uncosted {uncosted === 1 ? "line" : "lines"}
+              </span>
+            )}
+          </p>
+        ) : null}
         {/* The bill is a different number from this one — it carries tax,
             service and any discount, and on a merged table it covers other
             orders too. Naming both stops the sheet reading as a contradiction. */}

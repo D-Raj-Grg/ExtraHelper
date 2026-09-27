@@ -13,6 +13,22 @@ function toCents(raw: unknown): number | null {
   return Math.round(n * 100)
 }
 
+/** Upper bound on a dish cost, in cents. */
+const MAX_COST_CENTS = 100_000_000
+
+/** The cost RPCs raise 42501 without `profit.view`; say that plainly. */
+function costError(error: { code?: string; message: string }): string {
+  return error.code === "42501" ? "You don't have permission to set costs." : error.message
+}
+
+/** Null (clear) passes; otherwise an integer in 0..MAX_COST_CENTS. */
+function checkCents(costCents: number | null): string | null {
+  if (costCents === null) return null
+  if (!Number.isInteger(costCents) || costCents < 0) return "Cost price must be zero or more."
+  if (costCents > MAX_COST_CENTS) return "That cost is too large."
+  return null
+}
+
 export async function createCategory(
   _prev: MenuState,
   formData: FormData,
@@ -42,8 +58,16 @@ export async function createItem(
   const stationId = String(formData.get("stationId") ?? "").trim() || null
   const priceCents = toCents(formData.get("price"))
 
+  // Optional: what the dish costs to make. Blank = never entered (null).
+  const costRaw = String(formData.get("cost") ?? "").trim()
+  const costCents = costRaw === "" ? null : toCents(costRaw)
+
   if (!name) return { error: "Item name is required." }
   if (priceCents === null) return { error: "Price must be a positive number." }
+  if (costRaw !== "" && costCents === null) return { error: "Cost price must be zero or more." }
+  // Validate before the insert: a rejected cost must not leave a costless dish behind.
+  const badCost = checkCents(costCents)
+  if (badCost) return { error: badCost }
 
   const supabase = await createClient()
   const { data: item, error } = await supabase
@@ -68,7 +92,24 @@ export async function createItem(
     if (routeErr) return { error: routeErr.message }
   }
 
+  // Cost goes through `set_item_cost` (gated on `profit.view` in Postgres),
+  // never the table patch. Per-size costs are edited in Inventory → Costing.
+  if (costCents !== null && item) {
+    const { error: costErr } = await supabase.rpc("set_item_cost", {
+      _item_id: item.id,
+      _cost_cents: costCents,
+    })
+    // The dish exists by now: revalidate so the list shows it, and say so —
+    // a plain error would invite a duplicate.
+    if (costErr) {
+      revalidatePath("/menu")
+      revalidatePath("/inventory")
+      return { error: `Dish saved, but the cost was not: ${costError(costErr)}` }
+    }
+  }
+
   revalidatePath("/menu")
+  revalidatePath("/inventory")
   return { ok: true }
 }
 
@@ -142,9 +183,20 @@ export async function updateItem(
      * one, which would silently make "unmark" impossible.
      */
     isVeg?: boolean | null
+    /**
+     * What the dish costs to make. `undefined` = leave alone, `null` = clear.
+     * Not part of the table patch — it goes through `set_item_cost` below,
+     * which carries `profit.view`. Per-size costs are edited in
+     * Inventory → Costing.
+     */
+    costCents?: number | null
   },
 ): Promise<MenuState> {
   const tenant = await requireRole("owner", "manager")
+  if (fields.costCents !== undefined) {
+    const badCost = checkCents(fields.costCents)
+    if (badCost) return { error: badCost }
+  }
   const patch: Record<string, unknown> = {}
   if (fields.name !== undefined) {
     const name = fields.name.trim()
@@ -159,15 +211,33 @@ export async function updateItem(
   if (fields.categoryId !== undefined) patch.category_id = fields.categoryId || null
   if (fields.description !== undefined) patch.description = fields.description.trim() || null
   if (fields.isVeg !== undefined) patch.is_veg = fields.isVeg
-  if (Object.keys(patch).length === 0) return { ok: true }
+  if (Object.keys(patch).length === 0 && fields.costCents === undefined) return { ok: true }
 
   const supabase = await createClient()
-  const { error } = await supabase
-    .from("menu_items")
-    .update(patch)
-    .eq("id", itemId)
-    .eq("tenant_id", tenant.tenantId)
-  if (error) return { error: error.message }
+  if (Object.keys(patch).length > 0) {
+    const { error } = await supabase
+      .from("menu_items")
+      .update(patch)
+      .eq("id", itemId)
+      .eq("tenant_id", tenant.tenantId)
+    if (error) return { error: error.message }
+  }
+  if (fields.costCents !== undefined) {
+    const { error: costErr } = await supabase.rpc("set_item_cost", {
+      _item_id: itemId,
+      // Generated types say `number`; the function accepts null to clear.
+      _cost_cents: fields.costCents as number,
+    })
+    if (costErr) {
+      // The table patch (if any) already landed; surface what did and didn't.
+      revalidatePath("/menu")
+      revalidatePath("/pos")
+      return { error: `Details saved, but the cost was not: ${costError(costErr)}` }
+    }
+    revalidatePath("/inventory")
+    revalidatePath("/reports")
+    revalidatePath("/reports/day")
+  }
   revalidatePath("/menu")
   revalidatePath("/pos")
   return { ok: true }

@@ -22,12 +22,14 @@ export function ItemsTab({
   items,
   stations,
   modifiers,
+  canViewProfit,
 }: {
   currency: string
   categories: Category[]
   items: Item[]
   stations: Station[]
   modifiers: Modifier[]
+  canViewProfit: boolean
 }) {
   const [query, setQuery] = useState("")
   const [categoryFilter, setCategoryFilter] = useState("all")
@@ -147,7 +149,13 @@ export function ItemsTab({
         </div>
       )}
 
-      <AddItemSheet open={addOpen} onOpenChange={setAddOpen} categories={categories} stations={stations} />
+      <AddItemSheet
+        open={addOpen}
+        onOpenChange={setAddOpen}
+        categories={categories}
+        stations={stations}
+        canViewProfit={canViewProfit}
+      />
       <ItemEditorSheet
         item={editing}
         open={editing !== null}
@@ -158,6 +166,7 @@ export function ItemsTab({
         stations={stations}
         modifiers={modifiers}
         currency={currency}
+        canViewProfit={canViewProfit}
       />
     </div>
   )

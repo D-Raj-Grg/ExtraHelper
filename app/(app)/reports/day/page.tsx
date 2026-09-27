@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 import { requirePermission } from "@/lib/supabase/guards"
+import { getMyPermissions } from "@/lib/supabase/permissions"
 import { PageShell, PageHeader } from "@/components/page-header"
 import { DayClose } from "@/components/reports/day-close"
 import { DayPicker } from "@/components/reports/day-picker"
@@ -32,6 +33,10 @@ export default async function DayClosePage({
   // a 4am cutoff means 01:30 is still yesterday. Same rule the RPC applies.
   const today = businessDay(new Date(), tenant.timezone, tenant.dayCutoffMinutes)
   const date = isYmd(sp.date) && sp.date <= today ? sp.date : today
+
+  // Cost snapshots ride along on the order lines only for a viewer who may see
+  // profit; the RPC strips its own profit keys on the same rule.
+  const canViewProfit = (await getMyPermissions(tenant.tenantId)).includes("profit.view")
 
   const supabase = await createClient()
   const { data } = await supabase.rpc("daily_report", {
@@ -70,7 +75,12 @@ export default async function DayClosePage({
         "id, order_type, status, created_at, guests, bill_id, " +
           "restaurant_tables!orders_table_id_fkey(label), " +
           // The lines ride along so the detail sheet opens with no round trip.
-          "order_items(id, name_snapshot, qty, unit_price_cents, is_void, notes), " +
+          // The cost snapshot lives in `order_item_costs` (RLS: profit.view
+          // only), embedded one-to-one; skipped outright for anyone else so
+          // the query never asks for rows it would be denied.
+          `order_items(id, name_snapshot, qty, unit_price_cents, is_void, notes${
+            canViewProfit ? ", order_item_costs(unit_cost_cents)" : ""
+          }), ` +
           "bills!orders_bill_id_fkey(status, total_cents)",
       )
       .eq("tenant_id", tenant.tenantId)
@@ -80,7 +90,20 @@ export default async function DayClosePage({
       .order("created_at", { referencedTable: "order_items" })
       .limit(DAY_ORDER_LIMIT + 1)
 
-    const all = (rows ?? []) as unknown as DayOrder[]
+    // Flatten the embed onto the line: `DayOrder` stays a plain row shape and
+    // the arithmetic in day-order-utils never learns where the cost came from.
+    type RawOrder = Omit<DayOrder, "order_items"> & {
+      order_items: (Omit<DayOrder["order_items"][number], "unit_cost_cents"> & {
+        order_item_costs?: { unit_cost_cents: number } | null
+      })[]
+    }
+    const all: DayOrder[] = ((rows ?? []) as unknown as RawOrder[]).map((o) => ({
+      ...o,
+      order_items: (o.order_items ?? []).map(({ order_item_costs, ...l }) => ({
+        ...l,
+        unit_cost_cents: order_item_costs?.unit_cost_cents ?? null,
+      })),
+    }))
     truncated = all.length > DAY_ORDER_LIMIT
     orders = truncated ? all.slice(0, DAY_ORDER_LIMIT) : all
   }
@@ -95,7 +118,12 @@ export default async function DayClosePage({
       <DayPicker date={date} today={today} />
 
       {report ? (
-        <DayClose r={report} orders={orders} ordersTruncated={truncated} />
+        <DayClose
+          r={report}
+          orders={orders}
+          ordersTruncated={truncated}
+          canViewProfit={canViewProfit}
+        />
       ) : (
         <ReportEmpty>
           This report needs the Reports permission. Ask an owner or manager to grant it.

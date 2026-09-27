@@ -16,6 +16,7 @@ export function MenuManager({
   printers,
   modifiers,
   combos,
+  canViewProfit,
 }: {
   currency: string
   categories: Category[]
@@ -24,6 +25,8 @@ export function MenuManager({
   printers: StationPrinter[]
   modifiers: Modifier[]
   combos: Combo[]
+  /** `profit.view` — shows the Cost price field on items. */
+  canViewProfit: boolean
 }) {
   return (
     <Tabs defaultValue="items">
@@ -42,6 +45,7 @@ export function MenuManager({
           items={items}
           stations={stations}
           modifiers={modifiers}
+          canViewProfit={canViewProfit}
         />
       </TabsContent>
       <TabsContent value="categories">

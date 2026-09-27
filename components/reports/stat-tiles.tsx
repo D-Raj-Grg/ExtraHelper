@@ -11,6 +11,8 @@ export type Tile = {
   warn?: boolean
   /** A cost, where going up is the bad direction (expenses). */
   lowerIsBetter?: boolean
+  /** One short line under the value saying what the number is *of*. */
+  hint?: string
 }
 
 /**
@@ -33,6 +35,7 @@ export function StatTiles({ tiles }: { tiles: Tile[] }) {
               {t.value}
             </CardTitle>
             {t.delta ? <DeltaLabel delta={t.delta} lowerIsBetter={t.lowerIsBetter} /> : null}
+            {t.hint ? <p className="text-xs text-muted-foreground">{t.hint}</p> : null}
           </CardHeader>
         </Card>
       ))}

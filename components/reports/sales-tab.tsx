@@ -5,8 +5,9 @@ import { money } from "@/lib/format"
 import { paymentMethodLabel } from "@/lib/payment-constants"
 import { delta } from "@/lib/report-range"
 import { BreakdownTable, ReportSection } from "./report-section"
-import { StatTiles } from "./stat-tiles"
-import type { Breakdown, DayRow, ReportCtx, Sales } from "./types"
+import { marginLabel, topItemColumns, topItemRows, TopItemsTable, UncostedHint } from "./profit"
+import { StatTiles, type Tile } from "./stat-tiles"
+import type { Breakdown, DayRow, ReportCtx, Sales, TopItem } from "./types"
 
 const ZERO: Sales = {
   revenue_cents: 0,
@@ -14,6 +15,12 @@ const ZERO: Sales = {
   tax_cents: 0,
   service_cents: 0,
   discount_cents: 0,
+  net_sales_cents: null,
+  refunds_cents: null,
+  cogs_cents: null,
+  gross_profit_cents: null,
+  margin_pct: null,
+  uncosted_lines: null,
 }
 
 export async function SalesTab({
@@ -48,7 +55,7 @@ export async function SalesTab({
     supabase.rpc("report_sales_by_day", { _tenant: tenantId, _from: F, _to: T }),
   ])
 
-  const topItems = (top.data ?? []) as { description: string; qty: number; revenue_cents: number }[]
+  const topItems = (top.data ?? []) as TopItem[]
   const payments = (pays.data ?? []) as { method: string; amount_cents: number }[]
   const byBranch = (
     (branches.data ?? []) as { branch_name: string; orders: number; revenue_cents: number }[]
@@ -74,6 +81,33 @@ export async function SalesTab({
     .slice()
     .sort((a, b) => a.label.localeCompare(b.label))
 
+  // Profit only for callers with profit.view — the RPC nulls every figure
+  // otherwise, and a null here is a permission gap, not a zero to display.
+  const canViewProfit = c.gross_profit_cents != null
+  const profitTiles: Tile[] =
+    c.gross_profit_cents != null
+      ? [
+          {
+            label: "Gross profit",
+            value: money(c.gross_profit_cents, cur),
+            // `delta()` divides by prev, so a loss on either side points the
+            // arrow the wrong way (−100 → −50 reads as "down 50%"). Compare
+            // only when both periods were in profit; otherwise just the figure.
+            delta:
+              p.gross_profit_cents != null && p.gross_profit_cents > 0 && c.gross_profit_cents > 0
+                ? delta(c.gross_profit_cents, p.gross_profit_cents)
+                : undefined,
+          },
+          { label: "Margin", value: marginLabel(c.margin_pct), hint: "on net item sales after refunds" },
+          {
+            label: "Cost of goods",
+            value: money(c.cogs_cents ?? 0, cur),
+            delta: p.cogs_cents != null ? delta(c.cogs_cents ?? 0, p.cogs_cents) : undefined,
+            lowerIsBetter: true,
+          },
+        ]
+      : []
+
   return (
     <div className="flex flex-col gap-6">
       <StatTiles
@@ -85,6 +119,7 @@ export async function SalesTab({
           },
           { label: "Orders", value: String(c.orders), delta: delta(c.orders, p.orders) },
           { label: "Avg ticket", value: money(avg, cur) },
+          ...profitTiles,
           { label: "Tax", value: money(c.tax_cents, cur) },
           { label: "Discounts", value: money(c.discount_cents, cur) },
           { label: "Service", value: money(c.service_cents, cur) },
@@ -93,6 +128,7 @@ export async function SalesTab({
           { label: "Table turnover", value: turnover },
         ]}
       />
+      <UncostedHint n={c.uncosted_lines} />
 
       <ReportSection
         title="By day"
@@ -206,41 +242,12 @@ export async function SalesTab({
 
       <ReportSection
         title="Top items"
-        rows={topItems.map((t) => ({
-          item: t.description,
-          qty: Number(t.qty),
-          revenue: money(t.revenue_cents, cur),
-        }))}
-        columns={[
-          { key: "item", label: "Item" },
-          { key: "qty", label: "Qty" },
-          { key: "revenue", label: "Revenue" },
-        ]}
+        rows={topItemRows(topItems, cur, canViewProfit)}
+        columns={topItemColumns(canViewProfit)}
         filename="top-items"
         empty="No sales in this period."
       >
-        <Table className="w-full text-sm">
-          <TableHeader className="bg-muted/50">
-            <TableRow>
-              <TableHead className="px-3 py-2 font-medium">Item</TableHead>
-              <TableHead className="px-3 py-2 text-right font-medium">Qty</TableHead>
-              <TableHead className="px-3 py-2 text-right font-medium">Revenue</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {topItems.map((t) => (
-              <TableRow key={t.description}>
-                <TableCell className="px-3 py-2">{t.description}</TableCell>
-                <TableCell className="px-3 py-2 text-right tabular-nums text-muted-foreground">
-                  {Number(t.qty)}
-                </TableCell>
-                <TableCell className="px-3 py-2 text-right tabular-nums">
-                  {money(t.revenue_cents, cur)}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+        <TopItemsTable items={topItems} cur={cur} showProfit={canViewProfit} />
       </ReportSection>
     </div>
   )

@@ -16,13 +16,15 @@ export type Item = {
   name: string
   description: string | null
   base_price_cents: number
+  /** What it costs to make, for profit reports. null = never entered. */
+  cost_cents: number | null
   is_86: boolean
   /** null = unmarked (render nothing); true = vegetarian; false = non-vegetarian. */
   is_veg: boolean | null
   image_url: string | null
   category_id: string | null
   item_station_routes: { station_id: string; kitchen_stations: { name: string } | null }[]
-  item_variants: { id: string; name: string; price_delta_cents: number; sort: number }[]
+  item_variants: { id: string; name: string; price_delta_cents: number; sort: number; cost_cents: number | null }[]
   item_modifiers: {
     modifier_id: string
     is_default: boolean

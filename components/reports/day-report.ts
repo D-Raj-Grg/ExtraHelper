@@ -41,6 +41,16 @@ export type DayReport = {
     bills: number
     tables_served: number
     avg_cents: number
+    /**
+     * Gross profit on net item sales after refunds. Absent (stripped by
+     * `daily_report_strip_profit`) when the caller lacks profit.view.
+     */
+    net_sales_cents?: number | null
+    refunds_cents?: number | null
+    cogs_cents?: number | null
+    gross_profit_cents?: number | null
+    margin_pct?: number | null
+    uncosted_lines?: number | null
   }
   payments: DayPaymentRow[]
   payments_total_cents: number
@@ -69,7 +79,14 @@ export type DayReport = {
       sessions: number
     }
   }
-  top_items: { description: string; qty: number; revenue_cents: number }[]
+  top_items: {
+    description: string
+    qty: number
+    revenue_cents: number
+    /** null/absent when the caller lacks profit.view or the item had an uncosted line. */
+    cost_cents?: number | null
+    profit_cents?: number | null
+  }[]
   /** Added by 20260926090000_daily_expenses.sql. */
   cash_drawer_enabled: boolean
   expenses: DayExpenses
