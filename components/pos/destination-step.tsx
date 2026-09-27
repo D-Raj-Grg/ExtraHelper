@@ -77,77 +77,88 @@ export function DestinationStep({
     ...(groups.has(NO_FLOOR) ? [NO_FLOOR] : []),
   ]
 
-  return (
-    <div className="space-y-6">
-      <fieldset>
-        <legend className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Takeaway
-        </legend>
-        <div className={GRID}>
-          <ChoiceChip
-            name="pos-destination"
-            checked={value === TAKEAWAY}
-            onSelect={() => onChange(TAKEAWAY)}
-            onCommit={() => onCommit?.(TAKEAWAY)}
-            label="Takeaway"
-            detail="No table"
-            showCheck
-            leading={<ShoppingBagIcon className="size-6 shrink-0" aria-hidden />}
-          />
-        </div>
-      </fieldset>
+  // Takeaway is the last chip of the last floor — one grid, exactly like the
+  // tables board. A section of its own for one chip pushed every floor down
+  // and made "no table" look like a different kind of choice. It is one radio
+  // group throughout (`name`), so arrow keys reach it too.
+  const lastFloorId = ordered[ordered.length - 1]
+  const takeaway = (
+    <ChoiceChip
+      name="pos-destination"
+      checked={value === TAKEAWAY}
+      onSelect={() => onChange(TAKEAWAY)}
+      onCommit={() => onCommit?.(TAKEAWAY)}
+      label="Takeaway"
+      detail="No table"
+      showCheck
+      leading={<ShoppingBagIcon className="size-6 shrink-0" aria-hidden />}
+    />
+  )
 
-      {tables.length === 0 ? (
+  if (tables.length === 0) {
+    return (
+      <div className="space-y-6">
+        <fieldset>
+          <legend className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Where to
+          </legend>
+          <div className={GRID}>{takeaway}</div>
+        </fieldset>
         <p className="text-sm text-muted-foreground">
           No tables yet — this order can still go out as takeaway. Add tables under Table &amp; Space
           to seat guests.
         </p>
-      ) : (
-        ordered.map((floorId) => (
-          <fieldset key={floorId}>
-            <legend className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              {floorLabel(floors, floorId)}
-            </legend>
-            <div className={GRID}>
-              {(groups.get(floorId) ?? []).map((t) => {
-                const selected = value === t.id
-                return (
-                  <ChoiceChip
-                    key={t.id}
-                    name="pos-destination"
-                    checked={selected}
-                    onSelect={() => onChange(t.id)}
-                    onCommit={() => onCommit?.(t.id)}
-                    label={`Table ${t.label}`}
-                    showCheck
-                    // Same top-down glyph as the tables board, so a table looks
-                    // like the same object in both places. Seat count is drawn,
-                    // not just written.
-                    leading={
-                      <TableGlyph
-                        seats={t.capacity ?? 2}
-                        filled={SEATED.has(t.state)}
-                        className={cn(
-                          "size-8 shrink-0",
-                          !selected && (STATE_GLYPH[t.state] ?? STATE_GLYPH.cleaning),
-                        )}
-                      />
-                    }
-                    // The dot is never the only signal — the state is spelled out
-                    // next to it, and seats give the host the other half.
-                    detail={
-                      t.capacity
-                        ? `${tableStateLabel(t.state)} · ${t.capacity} seats`
-                        : tableStateLabel(t.state)
-                    }
-                    dot={STATE_DOT[t.state] ?? STATE_DOT.cleaning}
-                  />
-                )
-              })}
-            </div>
-          </fieldset>
-        ))
-      )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      {ordered.map((floorId) => (
+        <fieldset key={floorId}>
+          <legend className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            {floorLabel(floors, floorId)}
+          </legend>
+          <div className={GRID}>
+            {(groups.get(floorId) ?? []).map((t) => {
+              const selected = value === t.id
+              return (
+                <ChoiceChip
+                  key={t.id}
+                  name="pos-destination"
+                  checked={selected}
+                  onSelect={() => onChange(t.id)}
+                  onCommit={() => onCommit?.(t.id)}
+                  label={`Table ${t.label}`}
+                  showCheck
+                  // Same top-down glyph as the tables board, so a table looks
+                  // like the same object in both places. Seat count is drawn,
+                  // not just written.
+                  leading={
+                    <TableGlyph
+                      seats={t.capacity ?? 2}
+                      filled={SEATED.has(t.state)}
+                      className={cn(
+                        "size-8 shrink-0",
+                        !selected && (STATE_GLYPH[t.state] ?? STATE_GLYPH.cleaning),
+                      )}
+                    />
+                  }
+                  // The dot is never the only signal — the state is spelled out
+                  // next to it, and seats give the host the other half.
+                  detail={
+                    t.capacity
+                      ? `${tableStateLabel(t.state)} · ${t.capacity} seats`
+                      : tableStateLabel(t.state)
+                  }
+                  dot={STATE_DOT[t.state] ?? STATE_DOT.cleaning}
+                />
+              )
+            })}
+            {floorId === lastFloorId ? takeaway : null}
+          </div>
+        </fieldset>
+      ))}
     </div>
   )
 }

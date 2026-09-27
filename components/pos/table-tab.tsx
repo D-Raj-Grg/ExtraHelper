@@ -1,9 +1,10 @@
 "use client"
 
-import { ArmchairIcon, UsersIcon } from "lucide-react"
+import { ArmchairIcon, ShoppingBagIcon, UsersIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { tableStateLabel } from "@/lib/table-constants"
+import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { TableGlyph } from "@/components/pos/table-glyph"
 import type {
@@ -76,6 +77,7 @@ export function TableTab({
   billed,
   onOpenOrder,
   onNewForTable,
+  onNewTakeaway,
 }: {
   tables: PosTable[]
   floors: PosFloor[]
@@ -84,6 +86,8 @@ export function TableTab({
   billed: PosCompletedOrder[]
   onOpenOrder: (orderId: string) => void
   onNewForTable: (tableId: string) => void
+  /** Start an order with no table — the Takeaway card at the end of the board. */
+  onNewTakeaway: () => void
 }) {
   if (tables.length === 0) {
     return (
@@ -91,9 +95,12 @@ export function TableTab({
         <ArmchairIcon className="size-8 text-muted-foreground" aria-hidden />
         <p className="text-base font-semibold">No tables yet</p>
         <p className="max-w-md text-sm text-muted-foreground">
-          Add tables under Table &amp; Space to seat guests. Orders can still go out as takeaway from
-          the Orders tab.
+          Add tables under Table &amp; Space to seat guests. Orders can still go out as takeaway.
         </p>
+        <Button onClick={onNewTakeaway} className="mt-1">
+          <ShoppingBagIcon aria-hidden />
+          Start a takeaway order
+        </Button>
       </div>
     )
   }
@@ -131,6 +138,10 @@ export function TableTab({
     ...floors.filter((f) => groups.has(f.id)).map((f) => f.id),
     ...(groups.has(NO_FLOOR) ? [NO_FLOOR] : []),
   ]
+  // Takeaway sits in the same grid as the tables, as the last card of the last
+  // floor — one board, one kind of tap. A section of its own for a single card
+  // pushed every floor down for nothing.
+  const lastFloorId = ordered[ordered.length - 1]
 
   return (
     <div className="space-y-5">
@@ -204,6 +215,31 @@ export function TableTab({
                 </Card>
               )
             })}
+            {floorId === lastFloorId ? (
+              <Card
+                className={cn(
+                  "p-0 ring-1 ring-border transition-[box-shadow,transform] duration-150 ease-out",
+                  "has-[:hover]:ring-ring/50 has-[:active]:scale-[0.99] motion-reduce:transition-none motion-reduce:has-[:active]:scale-100",
+                )}
+              >
+                <button
+                  type="button"
+                  onClick={onNewTakeaway}
+                  aria-label="Start a takeaway order — no table"
+                  className="flex min-h-28 w-full items-start gap-3 rounded-xl p-4 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                >
+                  <ShoppingBagIcon
+                    className="size-11 shrink-0 text-muted-foreground"
+                    strokeWidth={1.5}
+                    aria-hidden
+                  />
+                  <span className="flex min-w-0 flex-1 flex-col gap-1.5">
+                    <span className="truncate text-lg font-bold leading-tight">Takeaway</span>
+                    <span className="text-sm font-medium text-muted-foreground">No table</span>
+                  </span>
+                </button>
+              </Card>
+            ) : null}
           </div>
         </section>
       ))}

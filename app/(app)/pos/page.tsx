@@ -7,7 +7,7 @@ import { loadPosData } from "./data"
 
 export const dynamic = "force-dynamic"
 
-const TABS: PosTab[] = ["orders", "table", "kot", "completed"]
+const TABS: PosTab[] = ["table", "orders", "kot", "completed"]
 
 export default async function PosPage({
   searchParams,

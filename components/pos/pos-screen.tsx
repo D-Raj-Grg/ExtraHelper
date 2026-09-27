@@ -271,6 +271,7 @@ export function PosScreen({
           billed={completed}
           onOpenOrder={(orderId) => setModal({ mode: "amend", orderId })}
           onNewForTable={(tableId) => setModal({ mode: "create", tableId })}
+          onNewTakeaway={() => setModal({ mode: "create" })}
         />
       ) : null}
 
