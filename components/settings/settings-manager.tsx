@@ -16,6 +16,7 @@ export function SettingsManager({
   restaurantName,
   currency,
   timezone,
+  phoneCountryCode,
   dayCutoffMinutes,
   serviceCharge,
   packagingFee,
@@ -40,6 +41,7 @@ export function SettingsManager({
   restaurantName: string
   currency: string
   timezone: string
+  phoneCountryCode: string
   dayCutoffMinutes: number
   serviceCharge: number
   packagingFee: number
@@ -96,6 +98,7 @@ export function SettingsManager({
             restaurantName={restaurantName}
             currency={currency}
             timezone={timezone}
+            phoneCountryCode={phoneCountryCode}
             dayCutoffMinutes={dayCutoffMinutes}
             paymentGateway={paymentGateway}
             blockNegativeStock={blockNegativeStock}

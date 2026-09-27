@@ -17,6 +17,7 @@ export function GeneralTab({
   restaurantName,
   currency,
   timezone,
+  phoneCountryCode,
   dayCutoffMinutes,
   paymentGateway,
   blockNegativeStock,
@@ -26,6 +27,8 @@ export function GeneralTab({
   restaurantName: string
   currency: string
   timezone: string
+  /** Dialling code without the +, or "" when phones are compared as typed. */
+  phoneCountryCode: string
   dayCutoffMinutes: number
   paymentGateway: string
   blockNegativeStock: boolean
@@ -83,6 +86,24 @@ export function GeneralTab({
                 </SelectContent>
               </Select>
               <FieldDescription>Report windows and shift times are cut on this clock.</FieldDescription>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="phoneCountryCode">Phone country code</FieldLabel>
+              <Input
+                id="phoneCountryCode"
+                name="phoneCountryCode"
+                inputMode="numeric"
+                pattern="[0-9]{1,4}"
+                maxLength={4}
+                defaultValue={phoneCountryCode}
+                placeholder="977"
+                className="w-32"
+              />
+              <FieldDescription>
+                Digits only, without the +. A customer phone typed with or without it is the
+                same customer, so “+977 98…” and “98…” stop turning into two people. Leave it
+                blank to compare numbers exactly as typed.
+              </FieldDescription>
             </Field>
             <Field>
               <FieldLabel htmlFor="dayCutoffMinutes">Day starts at</FieldLabel>

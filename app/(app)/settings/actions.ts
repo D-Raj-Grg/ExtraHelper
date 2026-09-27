@@ -23,6 +23,13 @@ export async function updateSettings(
   const restaurantName = String(formData.get("restaurantName") ?? "").trim()
   const currency = String(formData.get("currency") ?? "").trim() || "USD"
   const timezone = String(formData.get("timezone") ?? "").trim() || "UTC"
+  // Dialling code for customer-phone matching (rule #2: per tenant, never a
+  // hardcoded country). Blank = compare digits as typed. The column's check
+  // constraint enforces the same shape.
+  const phoneCountryCode =
+    String(formData.get("phoneCountryCode") ?? "").replace(/[^0-9]/g, "") || null
+  if (phoneCountryCode && phoneCountryCode.length > 4)
+    return { error: "Phone country code is 1–4 digits." }
   const serviceCharge = Number(formData.get("serviceCharge") ?? 0)
   const packagingFee = Number(formData.get("packagingFee") ?? 0)
 
@@ -76,6 +83,7 @@ export async function updateSettings(
     .update({
       currency,
       timezone,
+      phone_country_code: phoneCountryCode,
       day_cutoff_minutes: dayCutoffMinutes,
       service_charge: serviceCharge,
       packaging_fee: packagingFee,

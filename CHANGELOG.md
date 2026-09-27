@@ -9,6 +9,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 ## [Unreleased]
 
 ### Added
+- **Customers can be edited, merged and deleted.** On **Loyalty & CRM**, every customer row has an actions menu: **Edit** (name, phone, email), **Merge into another customer** (when one person was saved twice — their orders, reservations, feedback and points move to the one you keep), and **Delete** (asks first, and says what is lost: past orders keep their totals but lose the name; points and points history go). Owners and managers by default, via the **Manage customers** permission. Every change is in the audit log.
+- **One phone number is one customer.** Typing a phone with the country code, without it, or with spaces and dashes now finds the same customer at the POS, on the bill, in the storefront and in reservations, instead of creating a duplicate. **Settings → General → Phone country code** tells the app which prefix to ignore (filled in from your currency for existing restaurants; blank means compare as typed).
+- **POS: Table tab first, Takeaway on the board.** The Table tab now leads the POS, and a **Takeaway** card sits at the end of the floor grid, so a counter order starts with one tap. In the New order dialog, Takeaway is a chip in the same grid as the tables.
+
+### Security
+- The `customers` table no longer accepts updates or deletes from the API. Before this, any signed-in staff member could change or remove a customer with no role check and no audit entry. Changes now go only through the audited, permission-checked functions.
+
+<details><summary>Technical</summary>
+
+- Migration `20260927090000_customer_manage.sql`: `tenant_settings.phone_country_code` (check `^[0-9]{1,4}$`), `normalize_phone(_tenant, _phone)`, `customers.phone_norm` (trigger `trg_customers_phone_norm`, backfilled, index `(tenant_id, phone_norm)`), `trg_tenant_settings_renormalize_phones`. `customer_for_phone(_tenant, _name, _phone)` (EXECUTE revoked from every API role) is the one find-or-create; `place_staff_order`, `attach_bill_customer`, `place_online_order`, `create_public_reservation` call it; `find_or_create_customer` is the member-checked wrapper the web's `updateOrderDetails` uses.
+- RPCs `update_customer(_customer_id, _name, _phone, _email)`, `delete_customer(_customer_id)`, `merge_customers(_keep_id, _drop_id)`: `security definer`, `has_permission(tenant, 'loyalty.edit')`, audit actions `customer_update` / `customer_delete` / `customer_merge`. `update_customer` refuses a phone that normalises to another customer's (`23505`).
+- RLS on `customers`: `tenant_all` dropped; `customers_select` + `customers_insert` for `authenticated`; UPDATE/DELETE/TRUNCATE/REFERENCES/TRIGGER revoked from `authenticated`, all from `anon`.
+- Web: `app/(app)/loyalty/actions.ts` (`updateCustomer`, `deleteCustomer`, `mergeCustomers`), `components/loyalty-manager.tsx` (row menu + three dialogs, held by id), `phoneCountryCode` through `components/settings/general-tab.tsx` and `updateSettings`. Types regenerated.
+- Verified on the live project as the owner inside a rolled-back transaction, and `tsc`, `eslint`, `check:rsc` clean.
+
+</details>
+
+### Added (previous)
 - **Owners can set a staff member's password.** Staff forget passwords and many never check email, so the reset link doesn't help mid-shift. On **Users & Roles → Staff**, the owner now has a **Set password** button on each member: type a new one or tap **Generate one** (easy to read out — no 0/O or 1/l), copy it, and hand it over in person. Their old password stops working straight away. Nothing is emailed.
 - **Create a login for someone who was invited but never signed up.** Invited rows get **Create login** instead: the owner picks the password, the account is made ready to use (no email confirmation), and the person joins the team as active — they can sign in on the spot with no approval step.
 - Every password set or login created is written to the audit log (who did it, for whom — never the password).
