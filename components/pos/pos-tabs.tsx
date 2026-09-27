@@ -6,9 +6,15 @@ import { SegmentedControl, type SegmentedItem } from "@/components/pos/segmented
 
 export type PosTab = "orders" | "table" | "kot" | "completed"
 
+/**
+ * Table leads: a shift starts by looking at the floor and tapping a seat, so
+ * the board is the first thing under the thumb. Orders is the running list
+ * behind it. The default pane (the one with no `?tab=`) is still Orders — see
+ * `selectTab` in pos-screen.tsx.
+ */
 const TABS: { key: PosTab; label: string; icon: SegmentedItem<PosTab>["icon"] }[] = [
-  { key: "orders", label: "Orders", icon: ClipboardListIcon },
   { key: "table", label: "Table", icon: LayoutGridIcon },
+  { key: "orders", label: "Orders", icon: ClipboardListIcon },
   { key: "kot", label: "KOT", icon: ChefHatIcon },
   { key: "completed", label: "Completed", icon: CheckCircle2Icon },
 ]

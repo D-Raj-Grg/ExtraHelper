@@ -6,6 +6,18 @@
 
 ---
 
+## POS board — Table tab first, Takeaway on the board (2026-09-27, web)
+
+- [x] POS tabs reorder to Table · Orders · KOT · Completed (`pos-tabs.tsx`, `/pos` `?tab=` allow-list).
+      Landing pane with no `?tab=` is still Orders.
+- [x] Table tab gets a **Takeaway** card as the last card of the last floor's grid, in the same grid as
+      the tables; tapping it opens the composer with no table. The no-tables empty state offers a
+      "Start a takeaway order" button instead of pointing at another tab.
+- [x] New order dialog: the Takeaway chip is no longer its own section — it is the last chip of the
+      last floor's grid, one radio group with the tables, mirroring the board.
+
+---
+
 ## Daily expenses + night cash count (2026-09-26, web + DB + Flutter)
 
 Small restaurants keep a paper daily book: "Rs 100 rice", "Rs 100 ride for dishwasher", then at night
