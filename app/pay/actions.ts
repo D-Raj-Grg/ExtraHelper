@@ -19,6 +19,20 @@ type Quote = {
 }
 
 /**
+ * What an order comes to right now, from the server — the figure the gateway
+ * will be charged. The guest pages show this after placement instead of their
+ * own estimate, so the button never names one number and charges another.
+ */
+export async function quoteOrder(orderId: string): Promise<{ due: number; total: number } | null> {
+  if (!orderId) return null
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc("public_bill_quote", { _order_id: orderId })
+  if (error || !data) return null
+  const q = data as unknown as Quote
+  return { due: q.due, total: q.total }
+}
+
+/**
  * Customer-facing payment for an order (QR pay-at-table / online prepay). Runs
  * as the anon role: quotes the outstanding balance via a token/order-scoped
  * SECURITY DEFINER RPC, charges the tenant's gateway (sandbox by default), then

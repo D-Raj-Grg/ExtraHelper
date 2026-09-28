@@ -29,6 +29,7 @@ const TITLES: [prefix: string, label: string][] = [
   ["/purchasing", "Purchasing"],
   ["/reports", "Reports"],
   ["/loyalty", "Loyalty"],
+  ["/coupons", "Coupons"],
   ["/cash", "Cash Drawer"],
   ["/expenses", "Expenses"],
   ["/billing", "Billing"],

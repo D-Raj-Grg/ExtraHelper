@@ -19,4 +19,7 @@ export const ACTION_STYLES: Record<string, string> = {
   customer_update: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
   customer_merge: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
   customer_delete: "bg-red-500/10 text-red-600 dark:text-red-400",
+  coupon_saved: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
+  coupon_deleted: "bg-red-500/10 text-red-600 dark:text-red-400",
+  coupon_lapsed: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
 }

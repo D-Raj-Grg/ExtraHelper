@@ -1,12 +1,14 @@
 "use client"
 
 import { useState, useTransition } from "react"
-import { CheckCircle2Icon, StarIcon } from "lucide-react"
+import { CheckCircle2Icon, StarIcon, TicketIcon } from "lucide-react"
 
-import { placeQrOrder, requestBill, submitFeedback, type QrState } from "@/app/t/actions"
-import { payForOrder, type PayState } from "@/app/pay/actions"
+import { placeQrOrder, previewCoupon, requestBill, submitFeedback, type QrState } from "@/app/t/actions"
+import { payForOrder, quoteOrder, type PayState } from "@/app/pay/actions"
+import { extractCouponCode, type CouponPreview } from "@/lib/coupon-constants"
 import { money } from "@/lib/format"
 import { cn } from "@/lib/utils"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { CartReviewDialog } from "@/components/qr/cart-review-dialog"
@@ -20,14 +22,32 @@ import {
   type QrItem,
 } from "@/components/qr/qr-menu-types"
 
+/**
+ * What a previewed coupon takes off the cart as it stands now. Mirrors the
+ * server's bill-level maths so the figure moves with the cart; the server
+ * still decides at placement.
+ */
+function previewDiscount(preview: CouponPreview | null, subtotalCents: number): number {
+  if (!preview) return 0
+  if (subtotalCents < preview.min_subtotal_cents) return 0
+  const raw =
+    preview.type === "percent"
+      ? Math.round((subtotalCents * preview.value) / 100)
+      : Math.round(preview.value * 100)
+  return Math.min(raw, subtotalCents)
+}
+
 export function QrOrder({
   token,
   currency,
   categories,
+  initialCoupon = null,
 }: {
   token: string
   currency: string
   categories: QrCategory[]
+  /** A code carried in from a flyer link (`?coupon=`), already normalised. */
+  initialCoupon?: string | null
 }) {
   const [lines, setLines] = useState<QrCartLine[]>([])
   const [reviewing, setReviewing] = useState(false)
@@ -39,6 +59,13 @@ export function QrOrder({
   const [comment, setComment] = useState("")
   const [thanked, setThanked] = useState(false)
   const [pay, setPay] = useState<PayState | null>(null)
+
+  // The coupon lives here, not in the dialog: it has to survive the dialog
+  // closing and reach the placement call.
+  const [coupon, setCoupon] = useState(initialCoupon ?? "")
+  const [couponPreview, setCouponPreview] = useState<CouponPreview | null>(null)
+  const [couponError, setCouponError] = useState<string | null>(null)
+  const [checkingCoupon, startCouponCheck] = useTransition()
 
   function add(item: QrItem, variantId: string | null, qty: number) {
     const key = lineKey(item.id, variantId)
@@ -70,16 +97,56 @@ export function QrOrder({
     )
   }
 
+  function checkCoupon() {
+    const code = extractCouponCode(coupon)
+    if (!code) {
+      setCouponError("That coupon code isn't valid")
+      return
+    }
+    startCouponCheck(async () => {
+      setCouponError(null)
+      const r = await previewCoupon(token, code, cartTotal(lines))
+      if ("error" in r) {
+        setCouponPreview(null)
+        setCouponError(r.error)
+      } else {
+        setCoupon(r.code)
+        setCouponPreview(r)
+      }
+    })
+  }
+
+  function clearCoupon() {
+    setCoupon("")
+    setCouponPreview(null)
+    setCouponError(null)
+  }
+
+  const discountCents = previewDiscount(couponPreview, cartTotal(lines))
+
   function submit() {
     const payload = lines.map((l) => ({ item_id: l.itemId, variant_id: l.variantId, qty: l.qty }))
     const total = cartTotal(lines)
+    // A typed code that was never checked still goes: the server judges it,
+    // and a bad one fails the placement with a sentence the guest can fix.
+    const code = coupon.trim() ? extractCouponCode(coupon) : null
+    if (coupon.trim() && !code) {
+      setCouponError("That coupon code isn't valid")
+      return
+    }
     startTransition(async () => {
-      const result = await placeQrOrder(token, payload)
+      const result = await placeQrOrder(token, payload, code)
       setState(result)
       if (result && "ok" in result) {
-        setPlacedTotal(total)
+        // The server's figure: a code typed but never checked is applied
+        // there, and that is what Pay now will charge. The estimate is the
+        // fallback if the quote can't be read.
+        const quote = await quoteOrder(result.orderId)
+        setPlacedTotal(quote ? quote.due : total - discountCents)
         setLines([])
         setReviewing(false)
+        // One coupon per visit: round two starts without it.
+        clearCoupon()
       }
     })
   }
@@ -203,6 +270,19 @@ export function QrOrder({
 
   return (
     <>
+      {coupon.trim() ? (
+        // A flyer guest should see their code was noticed before they reach
+        // the review step, not wonder whether the link worked.
+        <div className="mb-2 flex justify-center">
+          <Badge variant="secondary" className="h-auto py-1">
+            <TicketIcon aria-hidden />
+            <span className="font-semibold">{coupon.trim().toUpperCase()}</span>
+            <span className="font-normal">
+              {couponPreview ? " applied at checkout" : " will be checked at checkout"}
+            </span>
+          </Badge>
+        </div>
+      ) : null}
       <MenuBrowser
         categories={categories}
         currency={currency}
@@ -220,6 +300,18 @@ export function QrOrder({
         pending={pending}
         error={state && "error" in state ? state.error : null}
         onPlace={submit}
+        coupon={coupon}
+        onCouponChange={(c) => {
+          setCoupon(c)
+          setCouponPreview(null)
+          setCouponError(null)
+        }}
+        couponPreview={couponPreview}
+        couponError={couponError}
+        checkingCoupon={checkingCoupon}
+        onCheckCoupon={checkCoupon}
+        onClearCoupon={clearCoupon}
+        discountCents={discountCents}
       />
     </>
   )

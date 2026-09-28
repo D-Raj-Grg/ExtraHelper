@@ -133,6 +133,19 @@ export async function applyCoupon(billId: string, code: string): Promise<BillSta
   return { ok: true }
 }
 
+/**
+ * Take the coupon back off the bill — a mistyped code, or the guest changed
+ * their mind. Hands the use back to the campaign. Same gate as applying one.
+ */
+export async function removeCoupon(billId: string): Promise<BillState> {
+  await requirePermission("payment.take")
+  const supabase = await createClient()
+  const { error } = await supabase.rpc("remove_coupon", { _bill_id: billId })
+  if (error) return { error: error.message }
+  revalidatePath(`/bill/${billId}`)
+  return { ok: true }
+}
+
 /** Add a named extra charge (delivery, packing, corkage…) to an open bill. */
 export async function addCharge(
   billId: string,

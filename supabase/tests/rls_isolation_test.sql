@@ -13,6 +13,8 @@ insert into public.tenants (id, name, slug, status)
 values ('f0000000-0000-0000-0000-0000000000f0', 'Rival', 'rival-isolation-test', 'active');
 insert into public.menu_categories (tenant_id, name)
 values ('f0000000-0000-0000-0000-0000000000f0', 'Secret Recipes');
+insert into public.coupons (tenant_id, code, type, value)
+values ('f0000000-0000-0000-0000-0000000000f0', 'RIVAL-10', 'percent', 10);
 
 -- Become an authenticated user who is a member of NOTHING.
 set local role authenticated;
@@ -30,6 +32,21 @@ begin
       where tenant_id = 'f0000000-0000-0000-0000-0000000000f0') <> 0 then
     raise exception 'FAIL: non-member can read rival menu rows';
   end if;
+
+  if (select count(*) from public.coupons
+      where tenant_id = 'f0000000-0000-0000-0000-0000000000f0') <> 0 then
+    raise exception 'FAIL: non-member can read rival coupons';
+  end if;
+
+  -- Coupons are written only through upsert_coupon; the table itself takes
+  -- no client insert, member or not.
+  begin
+    insert into public.coupons (tenant_id, code, type, value)
+    values ('f0000000-0000-0000-0000-0000000000f0', 'INJECT-1', 'percent', 100);
+    raise exception 'FAIL: non-member INSERT into rival coupons was allowed';
+  exception
+    when insufficient_privilege then null;  -- expected: no policy, no privilege
+  end;
 
   -- Write isolation ---------------------------------------------------------
   begin

@@ -11,6 +11,7 @@ import {
   addOrderToBill,
   applyCoupon,
   applyDiscount,
+  removeCoupon,
   removeDiscount,
   removeItemDiscount,
   applyItemDiscount,
@@ -79,6 +80,7 @@ export function CheckoutView({
   meta,
   canDiscount = false,
   hasStaffDiscount = false,
+  couponCode = null,
   customer = null,
   pointsValueCents = 1,
   mergeableOrders = [],
@@ -93,6 +95,8 @@ export function CheckoutView({
   meta: InvoiceMeta
   canDiscount?: boolean
   hasStaffDiscount?: boolean
+  /** The guest's coupon on the bill, if any. */
+  couponCode?: string | null
   customer?: CheckoutCustomer | null
   pointsValueCents?: number
   mergeableOrders?: MergeableOrder[]
@@ -155,11 +159,16 @@ export function CheckoutView({
   // Synchronous re-entrancy guard — `pending` only flips on the next render.
   const inFlight = useRef(false)
 
+  // Which lever last failed, so its message can sit beside that control as
+  // well as in the page-level alert.
+  const [lastLever, setLastLever] = useState<string | null>(null)
+
   /** Run a server action, surfacing its error. One shape for every lever here. */
-  function run(fn: () => Promise<{ error: string } | { ok: true } | undefined>) {
+  function run(fn: () => Promise<{ error: string } | { ok: true } | undefined>, lever?: string) {
     if (inFlight.current) return
     inFlight.current = true
     setError(null)
+    setLastLever(lever ?? null)
     startTransition(async () => {
       try {
         const res = await fn()
@@ -450,13 +459,16 @@ export function CheckoutView({
                   itemTotalCents={items.reduce((n, it) => n + it.total_cents, 0)}
                   canDiscount={canDiscount}
                   hasStaffDiscount={hasStaffDiscount}
+                  couponCode={couponCode}
                   settled={settled}
                   disabled={pending}
+                  error={lastLever === "coupon" ? error : null}
                   onBillDiscount={(type, value, reason) =>
                     run(() => applyDiscount(bill.id, type, value, reason))
                   }
                   onRemoveDiscount={() => run(() => removeDiscount(bill.id))}
-                  onCoupon={(code) => run(() => applyCoupon(bill.id, code))}
+                  onCoupon={(code) => run(() => applyCoupon(bill.id, code), "coupon")}
+                  onRemoveCoupon={() => run(() => removeCoupon(bill.id), "coupon")}
                   onAddCharge={(label, cents) => run(() => addCharge(bill.id, label, cents))}
                   onRemoveCharge={(id) => run(() => removeCharge(id, bill.id))}
                   onExtras={(tipCents, roundingCents) => saveExtras(tipCents, roundingCents)}

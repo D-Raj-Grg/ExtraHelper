@@ -6,6 +6,102 @@
 
 ---
 
+## Coupons: flyer codes, guest + staff redemption (2026-09-28, web + DB; Flutter to follow)
+
+Marketing wants "10% off" on flyers and photos. A guest scans the flyer (the QR opens the ordering
+page with the code pre-filled) or types the code; a cashier types it on the POS; the mobile app will
+scan it. Owner decisions: scanning only in the mobile app; rules = percent/flat, valid-from/through,
+usage cap, **minimum order, once per customer, order-type restriction**.
+
+**What was wrong before.** Coupons were sketched in July: a `coupons` table, `apply_coupon`, a
+checkout field on web and mobile. The table was created in `20260710095939` with
+`is_active / valid_from / valid_to / usage_limit`; the later `create table if not exists` in
+`20260713100000` (which used `active / expires_at / max_uses`) was a no-op, and every `apply_coupon`
+since read the columns that never existed — `record "_c" has no field "active"` on the first call.
+Nobody hit it because nothing could create a coupon. Also: `coupons` and `discounts` both had
+`tenant_all` FOR ALL, so any member could insert a 100% coupon or a discount row through PostgREST.
+
+- [x] Migration `20260928120000_coupons.sql`: live column names kept + `name`, `min_subtotal_cents`,
+      `once_per_customer`, `order_types[]`, `created_by`, `updated_at`, check constraints (code shape
+      `^[A-Z0-9-]{4,24}$`, value > 0, percent ≤ 100, window); `discounts.coupon_id` (FK restrict) +
+      partial unique `(bill_id) where coupon_id is not null` = one coupon per bill;
+      `orders.coupon_code` = a guest's pending code. RLS on `coupons`/`discounts` now select-only
+      (coupons behind `coupons.view`); every write via RPC. Permissions `coupons.view` /
+      `coupons.manage` (owner + manager by default).
+- [x] One validator, `_coupon_lookup(tenant, code, subtotal, order_type, customer)`, shared by POS,
+      guest and mobile; `_redeem_coupon_on_bill` (row lock + bump-if-under-limit, `discounts` row
+      with `coupon_id` **and** `coupon_code` — both clients key the staff-discount slot on
+      `coupon_code is null`); `_settle_pending_coupon` for guest orders (never raises; a code that
+      stopped validating is audited `coupon_lapsed`). `apply_coupon(uuid, text)` **same signature**,
+      body fixed (subtotal from `order_items`, order type + customer from the bill's orders), so old
+      Flutter builds start working on deploy. New `remove_coupon` (hands the use back),
+      `upsert_coupon` (blank code → `SAVE10-XXXX` from core functions only — `gen_random_bytes` sits
+      in `extensions`, out of `search_path = public`), `delete_coupon` (refuses once redeemed),
+      `list_coupons` (with redemptions + discount given), `public_coupon_preview` (anon, returns
+      `{error}` rather than raising).
+- [x] Guest path: `place_qr_order` / `place_online_order` gain `_coupon default null` — **dropped +
+      recreated** (arity), re-granted by full signature, no 2-arg wrapper (PostgREST 300 otherwise).
+      One coupon per table visit in `place_qr_order`. `_build_bill_for_order` and `add_order_to_bill`
+      settle the pending code (a second round merged onto a bill that already has one lapses, audited).
+      `public_bill_quote` subtracts the pending code **only while it still validates** — the gateway
+      is charged `quote.due` before the bill is built, so a lapsing code must not be quoted.
+- [x] Web `/coupons` (Insights, after Loyalty): list with status badge (icon + word), uses / limit,
+      discount given; editor `Sheet` (defaults: 10% off, code generated, active, no dates / cap; order
+      types as `ChoiceChip`s; "valid through" stores the exclusive start of the next day in the tenant
+      tz); flyer QR (`QrCard`, generalised from `TableQr`) encoding `/s/{slug}?coupon=CODE`; pause /
+      resume; delete confirms and offers Pause when redeemed.
+- [x] Checkout: Discount row reads "Discount · CODE"; **Remove coupon** (`payment.take`); the coupon
+      error sits beside the field. Guest: `?coupon=` on `/t/[token]` and `/s/[slug]` pre-fills; the
+      cart dialog / storefront bar check the code (`previewCoupon`) and show "CODE · −NPR 120"; the
+      "Pay now" figure is net, as the quote is; a QR round two starts without the coupon.
+- [x] `lib/coupon-constants.ts` (`extractCouponCode` accepts the flyer URL or a bare code — the Dart
+      mirror will too), `ORDER_TYPES` exported from `lib/order-constants.ts`, audit pills
+      `coupon_saved` / `coupon_deleted` / `coupon_lapsed`. Types hand-edited to the migration (the
+      Supabase MCP could not connect from this session — regenerate on the next pass).
+- [x] Tests: `supabase/tests/coupons.sh` (create, generated code, waiter guards incl. raw `POST
+      /coupons` + `/discounts`, apply / double-apply / remove, every rule, delete refusals);
+      `rls_isolation_test.sql` covers `coupons`. tsc / eslint (no new findings; the one error is the
+      pre-existing `hooks/use-mobile.ts`) / check:rsc / build clean.
+- [ ] Flutter (`extrahelper_app`, after the migration is live): `showScannerSheet` gains
+      title / hint / formats; **Scan** (44px) beside the coupon field in `checkout_adjust_sheet.dart`;
+      `extractCouponCode` mirror + unit test; "Discount · CODE" on `_TotalsCard` + Remove →
+      `remove_coupon`; camera usage strings mention coupons; widget test for the Scan button.
+- [x] **Second pass (same day).** Found by an adversarial re-read + review agent, fixed in the
+      migration file itself (nothing applied yet): `apply_coupon` says "already on this bill" *before*
+      the lookup (once-per-customer used to mask it with "already used by this customer");
+      once-per-customer also counts a **pending** stamp (`orders.coupon_code` set, `bill_id` null),
+      so two online orders from one phone can't both quote the discount and have the second lapse
+      after the card is charged; the one-coupon-per-table check is bounded to 6 hours so an
+      abandoned unbilled round doesn't lock the table's coupons; **a QR-table order counts as
+      dine-in** for the order-type rule (form offers dine in / takeaway / delivery only);
+      `upsert_coupon`'s rename path catches the unique violation; `coupons_code_shape` is added
+      `not valid` + validated. Web: `?coupon=a&coupon=b` (array) no longer crashes the guest pages;
+      **Pay now shows the server's quote** after placement (a code typed but never checked is still
+      applied server-side, and the button must name what the gateway charges). Tests: the
+      "creates a coupon" assertion was unpassable (fixed), and PostgREST answers **403**, not 401,
+      to a permission-denied insert with a valid JWT. Custom (non-system) roles need
+      `coupons.view` / `coupons.manage` granted from Users & Roles, as with every earlier key.
+      **Smoke-run against the real schema** (the Supabase MCP came back; the whole migration plus
+      15 checks on synthetic rows ran in one batch that ends in `raise exception`, so it all rolled
+      back — nothing is applied): every function body executes; build/redeem 200/1800, lapse path,
+      preview, usage cap, QR placement + table lock, generator, permission gates all as intended.
+      It caught one more bug: the pending-stamp check counted **the order being quoted**, so a
+      once-per-customer coupon quoted gross to an online guest (who would then be charged gross
+      for a bill that comes to net). `_coupon_lookup` gained `_order default null`; the quote and
+      the settle pass their own order. Re-run: quote 1800.
+- [x] **Applied to prod** (remote version `20260928131347_coupons`, same body as the repo file) and
+      types regenerated from the live schema (`lib/supabase/database.types.ts`). Catalog verified:
+      all 15 functions at the intended signatures, `coupons`/`discounts` select-only, both
+      permission keys + 20 system-role grants, 0 legacy coupon rows.
+- [ ] Run `coupons.sh` and the guest E2E against prod with the demo tenant (needs the demo creds
+      and an open bill id — not available from this session).
+
+**Known v1 limits (stated, not hidden):** a QR guest with no customer attached is not deduplicated
+for "once per customer"; a voided bill keeps its redemption (`used_count` not restored);
+`min_subtotal` is checked at redemption, not re-checked when lines are voided later; "discount given"
+on the list ignores the gross cap (approximate for a flat coupon on a tiny bill); coupon and staff
+discounts stack, by the July design.
+
 ## Dish cost price → gross profit (2026-09-27, web + DB + Flutter)
 
 The owner keeps a handwritten cost per dish and wanted profit on the daily report without weighing
@@ -1201,7 +1297,7 @@ and one of which could kill printing on a device until it was restarted. They ar
 - [x] Running bill per table/order (multi-order per bill) — `create_bill_for_order()` snapshots order lines → `bill_items`, `/bill/[billId]` view. TODO: multiple orders on one bill (currently one order = one bill). ✅ Finished in partial-features sprint (2026-07-13).
 - [x] Line pricing pulls price + tax class from menu — `order_items` snapshot `unit_price_cents` at add time; bill lines from those. (tax_class column exists for per-line tax later.)
 - [x] Configurable tax (multiple rates, inclusive/exclusive), service charge %, packaging charge — **computed in trusted SQL** (`create_bill_for_order`, SECURITY DEFINER), read from `tenant_settings` (rule #2). **Verified**: $17 + 10% service + 13% VAT → $18.70/$21.x correct; exclusive taxes add, inclusive skipped; packaging on pickup/delivery only.
-- [x] Discounts: %/flat, item + bill level, coupon codes, manager approval — bill-level via `apply_bill_discount()` + **item-level `apply_item_discount()`** (owner/manager gated + audited) + **coupon codes** `apply_coupon()` (cashier-usable, validated: active/expiry/max-uses/no-double-apply) — migration `20260713100000`. Unified `bill_discount_total(_bill_id, _subtotal)` computes bill-level (vs subtotal) + item-level (vs its non-void line, flat capped at line) discounts; both `apply_bill_discount` and `recompute_bill` now use it, so item/coupon discounts **survive a recompute** (void / further discount) instead of being ignored. New `coupons` table (per-tenant code, type, value, active, expiry, max_uses, used_count) with RLS. `/bill` UI: per-line **disc** button (manager) + **coupon** input (any cashier). TODO: coupon-management admin UI, finer cashier discount threshold.
+- [x] Discounts: %/flat, item + bill level, coupon codes, manager approval — **coupons never worked and had no admin UI until 2026-09-28; see "Coupons" at the top** — bill-level via `apply_bill_discount()` + **item-level `apply_item_discount()`** (owner/manager gated + audited) + **coupon codes** `apply_coupon()` (cashier-usable, validated: active/expiry/max-uses/no-double-apply) — migration `20260713100000`. Unified `bill_discount_total(_bill_id, _subtotal)` computes bill-level (vs subtotal) + item-level (vs its non-void line, flat capped at line) discounts; both `apply_bill_discount` and `recompute_bill` now use it, so item/coupon discounts **survive a recompute** (void / further discount) instead of being ignored. New `coupons` table (per-tenant code, type, value, active, expiry, max_uses, used_count) with RLS. `/bill` UI: per-line **disc** button (manager) + **coupon** input (any cashier). TODO: coupon-management admin UI, finer cashier discount threshold.
 - [x] Split bills: equal / by item / arbitrary amounts — **schema-free** (`components/bill-split.tsx`): compute each payer's share client-side, record it as its own `payments` row against the one bill; `record_payment` rolls open→partial→paid and closes the order on the final share. **Equal**: N-way exact distribution (remainder spread). **By item**: checkbox lines → proportional share of the whole bill (tax/service/discount incl.), capped at due + a **Pay remaining {due}** button so the last payer settles rounding exactly. **Arbitrary**: the existing editable Amount field. **Overpay-hardened** (adversarial review): `record_payment` now clamps the applied amount to the outstanding balance — `least(amount, total − paid_before)` — so no path can overpay (migration `20260712140000`); split uses **deterministic per-share idempotency keys** + a sync in-flight guard so a double-click de-dups instead of double-charging. `payment.take` gated. Survives `recompute_bill` (no split state persisted on bill_items). TODO: by-seat (needs POS `order_items.seat` entry first).
 - [x] Partial payments (pay now, remainder later) — `record_payment()` tracks paid vs total → open/partial/paid. **Verified** partial→full. TODO: UI already supports custom amount; test partial in browser. ✅ Finished in partial-features sprint (2026-07-13).
 - [x] Payment methods: cash, card (manual), split across methods; record + status — cash/card via `/bill` UI, `payments` rows with idempotency keys, status transitions. **Verified** browser (cash full → paid → order closed → table freed). TODO: online/wallet/points methods, split-across-methods UI. ✅ Finished in partial-features sprint (2026-07-13).

@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
+import { extractCouponCode } from "@/lib/coupon-constants"
 import { QrOrder } from "@/components/qr-order"
 import type { QrCategory } from "@/components/qr/qr-menu-types"
 
@@ -14,10 +15,15 @@ type Menu = {
 
 export default async function QrTablePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ token: string }>
+  searchParams: Promise<{ coupon?: string | string[] }>
 }) {
   const { token } = await params
+  // A flyer QR lands here with the code in the URL; it rides along into the
+  // order and is only ever judged by the server.
+  const initialCoupon = extractCouponCode((await searchParams).coupon)
   const supabase = await createClient()
   const { data } = await supabase.rpc("qr_menu", { _token: token })
 
@@ -36,7 +42,12 @@ export default async function QrTablePage({
           Table {menu.table_label} · dine-in · {dishes} {dishes === 1 ? "dish" : "dishes"}
         </p>
       </header>
-      <QrOrder token={token} currency={menu.currency} categories={menu.categories} />
+      <QrOrder
+        token={token}
+        currency={menu.currency}
+        categories={menu.categories}
+        initialCoupon={initialCoupon}
+      />
     </div>
   )
 }
