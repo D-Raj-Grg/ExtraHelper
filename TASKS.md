@@ -62,7 +62,9 @@ Nobody hit it because nothing could create a coupon. Also: `coupons` and `discou
       /coupons` + `/discounts`, apply / double-apply / remove, every rule, delete refusals);
       `rls_isolation_test.sql` covers `coupons`. tsc / eslint (no new findings; the one error is the
       pre-existing `hooks/use-mobile.ts`) / check:rsc / build clean.
-- [ ] Flutter (`extrahelper_app`, after the migration is live): `showScannerSheet` gains
+- [~] Flutter (`extrahelper_app`; the migration is live, so this can ship any time — **patch delivered**
+      to the owner on 2026-09-28, written without a Flutter SDK, needs `flutter analyze` + `test`):
+      `showScannerSheet` gains
       title / hint / formats; **Scan** (44px) beside the coupon field in `checkout_adjust_sheet.dart`;
       `extractCouponCode` mirror + unit test; "Discount · CODE" on `_TotalsCard` + Remove →
       `remove_coupon`; camera usage strings mention coupons; widget test for the Scan button.
@@ -89,6 +91,8 @@ Nobody hit it because nothing could create a coupon. Also: `coupons` and `discou
       once-per-customer coupon quoted gross to an online guest (who would then be charged gross
       for a bill that comes to net). `_coupon_lookup` gained `_order default null`; the quote and
       the settle pass their own order. Re-run: quote 1800.
+- [x] **Merged to main** via [#17](https://github.com/D-Raj-Grg/ExtraHelper/pull/17) (merge `882cec0`; commits
+      `c7356dd` feature, `e63c2b2` second-pass fixes, `cf79216` regenerated types).
 - [x] **Applied to prod** (remote version `20260928131347_coupons`, same body as the repo file) and
       types regenerated from the live schema (`lib/supabase/database.types.ts`). Catalog verified:
       all 15 functions at the intended signatures, `coupons`/`discounts` select-only, both
