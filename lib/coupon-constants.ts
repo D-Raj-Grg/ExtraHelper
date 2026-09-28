@@ -5,7 +5,7 @@
  */
 
 import { money } from "@/lib/format"
-import { ORDER_TYPES, orderTypeLabel, type OrderType } from "@/lib/order-constants"
+import { orderTypeLabel, type OrderType } from "@/lib/order-constants"
 
 export type CouponType = "percent" | "flat"
 
@@ -43,12 +43,21 @@ export type CouponPreview = {
 export const COUPON_CODE_RE = /^[A-Z0-9-]{4,24}$/
 
 /**
+ * What a coupon rule can be limited to. A QR-table order is dine-in as far as
+ * a rule is concerned (the server folds `qr` into `dine_in` when checking), so
+ * the form never offers it separately.
+ */
+export const COUPON_ORDER_TYPES = ["dine_in", "pickup", "delivery"] as const satisfies readonly OrderType[]
+
+/**
  * The code inside whatever was scanned or pasted: a flyer URL carrying
  * `?coupon=`, or the bare code. Uppercased and trimmed; null when it doesn't
  * look like one. Parsing only — the server decides whether it is valid.
  */
-export function extractCouponCode(raw: string | null | undefined): string | null {
-  const text = (raw ?? "").trim()
+export function extractCouponCode(raw: string | string[] | null | undefined): string | null {
+  // A repeated query key (`?coupon=a&coupon=b`) arrives as an array; the first one wins.
+  const first = Array.isArray(raw) ? raw[0] : raw
+  const text = (first ?? "").trim()
   if (!text) return null
   let candidate = text
   if (/^https?:\/\//i.test(text)) {
@@ -83,7 +92,7 @@ export function couponSummary(
 ): string {
   const parts = [couponValueLabel(c.type, c.value, currency)]
   if (c.min_subtotal_cents > 0) parts.push(`min ${money(c.min_subtotal_cents, currency)}`)
-  if (c.order_types && c.order_types.length > 0 && c.order_types.length < ORDER_TYPES.length) {
+  if (c.order_types && c.order_types.length > 0 && c.order_types.length < COUPON_ORDER_TYPES.length) {
     parts.push(c.order_types.map((t) => orderTypeLabel(t).toLowerCase()).join(" / ") + " only")
   }
   if (c.once_per_customer) parts.push("once per customer")

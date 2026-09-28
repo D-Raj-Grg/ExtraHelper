@@ -66,6 +66,29 @@ Nobody hit it because nothing could create a coupon. Also: `coupons` and `discou
       title / hint / formats; **Scan** (44px) beside the coupon field in `checkout_adjust_sheet.dart`;
       `extractCouponCode` mirror + unit test; "Discount · CODE" on `_TotalsCard` + Remove →
       `remove_coupon`; camera usage strings mention coupons; widget test for the Scan button.
+- [x] **Second pass (same day).** Found by an adversarial re-read + review agent, fixed in the
+      migration file itself (nothing applied yet): `apply_coupon` says "already on this bill" *before*
+      the lookup (once-per-customer used to mask it with "already used by this customer");
+      once-per-customer also counts a **pending** stamp (`orders.coupon_code` set, `bill_id` null),
+      so two online orders from one phone can't both quote the discount and have the second lapse
+      after the card is charged; the one-coupon-per-table check is bounded to 6 hours so an
+      abandoned unbilled round doesn't lock the table's coupons; **a QR-table order counts as
+      dine-in** for the order-type rule (form offers dine in / takeaway / delivery only);
+      `upsert_coupon`'s rename path catches the unique violation; `coupons_code_shape` is added
+      `not valid` + validated. Web: `?coupon=a&coupon=b` (array) no longer crashes the guest pages;
+      **Pay now shows the server's quote** after placement (a code typed but never checked is still
+      applied server-side, and the button must name what the gateway charges). Tests: the
+      "creates a coupon" assertion was unpassable (fixed), and PostgREST answers **403**, not 401,
+      to a permission-denied insert with a valid JWT. Custom (non-system) roles need
+      `coupons.view` / `coupons.manage` granted from Users & Roles, as with every earlier key.
+      **Smoke-run against the real schema** (the Supabase MCP came back; the whole migration plus
+      15 checks on synthetic rows ran in one batch that ends in `raise exception`, so it all rolled
+      back — nothing is applied): every function body executes; build/redeem 200/1800, lapse path,
+      preview, usage cap, QR placement + table lock, generator, permission gates all as intended.
+      It caught one more bug: the pending-stamp check counted **the order being quoted**, so a
+      once-per-customer coupon quoted gross to an online guest (who would then be charged gross
+      for a bill that comes to net). `_coupon_lookup` gained `_order default null`; the quote and
+      the settle pass their own order. Re-run: quote 1800.
 - [ ] Run `coupons.sh` and the guest E2E against the dev branch once the migration is applied.
 
 **Known v1 limits (stated, not hidden):** a QR guest with no customer attached is not deduplicated

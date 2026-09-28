@@ -3931,6 +3931,7 @@ export type Database = {
         Args: {
           _code: string
           _customer: string
+          _order?: string
           _order_type: Database["public"]["Enums"]["order_type"]
           _subtotal_cents: number
           _tenant: string

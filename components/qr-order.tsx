@@ -4,7 +4,7 @@ import { useState, useTransition } from "react"
 import { CheckCircle2Icon, StarIcon, TicketIcon } from "lucide-react"
 
 import { placeQrOrder, previewCoupon, requestBill, submitFeedback, type QrState } from "@/app/t/actions"
-import { payForOrder, type PayState } from "@/app/pay/actions"
+import { payForOrder, quoteOrder, type PayState } from "@/app/pay/actions"
 import { extractCouponCode, type CouponPreview } from "@/lib/coupon-constants"
 import { money } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -138,7 +138,11 @@ export function QrOrder({
       const result = await placeQrOrder(token, payload, code)
       setState(result)
       if (result && "ok" in result) {
-        setPlacedTotal(total - discountCents)
+        // The server's figure: a code typed but never checked is applied
+        // there, and that is what Pay now will charge. The estimate is the
+        // fallback if the quote can't be read.
+        const quote = await quoteOrder(result.orderId)
+        setPlacedTotal(quote ? quote.due : total - discountCents)
         setLines([])
         setReviewing(false)
         // One coupon per visit: round two starts without it.

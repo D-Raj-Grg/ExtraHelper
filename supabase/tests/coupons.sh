@@ -53,7 +53,7 @@ echo "== create"
 CODE="T$(date +%s | tail -c 6)"
 NEW=$(rpc "$OWNER" upsert_coupon "{\"_tenant\":\"$TENANT\",\"_id\":null,\"_code\":\"$CODE\",\"_name\":\"test\",\"_type\":\"percent\",\"_value\":10,\"_is_active\":true,\"_valid_from\":null,\"_valid_to\":null,\"_usage_limit\":null,\"_min_subtotal_cents\":0,\"_once_per_customer\":false,\"_order_types\":null}")
 CID=$(printf '%s' "$NEW" | tr -d '"')
-expect_has "owner creates a coupon" "-" "$(printf '%s' "$CID" | grep -c -)"
+if [[ "$CID" =~ ^[0-9a-f-]{36}$ ]]; then ok "owner creates a coupon ($CODE)"; else bad "owner creates a coupon" "$NEW"; fi
 GEN=$(rpc "$OWNER" upsert_coupon "{\"_tenant\":\"$TENANT\",\"_id\":null,\"_code\":\"\",\"_name\":\"gen\",\"_type\":\"percent\",\"_value\":10,\"_is_active\":true,\"_valid_from\":null,\"_valid_to\":null,\"_usage_limit\":null,\"_min_subtotal_cents\":0,\"_once_per_customer\":false,\"_order_types\":null}" | tr -d '"')
 GENCODE=$(get "$OWNER" "coupons?id=eq.$GEN&select=code" | field code)
 expect_has "blank code is generated (SAVE10-XXXX)" "SAVE10-" "$GENCODE"
@@ -61,8 +61,9 @@ rpc "$OWNER" delete_coupon "{\"_id\":\"$GEN\"}" >/dev/null
 
 echo "== guards"
 expect_has "waiter cannot create a coupon"   "permission" "$(rpc "$WAITER" upsert_coupon "{\"_tenant\":\"$TENANT\",\"_id\":null,\"_code\":\"WAITER1\",\"_name\":null,\"_type\":\"percent\",\"_value\":100,\"_is_active\":true,\"_valid_from\":null,\"_valid_to\":null,\"_usage_limit\":null,\"_min_subtotal_cents\":0,\"_once_per_customer\":false,\"_order_types\":null}")"
-expect_eq  "waiter cannot POST /coupons"      "401" "$(post_table "$WAITER" coupons "{\"tenant_id\":\"$TENANT\",\"code\":\"WAITER2\",\"type\":\"percent\",\"value\":100}")"
-expect_eq  "waiter cannot POST /discounts"    "401" "$(post_table "$WAITER" discounts "{\"tenant_id\":\"$TENANT\",\"bill_id\":\"$BILL\",\"type\":\"percent\",\"value\":100}")"
+# PostgREST maps 42501 to 403 when the request carries a valid JWT.
+expect_eq  "waiter cannot POST /coupons"      "403" "$(post_table "$WAITER" coupons "{\"tenant_id\":\"$TENANT\",\"code\":\"WAITER2\",\"type\":\"percent\",\"value\":100}")"
+expect_eq  "waiter cannot POST /discounts"    "403" "$(post_table "$WAITER" discounts "{\"tenant_id\":\"$TENANT\",\"bill_id\":\"$BILL\",\"type\":\"percent\",\"value\":100}")"
 expect_eq  "waiter sees no coupons"           "[]"  "$(get "$WAITER" "coupons?select=id&tenant_id=eq.$TENANT")"
 expect_has "waiter cannot apply a coupon"     "permission" "$(rpc "$WAITER" apply_coupon "{\"_bill_id\":\"$BILL\",\"_code\":\"$CODE\"}")"
 

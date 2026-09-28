@@ -55,8 +55,12 @@ alter table public.coupons drop constraint if exists coupons_value_positive;
 alter table public.coupons add constraint coupons_value_positive check (value > 0);
 alter table public.coupons drop constraint if exists coupons_percent_cap;
 alter table public.coupons add constraint coupons_percent_cap check (type <> 'percent' or value <= 100);
+-- Added NOT VALID then validated: the same statement, but an environment with
+-- a legacy row that fails the shape reports it by name instead of aborting
+-- the whole migration on the ALTER.
 alter table public.coupons drop constraint if exists coupons_code_shape;
-alter table public.coupons add constraint coupons_code_shape check (code ~ '^[A-Z0-9-]{4,24}$');
+alter table public.coupons add constraint coupons_code_shape check (code ~ '^[A-Z0-9-]{4,24}$') not valid;
+alter table public.coupons validate constraint coupons_code_shape;
 alter table public.coupons drop constraint if exists coupons_min_subtotal_nonneg;
 alter table public.coupons add constraint coupons_min_subtotal_nonneg check (min_subtotal_cents >= 0);
 alter table public.coupons drop constraint if exists coupons_window;
@@ -133,13 +137,16 @@ as $$
 $$;
 
 -- Find a coupon and check every rule against this order. Raises a sentence the
--- caller can show; returns the row when it may be used.
+-- caller can show; returns the row when it may be used. `_order` is the order
+-- being quoted or settled, when one exists: its own pending stamp must not
+-- count as "this customer already used it".
 create or replace function public._coupon_lookup(
-  _tenant uuid, _code text, _subtotal_cents integer, _order_type public.order_type, _customer uuid
+  _tenant uuid, _code text, _subtotal_cents integer, _order_type public.order_type, _customer uuid,
+  _order uuid default null
 ) returns public.coupons
 language plpgsql stable set search_path = public
 as $$
-declare _c public.coupons; _norm text;
+declare _c public.coupons; _norm text; _kind public.order_type;
 begin
   _norm := upper(trim(coalesce(_code, '')));
   if _norm = '' then raise exception 'Enter a coupon code' using errcode = '22023'; end if;
@@ -156,21 +163,31 @@ begin
   if _c.usage_limit is not null and _c.used_count >= _c.usage_limit then
     raise exception 'This coupon has been used up' using errcode = '22023';
   end if;
-  if _c.order_types is not null and not (_order_type = any (_c.order_types)) then
+  -- A QR-table order is dine-in as far as a rule is concerned.
+  _kind := case _order_type when 'qr' then 'dine_in'::public.order_type else _order_type end;
+  if _c.order_types is not null and not (_kind = any (_c.order_types)) then
     raise exception 'This coupon isn''t valid for % orders',
-      case _order_type when 'dine_in' then 'dine-in' when 'pickup' then 'takeaway'
-                       when 'delivery' then 'delivery' else 'QR' end
+      case _kind when 'dine_in' then 'dine-in' when 'pickup' then 'takeaway' else 'delivery' end
       using errcode = '22023';
   end if;
   if _subtotal_cents < _c.min_subtotal_cents then
     raise exception 'Minimum order for this coupon is not reached' using errcode = '22023';
   end if;
   -- Joins through the order's customer, so a customer attached after the
-  -- redemption is still caught on their next visit.
-  if _c.once_per_customer and _customer is not null and exists (
-    select 1 from public.discounts d
-    join public.orders o on o.bill_id = d.bill_id
-    where d.coupon_id = _c.id and o.customer_id = _customer
+  -- redemption is still caught on their next visit. Pending stamps count too:
+  -- two online orders from one phone, placed a minute apart, must not both
+  -- quote the discount and then have the second lapse after the card is charged.
+  if _c.once_per_customer and _customer is not null and (
+    exists (
+      select 1 from public.discounts d
+      join public.orders o on o.bill_id = d.bill_id
+      where d.coupon_id = _c.id and o.customer_id = _customer
+    ) or exists (
+      select 1 from public.orders o
+      where o.tenant_id = _tenant and o.customer_id = _customer
+        and o.coupon_code = _c.code and o.bill_id is null
+        and (_order is null or o.id <> _order)
+    )
   ) then
     raise exception 'This customer has already used this coupon' using errcode = '22023';
   end if;
@@ -234,7 +251,7 @@ begin
   where o.bill_id = _bill and oi.is_void = false;
 
   begin
-    _c := public._coupon_lookup(_tenant, _code, _subtotal, _otype, _cust);
+    _c := public._coupon_lookup(_tenant, _code, _subtotal, _otype, _cust, _order_id);
     if not public._redeem_coupon_on_bill(_bill, _c.id, false) then
       insert into public.audit_logs (tenant_id, actor_id, action, entity_type, entity_id, metadata)
       values (_tenant, auth.uid(), 'coupon_lapsed', 'bill', _bill,
@@ -250,7 +267,7 @@ begin
 end $$;
 
 revoke execute on function public._coupon_discount_cents(public.discount_type, numeric, integer, integer) from public, anon, authenticated;
-revoke execute on function public._coupon_lookup(uuid, text, integer, public.order_type, uuid) from public, anon, authenticated;
+revoke execute on function public._coupon_lookup(uuid, text, integer, public.order_type, uuid, uuid) from public, anon, authenticated;
 revoke execute on function public._redeem_coupon_on_bill(uuid, uuid, boolean) from public, anon, authenticated;
 revoke execute on function public._settle_pending_coupon(uuid, uuid) from public, anon, authenticated;
 
@@ -273,6 +290,11 @@ begin
     raise exception 'permission denied' using errcode = '42501';
   end if;
   if _status in ('paid', 'void') then raise exception 'bill already settled' using errcode = '22023'; end if;
+  -- Before the lookup, so a re-typed code on a bill that already carries it
+  -- says this rather than tripping once-per-customer on its own redemption.
+  if exists (select 1 from public.discounts where bill_id = _bill_id and coupon_id is not null) then
+    raise exception 'A coupon is already on this bill' using errcode = '22023';
+  end if;
 
   -- The live subtotal, as recompute_bill sees it — not bills.subtotal_cents,
   -- which is only current after a recompute.
@@ -357,12 +379,16 @@ begin
     end if;
     if _norm = '' then _norm := _existing.code; end if;
 
-    update public.coupons
-    set code = _norm, name = nullif(trim(_name), ''), type = _type, value = _value,
-        is_active = coalesce(_is_active, true), valid_from = _valid_from, valid_to = _valid_to,
-        usage_limit = _usage_limit, min_subtotal_cents = coalesce(_min_subtotal_cents, 0),
-        once_per_customer = coalesce(_once_per_customer, false), order_types = _order_types
-    where id = _id;
+    begin
+      update public.coupons
+      set code = _norm, name = nullif(trim(_name), ''), type = _type, value = _value,
+          is_active = coalesce(_is_active, true), valid_from = _valid_from, valid_to = _valid_to,
+          usage_limit = _usage_limit, min_subtotal_cents = coalesce(_min_subtotal_cents, 0),
+          once_per_customer = coalesce(_once_per_customer, false), order_types = _order_types
+      where id = _id;
+    exception when unique_violation then
+      raise exception 'A coupon with this code already exists' using errcode = '23505';
+    end;
     _out := _id;
   else
     loop
@@ -536,12 +562,15 @@ begin
   end if;
 
   -- One coupon per table visit: a second round on the same table cannot carry
-  -- another, whether the first is still pending or already on the bill.
+  -- another, whether the first is still pending or already on the bill. "This
+  -- visit" is bounded in time, so a round abandoned unbilled last night does
+  -- not lock the table's coupons for every party after it.
   if coalesce(trim(_coupon), '') <> '' and exists (
     select 1 from public.orders o
     left join public.discounts d on d.bill_id = o.bill_id and d.coupon_id is not null
     where o.table_id = _table and o.order_type = 'qr'
       and o.status not in ('closed', 'cancelled')
+      and o.created_at > now() - interval '6 hours'
       and (o.coupon_code is not null or d.id is not null)
   ) then
     raise exception 'A coupon is already on this table''s order' using errcode = '22023';
@@ -809,7 +838,7 @@ begin
       _gross := _subtotal + _service_cents + _packaging_cents + _tax_cents;
       if _code is not null then
         begin
-          _c := public._coupon_lookup(_tenant, _code, _subtotal, _otype, _cust);
+          _c := public._coupon_lookup(_tenant, _code, _subtotal, _otype, _cust, _order_id);
           _disc := public._coupon_discount_cents(_c.type, _c.value, _subtotal, _gross);
         exception when others then
           _disc := 0;

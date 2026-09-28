@@ -5,8 +5,8 @@ import { toast } from "sonner"
 
 import { saveCoupon, type CouponState } from "@/app/(app)/coupons/actions"
 import { businessDay } from "@/lib/format"
-import { ORDER_TYPES, orderTypeLabel, type OrderType } from "@/lib/order-constants"
-import type { CouponRow, CouponType } from "@/lib/coupon-constants"
+import { orderTypeLabel, type OrderType } from "@/lib/order-constants"
+import { COUPON_ORDER_TYPES, type CouponRow, type CouponType } from "@/lib/coupon-constants"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Field, FieldDescription, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field"
@@ -233,9 +233,11 @@ export function CouponForm({
 
             <FieldSet>
               <FieldLegend variant="label">Order types</FieldLegend>
-              <FieldDescription className="-mt-2">None picked means any order.</FieldDescription>
+              <FieldDescription className="-mt-2">
+                None picked means any order. A QR table counts as dine in.
+              </FieldDescription>
               <div className="flex flex-wrap gap-2">
-                {ORDER_TYPES.map((t) => (
+                {COUPON_ORDER_TYPES.map((t) => (
                   <ChoiceChip
                     key={t}
                     type="checkbox"

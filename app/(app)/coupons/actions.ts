@@ -4,8 +4,8 @@ import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
 import { requireTenant } from "@/lib/supabase/guards"
 import { zonedTimeToUtc } from "@/lib/format"
-import { ORDER_TYPES, type OrderType } from "@/lib/order-constants"
-import type { CouponRow, CouponType } from "@/lib/coupon-constants"
+import type { OrderType } from "@/lib/order-constants"
+import { COUPON_ORDER_TYPES, type CouponRow, type CouponType } from "@/lib/coupon-constants"
 
 export type CouponState = { error: string } | { ok: true; id: string } | undefined
 
@@ -83,7 +83,7 @@ export async function saveCoupon(_prev: CouponState, formData: FormData): Promis
   const orderTypes = formData
     .getAll("order_types")
     .map(String)
-    .filter((t): t is OrderType => (ORDER_TYPES as readonly string[]).includes(t))
+    .filter((t): t is OrderType => (COUPON_ORDER_TYPES as readonly string[]).includes(t))
 
   if (!Number.isFinite(value) || value <= 0) return { error: "Enter a discount above zero." }
   if (type === "percent" && value > 100) return { error: "A discount can't be more than 100%." }
@@ -113,7 +113,7 @@ export async function saveCoupon(_prev: CouponState, formData: FormData): Promis
     _min_subtotal_cents: minCents,
     _once_per_customer: oncePerCustomer,
     // Every type or none is "any"; the RPC stores null for that.
-    _order_types: (orderTypes.length === 0 || orderTypes.length === ORDER_TYPES.length
+    _order_types: (orderTypes.length === 0 || orderTypes.length === COUPON_ORDER_TYPES.length
       ? null
       : orderTypes) as unknown as OrderType[],
   })

@@ -18,7 +18,7 @@ export default async function QrTablePage({
   searchParams,
 }: {
   params: Promise<{ token: string }>
-  searchParams: Promise<{ coupon?: string }>
+  searchParams: Promise<{ coupon?: string | string[] }>
 }) {
   const { token } = await params
   // A flyer QR lands here with the code in the URL; it rides along into the

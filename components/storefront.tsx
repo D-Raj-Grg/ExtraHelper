@@ -4,7 +4,7 @@ import { useState, useTransition } from "react"
 import { TicketIcon, XIcon } from "lucide-react"
 
 import { placeOnlineOrder, previewCoupon, type StoreState } from "@/app/s/actions"
-import { payForOrder, type PayState } from "@/app/pay/actions"
+import { payForOrder, quoteOrder, type PayState } from "@/app/pay/actions"
 import { extractCouponCode, type CouponPreview } from "@/lib/coupon-constants"
 import { money } from "@/lib/format"
 import { Button } from "@/components/ui/button"
@@ -47,6 +47,8 @@ export function Storefront({
   const [pending, startTransition] = useTransition()
   const [state, setState] = useState<StoreState>(undefined)
   const [pay, setPay] = useState<PayState | null>(null)
+  // The server's due figure once the order exists; the bar's estimate until then.
+  const [placedDue, setPlacedDue] = useState<number | null>(null)
   const [coupon, setCoupon] = useState(initialCoupon ?? "")
   const [couponPreview, setCouponPreview] = useState<CouponPreview | null>(null)
   const [couponError, setCouponError] = useState<string | null>(null)
@@ -95,7 +97,12 @@ export function Storefront({
       return
     }
     startTransition(async () => {
-      setState(await placeOnlineOrder(slug, payload, fulfillment, { name, phone, address }, code))
+      const result = await placeOnlineOrder(slug, payload, fulfillment, { name, phone, address }, code)
+      if (result && "ok" in result) {
+        const quote = await quoteOrder(result.orderId)
+        setPlacedDue(quote ? quote.due : null)
+      }
+      setState(result)
     })
   }
 
@@ -124,7 +131,7 @@ export function Storefront({
               disabled={pending}
               onClick={() => startTransition(async () => setPay(await payForOrder(state.orderId)))}
             >
-              {pending ? "Processing…" : `Pay now (prepay) · ${money(total, currency)}`}
+              {pending ? "Processing…" : `Pay now (prepay) · ${money(placedDue ?? total, currency)}`}
             </Button>
           </div>
         )}

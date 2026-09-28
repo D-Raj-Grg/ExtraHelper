@@ -21,7 +21,7 @@ export default async function StorefrontPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>
-  searchParams: Promise<{ coupon?: string }>
+  searchParams: Promise<{ coupon?: string | string[] }>
 }) {
   const { slug } = await params
   // The flyer QR encodes this page with `?coupon=`; the code is pre-filled and
