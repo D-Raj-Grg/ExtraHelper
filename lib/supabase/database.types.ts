@@ -3936,7 +3936,31 @@ export type Database = {
           _subtotal_cents: number
           _tenant: string
         }
-        Returns: Database["public"]["Tables"]["coupons"]["Row"]
+        Returns: {
+          code: string
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          min_subtotal_cents: number
+          name: string | null
+          once_per_customer: boolean
+          order_types: Database["public"]["Enums"]["order_type"][] | null
+          tenant_id: string
+          type: Database["public"]["Enums"]["discount_type"]
+          updated_at: string
+          usage_limit: number | null
+          used_count: number
+          valid_from: string | null
+          valid_to: string | null
+          value: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "coupons"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       _redeem_coupon_on_bill: {
         Args: { _bill: string; _coupon_id: string; _strict: boolean }
@@ -4314,23 +4338,23 @@ export type Database = {
       list_coupons: {
         Args: { _tenant: string }
         Returns: {
-          id: string
           code: string
-          name: string | null
-          type: Database["public"]["Enums"]["discount_type"]
-          value: number
-          is_active: boolean
-          valid_from: string | null
-          valid_to: string | null
-          usage_limit: number | null
-          used_count: number
-          min_subtotal_cents: number
-          once_per_customer: boolean
-          order_types: Database["public"]["Enums"]["order_type"][] | null
           created_at: string
-          redemptions: number
           discount_given_cents: number
-          last_redeemed_at: string | null
+          id: string
+          is_active: boolean
+          last_redeemed_at: string
+          min_subtotal_cents: number
+          name: string
+          once_per_customer: boolean
+          order_types: Database["public"]["Enums"]["order_type"][]
+          redemptions: number
+          type: Database["public"]["Enums"]["discount_type"]
+          usage_limit: number
+          used_count: number
+          valid_from: string
+          valid_to: string
+          value: number
         }[]
       }
       list_order_staff: {
@@ -4887,24 +4911,6 @@ export type Database = {
           suspended: number
         }[]
       }
-      upsert_coupon: {
-        Args: {
-          _code: string
-          _id: string
-          _is_active: boolean
-          _min_subtotal_cents: number
-          _name: string
-          _once_per_customer: boolean
-          _order_types: Database["public"]["Enums"]["order_type"][]
-          _tenant: string
-          _type: Database["public"]["Enums"]["discount_type"]
-          _usage_limit: number
-          _valid_from: string
-          _valid_to: string
-          _value: number
-        }
-        Returns: string
-      }
       update_customer: {
         Args: {
           _customer_id: string
@@ -4931,6 +4937,24 @@ export type Database = {
       update_variant: {
         Args: { _name: string; _price_delta_cents: number; _variant_id: string }
         Returns: undefined
+      }
+      upsert_coupon: {
+        Args: {
+          _code: string
+          _id: string
+          _is_active: boolean
+          _min_subtotal_cents: number
+          _name: string
+          _once_per_customer: boolean
+          _order_types: Database["public"]["Enums"]["order_type"][]
+          _tenant: string
+          _type: Database["public"]["Enums"]["discount_type"]
+          _usage_limit: number
+          _valid_from: string
+          _valid_to: string
+          _value: number
+        }
+        Returns: string
       }
       upsert_expense_category: {
         Args: { _id: string; _name: string; _tenant: string }

@@ -89,7 +89,12 @@ Nobody hit it because nothing could create a coupon. Also: `coupons` and `discou
       once-per-customer coupon quoted gross to an online guest (who would then be charged gross
       for a bill that comes to net). `_coupon_lookup` gained `_order default null`; the quote and
       the settle pass their own order. Re-run: quote 1800.
-- [ ] Run `coupons.sh` and the guest E2E against the dev branch once the migration is applied.
+- [x] **Applied to prod** (remote version `20260928131347_coupons`, same body as the repo file) and
+      types regenerated from the live schema (`lib/supabase/database.types.ts`). Catalog verified:
+      all 15 functions at the intended signatures, `coupons`/`discounts` select-only, both
+      permission keys + 20 system-role grants, 0 legacy coupon rows.
+- [ ] Run `coupons.sh` and the guest E2E against prod with the demo tenant (needs the demo creds
+      and an open bill id — not available from this session).
 
 **Known v1 limits (stated, not hidden):** a QR guest with no customer attached is not deduplicated
 for "once per customer"; a voided bill keeps its redemption (`used_count` not restored);
