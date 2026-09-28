@@ -466,10 +466,16 @@ export type Database = {
         Row: {
           code: string
           created_at: string
+          created_by: string | null
           id: string
           is_active: boolean
+          min_subtotal_cents: number
+          name: string | null
+          once_per_customer: boolean
+          order_types: Database["public"]["Enums"]["order_type"][] | null
           tenant_id: string
           type: Database["public"]["Enums"]["discount_type"]
+          updated_at: string
           usage_limit: number | null
           used_count: number
           valid_from: string | null
@@ -479,10 +485,16 @@ export type Database = {
         Insert: {
           code: string
           created_at?: string
+          created_by?: string | null
           id?: string
           is_active?: boolean
+          min_subtotal_cents?: number
+          name?: string | null
+          once_per_customer?: boolean
+          order_types?: Database["public"]["Enums"]["order_type"][] | null
           tenant_id: string
           type: Database["public"]["Enums"]["discount_type"]
+          updated_at?: string
           usage_limit?: number | null
           used_count?: number
           valid_from?: string | null
@@ -492,10 +504,16 @@ export type Database = {
         Update: {
           code?: string
           created_at?: string
+          created_by?: string | null
           id?: string
           is_active?: boolean
+          min_subtotal_cents?: number
+          name?: string | null
+          once_per_customer?: boolean
+          order_types?: Database["public"]["Enums"]["order_type"][] | null
           tenant_id?: string
           type?: Database["public"]["Enums"]["discount_type"]
+          updated_at?: string
           usage_limit?: number | null
           used_count?: number
           valid_from?: string | null
@@ -644,6 +662,7 @@ export type Database = {
           approved_by: string | null
           bill_id: string | null
           coupon_code: string | null
+          coupon_id: string | null
           created_at: string
           id: string
           order_item_id: string | null
@@ -656,6 +675,7 @@ export type Database = {
           approved_by?: string | null
           bill_id?: string | null
           coupon_code?: string | null
+          coupon_id?: string | null
           created_at?: string
           id?: string
           order_item_id?: string | null
@@ -668,6 +688,7 @@ export type Database = {
           approved_by?: string | null
           bill_id?: string | null
           coupon_code?: string | null
+          coupon_id?: string | null
           created_at?: string
           id?: string
           order_item_id?: string | null
@@ -682,6 +703,13 @@ export type Database = {
             columns: ["bill_id"]
             isOneToOne: false
             referencedRelation: "bills"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "discounts_coupon_id_fkey"
+            columns: ["coupon_id"]
+            isOneToOne: false
+            referencedRelation: "coupons"
             referencedColumns: ["id"]
           },
           {
@@ -2206,6 +2234,7 @@ export type Database = {
         Row: {
           bill_id: string | null
           branch_id: string | null
+          coupon_code: string | null
           created_at: string
           customer_id: string | null
           guests: number | null
@@ -2224,6 +2253,7 @@ export type Database = {
         Insert: {
           bill_id?: string | null
           branch_id?: string | null
+          coupon_code?: string | null
           created_at?: string
           customer_id?: string | null
           guests?: number | null
@@ -2242,6 +2272,7 @@ export type Database = {
         Update: {
           bill_id?: string | null
           branch_id?: string | null
+          coupon_code?: string | null
           created_at?: string
           customer_id?: string | null
           guests?: number | null
@@ -3887,6 +3918,33 @@ export type Database = {
     }
     Functions: {
       _build_bill_for_order: { Args: { _order_id: string }; Returns: string }
+      _coupon_discount_cents: {
+        Args: {
+          _gross: number
+          _subtotal: number
+          _type: Database["public"]["Enums"]["discount_type"]
+          _value: number
+        }
+        Returns: number
+      }
+      _coupon_lookup: {
+        Args: {
+          _code: string
+          _customer: string
+          _order_type: Database["public"]["Enums"]["order_type"]
+          _subtotal_cents: number
+          _tenant: string
+        }
+        Returns: Database["public"]["Tables"]["coupons"]["Row"]
+      }
+      _redeem_coupon_on_bill: {
+        Args: { _bill: string; _coupon_id: string; _strict: boolean }
+        Returns: boolean
+      }
+      _settle_pending_coupon: {
+        Args: { _bill: string; _order_id: string }
+        Returns: undefined
+      }
       accept_qr_order: { Args: { _order_id: string }; Returns: number }
       add_bill_charge: {
         Args: { _amount_cents: number; _bill_id: string; _label: string }
@@ -4186,6 +4244,7 @@ export type Database = {
         Args: { _base: Database["public"]["Enums"]["app_role"] }
         Returns: string[]
       }
+      delete_coupon: { Args: { _id: string }; Returns: undefined }
       delete_customer: { Args: { _customer_id: string }; Returns: undefined }
       delete_my_account: { Args: never; Returns: undefined }
       delete_po: { Args: { _po_id: string }; Returns: undefined }
@@ -4251,6 +4310,28 @@ export type Database = {
         Args: { _bill_id: string }
         Returns: Database["public"]["Enums"]["bill_status"]
       }
+      list_coupons: {
+        Args: { _tenant: string }
+        Returns: {
+          id: string
+          code: string
+          name: string | null
+          type: Database["public"]["Enums"]["discount_type"]
+          value: number
+          is_active: boolean
+          valid_from: string | null
+          valid_to: string | null
+          usage_limit: number | null
+          used_count: number
+          min_subtotal_cents: number
+          once_per_customer: boolean
+          order_types: Database["public"]["Enums"]["order_type"][] | null
+          created_at: string
+          redemptions: number
+          discount_given_cents: number
+          last_redeemed_at: string | null
+        }[]
+      }
       list_order_staff: {
         Args: { _tenant: string }
         Returns: {
@@ -4315,6 +4396,7 @@ export type Database = {
       place_online_order: {
         Args: {
           _address: Json
+          _coupon?: string
           _fulfillment: string
           _items: Json
           _name: string
@@ -4324,7 +4406,7 @@ export type Database = {
         Returns: string
       }
       place_qr_order: {
-        Args: { _items: Json; _token: string }
+        Args: { _coupon?: string; _items: Json; _token: string }
         Returns: string
       }
       place_staff_order: {
@@ -4353,6 +4435,16 @@ export type Database = {
         Returns: string
       }
       public_bill_quote: { Args: { _order_id: string }; Returns: Json }
+      public_coupon_preview: {
+        Args: {
+          _code: string
+          _order_type: Database["public"]["Enums"]["order_type"]
+          _slug: string
+          _subtotal_cents: number
+          _token: string
+        }
+        Returns: Json
+      }
       public_pay_order: {
         Args: { _order_id: string; _reference: string }
         Returns: Json
@@ -4450,6 +4542,7 @@ export type Database = {
       reject_cash_movement: { Args: { _id: string }; Returns: undefined }
       remove_bill_charge: { Args: { _charge_id: string }; Returns: undefined }
       remove_bill_discount: { Args: { _bill_id: string }; Returns: number }
+      remove_coupon: { Args: { _bill_id: string }; Returns: number }
       remove_item_discount: {
         Args: { _order_item_id: string }
         Returns: undefined
@@ -4792,6 +4885,24 @@ export type Database = {
           marked_past_due: number
           suspended: number
         }[]
+      }
+      upsert_coupon: {
+        Args: {
+          _code: string
+          _id: string
+          _is_active: boolean
+          _min_subtotal_cents: number
+          _name: string
+          _once_per_customer: boolean
+          _order_types: Database["public"]["Enums"]["order_type"][]
+          _tenant: string
+          _type: Database["public"]["Enums"]["discount_type"]
+          _usage_limit: number
+          _valid_from: string
+          _valid_to: string
+          _value: number
+        }
+        Returns: string
       }
       update_customer: {
         Args: {

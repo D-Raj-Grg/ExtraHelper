@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
+import { extractCouponCode } from "@/lib/coupon-constants"
 import { Storefront } from "@/components/storefront"
 
 export const dynamic = "force-dynamic"
@@ -17,10 +18,15 @@ type Menu = {
 
 export default async function StorefrontPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>
+  searchParams: Promise<{ coupon?: string }>
 }) {
   const { slug } = await params
+  // The flyer QR encodes this page with `?coupon=`; the code is pre-filled and
+  // judged by the server, never here.
+  const initialCoupon = extractCouponCode((await searchParams).coupon)
   const supabase = await createClient()
   const { data } = await supabase.rpc("storefront_menu", { _slug: slug })
   if (!data) notFound()
@@ -37,6 +43,7 @@ export default async function StorefrontPage({
         currency={menu.currency}
         fees={menu.fees ?? {}}
         categories={menu.categories}
+        initialCoupon={initialCoupon}
       />
     </div>
   )

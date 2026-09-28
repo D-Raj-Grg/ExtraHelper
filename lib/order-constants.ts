@@ -32,6 +32,10 @@ export const ORDER_STATUS_STYLE: Record<string, string> = {
   cancelled: "bg-muted text-muted-foreground",
 }
 
+/** Every value of the `order_type` enum, in the order a form should offer them. */
+export const ORDER_TYPES = ["dine_in", "pickup", "delivery", "qr"] as const
+export type OrderType = (typeof ORDER_TYPES)[number]
+
 /** Destination in plain English — the order_type enum never reaches staff. */
 const ORDER_TYPE_LABEL: Record<string, string> = {
   dine_in: "Dine in",

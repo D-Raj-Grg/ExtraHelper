@@ -74,11 +74,14 @@ export function CheckoutTotalsPanel({
   itemTotalCents,
   canDiscount,
   hasStaffDiscount,
+  couponCode,
   settled,
   disabled,
+  error,
   onBillDiscount,
   onRemoveDiscount,
   onCoupon,
+  onRemoveCoupon,
   onAddCharge,
   onRemoveCharge,
   onExtras,
@@ -91,11 +94,16 @@ export function CheckoutTotalsPanel({
   canDiscount: boolean
   /** A typed discount or a comp is on the bill — a coupon alone is not. */
   hasStaffDiscount: boolean
+  /** The guest's coupon on this bill, if any. Its own Remove, not the staff one. */
+  couponCode: string | null
   settled: boolean
   disabled: boolean
+  /** The last lever's failure, shown next to the coupon field when it was the coupon's. */
+  error?: string | null
   onBillDiscount: (type: "percent" | "flat", value: number, reason: string) => void
   onRemoveDiscount: () => void
   onCoupon: (code: string) => void
+  onRemoveCoupon: () => void
   onAddCharge: (label: string, amountCents: number) => void
   onRemoveCharge: (chargeId: string) => void
   onExtras: (tipCents: number, roundingCents: number) => void
@@ -164,7 +172,7 @@ export function CheckoutTotalsPanel({
       ))}
       {bill.discount_cents > 0 ? (
         <Row
-          label="Discount"
+          label={couponCode ? `Discount · ${couponCode}` : "Discount"}
           cents={-bill.discount_cents}
           currency={currency}
           muted
@@ -246,29 +254,55 @@ export function CheckoutTotalsPanel({
             </div>
           ) : null}
 
-          <div className="flex flex-wrap items-end gap-2">
-            <Field className="w-36">
-              <FieldLabel htmlFor="coupon-code">Coupon</FieldLabel>
-              <Input
-                id="coupon-code"
-                className="uppercase"
-                value={coupon}
-                onChange={(e) => setCoupon(e.target.value.toUpperCase())}
-                placeholder="CODE"
-              />
-            </Field>
-            <Button
-              variant="secondary"
-              disabled={disabled || !coupon.trim()}
-              onClick={() => {
-                onCoupon(coupon)
-                setCoupon("")
-              }}
-            >
-              <TicketIcon className="size-4" />
-              Apply coupon
-            </Button>
-          </div>
+          {couponCode ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="flex items-center gap-1.5 text-sm">
+                <TicketIcon className="size-4 text-muted-foreground" aria-hidden />
+                Coupon <span className="font-semibold">{couponCode}</span> is on this bill
+              </p>
+              <Button variant="ghost" size="sm" disabled={disabled} onClick={onRemoveCoupon}>
+                <XIcon className="size-4" />
+                Remove coupon
+              </Button>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-end gap-2">
+              <Field className="w-36">
+                <FieldLabel htmlFor="coupon-code">Coupon</FieldLabel>
+                <Input
+                  id="coupon-code"
+                  className="uppercase"
+                  value={coupon}
+                  onChange={(e) => setCoupon(e.target.value.toUpperCase())}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && coupon.trim() && !disabled) {
+                      e.preventDefault()
+                      onCoupon(coupon)
+                      setCoupon("")
+                    }
+                  }}
+                  placeholder="CODE"
+                  aria-describedby={error ? "coupon-error" : undefined}
+                />
+              </Field>
+              <Button
+                variant="secondary"
+                disabled={disabled || !coupon.trim()}
+                onClick={() => {
+                  onCoupon(coupon)
+                  setCoupon("")
+                }}
+              >
+                <TicketIcon className="size-4" />
+                Apply coupon
+              </Button>
+              {error ? (
+                <p id="coupon-error" className="w-full text-sm text-destructive" role="alert">
+                  {error}
+                </p>
+              ) : null}
+            </div>
+          )}
 
           {canDiscount ? (
             <div className="flex flex-wrap items-end gap-2">

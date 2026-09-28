@@ -85,6 +85,7 @@ export default async function BillPage({
     { data: people },
     { data: staffDiscount },
     { data: billOrders },
+    { data: couponRows },
   ] = await Promise.all([
       orderItemIds.length
         ? supabase
@@ -130,6 +131,15 @@ export default async function BillPage({
         .select("id")
         .eq("bill_id", billId)
         .eq("tenant_id", tenant.tenantId),
+      // The guest's coupon, if one is on the bill: the Discount row names it
+      // and offers Remove coupon (a separate control from the staff one).
+      supabase
+        .from("discounts")
+        .select("coupon_code")
+        .eq("bill_id", billId)
+        .eq("tenant_id", tenant.tenantId)
+        .not("coupon_id", "is", null)
+        .limit(1),
     ])
 
   // Orders that could be merged onto this open bill (fired, not yet billed).
@@ -238,6 +248,7 @@ export default async function BillPage({
         paidCents={paid}
         canDiscount={tenant.role === "owner" || tenant.role === "manager"}
         hasStaffDiscount={(staffDiscount ?? []).length > 0}
+        couponCode={(couponRows ?? [])[0]?.coupon_code ?? null}
         customer={customer}
         pointsValueCents={settings?.points_value_cents ?? 1}
         mergeableOrders={(mergeable ?? []) as never}
