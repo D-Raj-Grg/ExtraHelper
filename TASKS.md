@@ -6,7 +6,7 @@
 
 ---
 
-## Coupons: flyer codes, guest + staff redemption (2026-09-28, web + DB; Flutter to follow)
+## Coupons: flyer codes, guest + staff redemption (2026-09-28, web + DB + Flutter)
 
 Marketing wants "10% off" on flyers and photos. A guest scans the flyer (the QR opens the ordering
 page with the code pre-filled) or types the code; a cashier types it on the POS; the mobile app will
@@ -58,6 +58,11 @@ Nobody hit it because nothing could create a coupon. Also: `coupons` and `discou
       mirror will too), `ORDER_TYPES` exported from `lib/order-constants.ts`, audit pills
       `coupon_saved` / `coupon_deleted` / `coupon_lapsed`. Types hand-edited to the migration (the
       Supabase MCP could not connect from this session — regenerate on the next pass).
+- [x] Flutter (2026-09-28): checkout coupon box + **Scan** (QR-only `showScannerSheet`,
+      `extractCouponCode` Dart mirror) shipped in 1.0.16; **Coupons** drawer screen (list, new / edit /
+      pause / delete, on-screen QR + share-as-PNG; `zxing2` encoder, no new package) on `coupons.view`
+      / `coupons.manage`, calling `list_coupons` / `upsert_coupon` / `delete_coupon` unchanged. Dates
+      are device-zone days (no tz db on the phone). Print stays web-only.
 - [x] Tests: `supabase/tests/coupons.sh` (create, generated code, waiter guards incl. raw `POST
       /coupons` + `/discounts`, apply / double-apply / remove, every rule, delete refusals);
       `rls_isolation_test.sql` covers `coupons`. tsc / eslint (no new findings; the one error is the
