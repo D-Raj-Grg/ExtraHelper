@@ -10,6 +10,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ### Added
 - **Coupons for the flyer.** **Coupons** (under Insights) is where a campaign code lives: "10% off", a minimum order if you want one, once per customer, dine-in or delivery only, a start and end day, a usage cap. Leave the code blank and one is made for you (`SAVE10-7KQ2`). Each coupon has a **printable QR**: scanning it opens your online menu with the code already noticed, so the guest sees "SAVE10-7KQ2 · −NPR 120" before they order. The code typed by hand works too, on the guest pages and at the POS checkout. Pause, resume, edit; delete only while nobody has used it.
+- **Staff passwords from the phone.** The mobile app's Team screen gets **Set password** / **Create login** (owner only), backed by a new Edge Function `set-member-password` that runs the same owner-only checks as the web's Team page under the caller's login before touching the account. Nothing changes on the web.
 - **Coupons on the phone too.** The mobile app (next TestFlight build after 1.0.16) has the same Coupons screen: list with status, new / edit / pause / delete, and the flyer QR to show a guest or share as a picture. Same permission keys, same server functions — nothing new on the server. See `../extrahelper_flutter/CHANGELOG.md`.
 - **Checkout knows the coupon.** The Discount line reads "Discount · SAVE10-7KQ2", and **Remove coupon** takes it back off and hands the use back to the campaign. A code that is paused, expired, used up, under the minimum, for the wrong order type, or already used by this customer says so in a sentence, next to the field.
 - **Guests pay the discounted figure.** "Pay now" on the QR page and the storefront shows the server's own quote for the order, and the bill built a moment later carries the same discount. A code typed but never checked is still applied, and the button names what the card is charged.
@@ -25,6 +26,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 - A voided bill keeps its redemption; a second round on a QR table within six hours cannot carry a second coupon.
 - Custom roles (not the built-in Owner / Manager) need **See coupons** and **Create, edit and delete coupons** granted from Users & Roles, as with every earlier key.
 - The mobile app's typed coupon field works as of this deploy; **Scan** and **Remove coupon** in the app ship with the next build (patch delivered to the app repo).
+
+<details><summary>Technical — set-member-password Edge Function</summary>
+
+- `supabase/functions/set-member-password/index.ts` (first Edge Function in the project; deployed 2026-09-28 with `verify_jwt: true`). Mirrors `setMemberPassword` / `createInviteLogin` in `app/(app)/team/actions.ts` step for step: password rule, `assert_can_set_member_password` / `assert_can_create_invite_login` under the caller's JWT (anon key + forwarded `Authorization`), then the service-role write, then the `password_reset` audit row. Body `{tenant_id, password, user_id | email}`; `200 {ok, email}` or `4xx {error}`. The web actions are unchanged.
+
+</details>
 
 <details><summary>Technical</summary>
 

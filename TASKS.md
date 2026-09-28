@@ -6,6 +6,14 @@
 
 ---
 
+## Staff passwords from the phone (2026-09-28)
+
+- [x] Edge Function `supabase/functions/set-member-password` — the mobile app cannot hold the
+      service key, and `assert_can_set_member_password` only *checks*. Runs the check under the
+      caller's JWT, then the admin write, then the audit row. Deployed via MCP, `verify_jwt` on.
+- [ ] Optionally point the web's `setMemberPassword` / `createInviteLogin` at the function so there
+      is one implementation. Left as is: both mirror each other line for line today.
+
 ## Coupons: flyer codes, guest + staff redemption (2026-09-28, web + DB + Flutter)
 
 Marketing wants "10% off" on flyers and photos. A guest scans the flyer (the QR opens the ordering
