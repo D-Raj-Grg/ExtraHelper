@@ -6,6 +6,23 @@
 
 ---
 
+## Refunds: a partial refund kept the bill "part paid" (2026-09-29, DB)
+
+Owner refunded 10 on a 960 bill paid in full (guest paid 950 by eSewa QR, asked for 10 off).
+`refund_payment` set status from `payments − refunds < total` → `partial`. The bill then sat in
+Credit with nothing owed and dropped out of `daily_report_core` (sales count `paid` only) while the
+refund still counted. Same on a second bill (450, 80 back "Wrong order").
+
+- [x] `20260929090000_refund_keeps_bill_paid.sql`: status unchanged by a partial refund; full refund
+      → `void` as before. Backfill flipped the two bills back to `paid`. Applied via MCP.
+- [x] "10 off after payment" = Refund with the reason, on web and phone alike. Discount stays blocked
+      on a paid bill (`bill already settled`) — correct, the money already moved.
+- [ ] **Full refund double-counts in the report**: the bill becomes `void` (excluded from sales) *and*
+      the refund is subtracted from gross profit. Decide: keep `paid` + refund, or exclude the refund
+      of a void bill from `refunds_cents`.
+- [ ] Phone refund sheet: no client-side cap (server refuses with "refund exceeds net paid") and no
+      reason chips. Fine for now.
+
 ## Staff passwords from the phone (2026-09-28)
 
 - [x] Edge Function `supabase/functions/set-member-password` — the mobile app cannot hold the

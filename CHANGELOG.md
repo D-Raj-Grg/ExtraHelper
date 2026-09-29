@@ -8,6 +8,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Fixed
+- **A refund no longer reopens a paid bill.** Give NPR 10 back on a bill paid in full and the bill stayed "Part paid": it sat in the outstanding-credit list with nothing owed, the checkout offered the payment form again, and — worse — the whole bill vanished from that day's sales report while the refund was still deducted. A partial refund now leaves the bill as it was; a refund of everything still voids it. The two bills this had already happened to (28 Sep) are back to Paid and back in the report.
+
+<details><summary>Technical — refund_payment status</summary>
+
+- `20260929090000_refund_keeps_bill_paid.sql`: `refund_payment` (same 4-arg signature as `20260815032537`, so `create or replace`, grants stand) no longer re-derives status from `payments − refunds` vs total. It reads the row's status with the lock, and only when the net after this refund is ≤ 0 sets `void`; otherwise the status is returned unchanged. Every other reader (`record_payment`, `redeem_points_for_bill`, `daily_report_core`, `customer_credit_summary`, both checkouts) already computed "paid" from completed payments alone — the writer was the odd one out.
+- Backfill: bills `status = 'partial'` whose completed payments cover the total and that carry a refund → `paid`. 2 rows on the live tenant.
+- Still open (pre-existing): a full refund voids the bill, so the report drops the sale *and* subtracts the refund. See `TASKS.md` → Refunds.
+
+</details>
+
 ### Added
 - **Coupons for the flyer.** **Coupons** (under Insights) is where a campaign code lives: "10% off", a minimum order if you want one, once per customer, dine-in or delivery only, a start and end day, a usage cap. Leave the code blank and one is made for you (`SAVE10-7KQ2`). Each coupon has a **printable QR**: scanning it opens your online menu with the code already noticed, so the guest sees "SAVE10-7KQ2 · −NPR 120" before they order. The code typed by hand works too, on the guest pages and at the POS checkout. Pause, resume, edit; delete only while nobody has used it.
 - **Staff passwords from the phone.** The mobile app's Team screen gets **Set password** / **Create login** (owner only), backed by a new Edge Function `set-member-password` that runs the same owner-only checks as the web's Team page under the caller's login before touching the account. Nothing changes on the web.
