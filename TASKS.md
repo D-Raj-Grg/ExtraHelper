@@ -28,6 +28,9 @@ refund still counted. Same on a second bill (450, 80 back "Wrong order").
 - [x] Edge Function `supabase/functions/set-member-password` — the mobile app cannot hold the
       service key, and `assert_can_set_member_password` only *checks*. Runs the check under the
       caller's JWT, then the admin write, then the audit row. Deployed via MCP, `verify_jwt` on.
+- [x] `supabase/functions/**` is excluded in `tsconfig.json`. It is Deno code (`npm:`/`jsr:`
+      specifiers, `Deno.env`) and the Next build's type check picked it up and failed the deploy.
+      Any new Edge Function lands under that folder and stays out of the web build automatically.
 - [ ] Optionally point the web's `setMemberPassword` / `createInviteLogin` at the function so there
       is one implementation. Left as is: both mirror each other line for line today.
 
