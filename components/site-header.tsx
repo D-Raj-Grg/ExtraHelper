@@ -45,6 +45,7 @@ const TITLES: [prefix: string, label: string][] = [
 // Longest-prefix match. Section crumb stays a link back to the list.
 const SUBPAGES: [prefix: string, label: string][] = [
   ["/inventory/count/", "Stock count"],
+  ["/coupons/flyers", "Flyers"],
 ]
 
 type Crumb = { label: string; href?: string }

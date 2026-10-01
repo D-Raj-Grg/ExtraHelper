@@ -97,6 +97,7 @@ function validity(c: CouponRow, timezone: string): string {
  */
 export function CouponsBoard({
   coupons,
+  flyerRuns = 0,
   loadError,
   slug,
   currency,
@@ -104,6 +105,8 @@ export function CouponsBoard({
   canManage,
 }: {
   coupons: CouponRow[]
+  /** Print runs shown above; their codes are not in `coupons`. */
+  flyerRuns?: number
   loadError: string | null
   slug: string
   currency: string
@@ -137,7 +140,9 @@ export function CouponsBoard({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-muted-foreground">
           {coupons.length === 0
-            ? "No coupons yet."
+            ? flyerRuns > 0
+              ? "No single campaign coupons yet. Your flyer runs are above."
+              : "No coupons yet."
             : `${coupons.length} ${coupons.length === 1 ? "coupon" : "coupons"}`}
         </p>
         {canManage ? (

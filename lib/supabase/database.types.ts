@@ -4357,6 +4357,102 @@ export type Database = {
           value: number
         }[]
       }
+      coupon_stats: {
+        Args: { _tenant: string }
+        Returns: {
+          active: number
+          discount_given_cents: number
+          expired: number
+          paused: number
+          redemptions: number
+          scheduled: number
+          used_up: number
+        }[]
+      }
+      save_flyer_design: {
+        Args: {
+          _batch: string
+          _height: number
+          _id: string
+          _image_path: string
+          _link_base: string
+          _mode: string
+          _name: string
+          _placement: Json
+          _tenant: string
+          _width: number
+        }
+        Returns: string
+      }
+      list_flyer_designs: {
+        Args: { _tenant: string }
+        Returns: {
+          height: number
+          id: string
+          image_path: string
+          link_base: string
+          mode: string
+          name: string
+          placement: Json
+          updated_at: string
+          width: number
+        }[]
+      }
+      delete_flyer_design: { Args: { _id: string }; Returns: string }
+      update_coupon_batch: {
+        Args: { _batch: string; _name: string; _valid_from: string; _valid_to: string }
+        Returns: undefined
+      }
+      create_coupon_batch: {
+        Args: {
+          _count: number
+          _min_subtotal_cents: number
+          _name: string
+          _once_per_customer: boolean
+          _order_types: Database["public"]["Enums"]["order_type"][]
+          _prefix: string
+          _tenant: string
+          _type: Database["public"]["Enums"]["discount_type"]
+          _valid_from: string
+          _valid_to: string
+          _value: number
+        }
+        Returns: string
+      }
+      get_batch_codes: {
+        Args: { _batch: string }
+        Returns: {
+          code: string
+          is_active: boolean
+          redeemed: boolean
+          shared: boolean
+        }[]
+      }
+      list_coupon_batches: {
+        Args: { _tenant: string }
+        Returns: {
+          active: number
+          created_at: string
+          id: string
+          issued: number
+          name: string
+          redeemed: number
+          shared: number
+          design_id: string
+          type: Database["public"]["Enums"]["discount_type"]
+          valid_from: string
+          valid_to: string
+          value: number
+        }[]
+      }
+      mark_coupon_shared: {
+        Args: { _batch: string; _code: string; _shared?: boolean }
+        Returns: undefined
+      }
+      set_batch_active: {
+        Args: { _active: boolean; _batch: string }
+        Returns: undefined
+      }
       list_order_staff: {
         Args: { _tenant: string }
         Returns: {

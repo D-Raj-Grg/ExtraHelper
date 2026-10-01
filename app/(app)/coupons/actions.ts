@@ -5,7 +5,9 @@ import { createClient } from "@/lib/supabase/server"
 import { requireTenant } from "@/lib/supabase/guards"
 import { zonedTimeToUtc } from "@/lib/format"
 import type { OrderType } from "@/lib/order-constants"
+import { parsePlacement } from "@/lib/flyer"
 import { COUPON_ORDER_TYPES, type CouponRow, type CouponType } from "@/lib/coupon-constants"
+import type { Json } from "@/lib/supabase/database.types"
 
 export type CouponState = { error: string } | { ok: true; id: string } | undefined
 
@@ -146,5 +148,210 @@ export async function deleteCoupon(id: string): Promise<CouponState> {
   const { error } = await supabase.rpc("delete_coupon", { _id: id })
   if (error) return { error: error.message }
   revalidatePath("/coupons")
+  return { ok: true, id }
+}
+
+export type BatchState = { error: string } | { ok: true; id: string }
+
+/**
+ * A print run: `count` unique single-use codes (`PREFIX-XXXXXX`) of the same
+ * deal. The RPC checks `coupons.manage` and builds the codes; this shapes the
+ * form into the call.
+ */
+export async function createCouponBatch(input: {
+  name: string
+  count: number
+  prefix: string
+  type: CouponType
+  value: number
+  validFrom: string
+  validTo: string
+  dineInOnly: boolean
+}): Promise<BatchState> {
+  const tenant = await requireTenant()
+
+  const name = input.name.trim()
+  const prefix = input.prefix.trim().toUpperCase()
+  if (!name) return { error: "Give the batch a name." }
+  if (!Number.isInteger(input.count) || input.count < 1 || input.count > 1000) {
+    return { error: "A batch is 1 to 1000 codes." }
+  }
+  if (!/^[A-Z0-9]{2,8}$/.test(prefix)) return { error: "The prefix is 2 to 8 letters or digits." }
+  if (!Number.isFinite(input.value) || input.value <= 0) return { error: "Enter a discount above zero." }
+  if (input.type === "percent" && input.value > 100) return { error: "A discount can't be more than 100%." }
+
+  const validFrom = input.validFrom ? dayStart(input.validFrom, tenant.timezone) : null
+  const validTo = input.validTo ? dayEnd(input.validTo, tenant.timezone) : null
+  if (input.validFrom && !validFrom) return { error: "Pick a real start date." }
+  if (input.validTo && !validTo) return { error: "Pick a real end date." }
+  if (validFrom && validTo && validTo <= validFrom) return { error: "The coupon must end after it starts." }
+  if (validTo && new Date(validTo).getTime() <= Date.now()) return { error: "That end date has already passed." }
+
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc("create_coupon_batch", {
+    _tenant: tenant.tenantId,
+    _name: name,
+    _count: input.count,
+    _prefix: prefix,
+    _type: input.type,
+    _value: input.value,
+    _valid_from: validFrom as unknown as string,
+    _valid_to: validTo as unknown as string,
+    _min_subtotal_cents: 0,
+    _once_per_customer: false,
+    // Null is "any"; the flyer says dine-in only when the box is ticked.
+    _order_types: (input.dineInOnly ? ["dine_in"] : null) as unknown as OrderType[],
+  })
+  if (error) return { error: error.message }
+  revalidatePath("/coupons/flyers")
+  return { ok: true, id: data as string }
+}
+
+/**
+ * Rename a run or move its dates. Codes, prefix and discount are printed on
+ * paper, so they are not editable; the RPC carries the new window onto every code.
+ */
+export async function updateCouponBatch(input: {
+  batchId: string
+  name: string
+  validFrom: string
+  validTo: string
+}): Promise<BatchState> {
+  const tenant = await requireTenant()
+  const name = input.name.trim()
+  if (!name) return { error: "Give the run a name." }
+  const validFrom = input.validFrom ? dayStart(input.validFrom, tenant.timezone) : null
+  const validTo = input.validTo ? dayEnd(input.validTo, tenant.timezone) : null
+  if (input.validFrom && !validFrom) return { error: "Pick a real start date." }
+  if (input.validTo && !validTo) return { error: "Pick a real end date." }
+  if (validFrom && validTo && validTo <= validFrom) return { error: "The coupon must end after it starts." }
+
+  const supabase = await createClient()
+  const { error } = await supabase.rpc("update_coupon_batch", {
+    _batch: input.batchId,
+    _name: name,
+    _valid_from: validFrom as unknown as string,
+    _valid_to: validTo as unknown as string,
+  })
+  if (error) return { error: error.message }
+  revalidatePath("/coupons/flyers")
+  return { ok: true, id: input.batchId }
+}
+
+/** The codes of one run, for the editor preview, the PDF and the CSV. */
+export async function getBatchCodes(
+  batchId: string,
+): Promise<{ error: string } | { codes: { code: string; redeemed: boolean; shared: boolean }[] }> {
+  await requireTenant()
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc("get_batch_codes", { _batch: batchId })
+  if (error) return { error: error.message }
+  const rows = (data ?? []) as { code: string; redeemed: boolean; shared: boolean }[]
+  return { codes: rows.map((r) => ({ code: r.code, redeemed: r.redeemed, shared: r.shared })) }
+}
+
+/** Pause or resume a whole run, e.g. after a stack of flyers goes missing. */
+export async function setBatchActive(batchId: string, active: boolean): Promise<CouponState> {
+  await requireTenant()
+  const supabase = await createClient()
+  const { error } = await supabase.rpc("set_batch_active", { _batch: batchId, _active: active })
+  if (error) return { error: error.message }
+  revalidatePath("/coupons/flyers")
+  return { ok: true, id: batchId }
+}
+
+/**
+ * Note that a flyer was shared or handed over, so the owner knows which codes
+ * are still free to give out. It never affects whether the code redeems.
+ */
+export async function markCouponShared(batchId: string, code: string, shared = true): Promise<CouponState> {
+  await requireTenant()
+  const supabase = await createClient()
+  const { error } = await supabase.rpc("mark_coupon_shared", { _batch: batchId, _code: code, _shared: shared })
+  if (error) return { error: error.message }
+  return { ok: true, id: batchId }
+}
+
+export type DesignState = { error: string } | { ok: true; id: string }
+
+const TEMPLATE_BUCKET = "flyer-templates"
+const TEMPLATE_MAX_BYTES = 5 * 1024 * 1024
+const TEMPLATE_EXT: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png" }
+
+/**
+ * Save a flyer design: where the code and QR sit, how the QR is built, and the
+ * template image when one was picked this time. A new image gets a fresh storage
+ * name and the old one is removed only once the row points at the new one, so a
+ * failure part-way leaves the previous design working. Pointing `batch` at it
+ * makes the run open with this design.
+ */
+export async function saveFlyerDesign(formData: FormData): Promise<DesignState> {
+  const tenant = await requireTenant()
+  const supabase = await createClient()
+
+  const id = String(formData.get("id") ?? "") || null
+  const name = String(formData.get("name") ?? "").trim()
+  const batch = String(formData.get("batch") ?? "") || null
+  const mode = String(formData.get("mode") ?? "") === "code" ? "code" : "url"
+  const linkBase = String(formData.get("linkBase") ?? "").trim()
+  const width = Number(formData.get("width"))
+  const height = Number(formData.get("height"))
+  const placement = parsePlacement(String(formData.get("placement") ?? ""))
+  const file = formData.get("template")
+
+  if (!name) return { error: "Give the design a name." }
+  if (name.length > 80) return { error: "Keep the name under 80 characters." }
+  if (!placement) return { error: "The placement is missing. Move a box and try again." }
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1) {
+    return { error: "The template size is missing. Upload the template again." }
+  }
+
+  let uploaded: string | null = null
+  if (file instanceof File && file.size > 0) {
+    const ext = TEMPLATE_EXT[file.type]
+    if (!ext) return { error: "Use a JPEG or PNG image." }
+    if (file.size > TEMPLATE_MAX_BYTES) return { error: "The template must be under 5 MB." }
+    uploaded = `${tenant.tenantId}/${crypto.randomUUID()}.${ext}`
+    const { error: upErr } = await supabase.storage.from(TEMPLATE_BUCKET).upload(uploaded, file, { contentType: file.type })
+    if (upErr) return { error: `The template didn't upload: ${upErr.message}` }
+  } else if (!id) {
+    return { error: "Upload the template first." }
+  }
+
+  let previous: string | null = null
+  if (id && uploaded) {
+    const { data } = await supabase.rpc("list_flyer_designs", { _tenant: tenant.tenantId })
+    previous = ((data ?? []) as { id: string; image_path: string }[]).find((d) => d.id === id)?.image_path ?? null
+  }
+
+  const { data, error } = await supabase.rpc("save_flyer_design", {
+    _tenant: tenant.tenantId,
+    _id: id as unknown as string,
+    _name: name,
+    _image_path: uploaded as unknown as string,
+    _width: width,
+    _height: height,
+    _placement: placement as unknown as Json,
+    _mode: mode,
+    _link_base: (mode === "url" ? linkBase : "") as unknown as string,
+    _batch: batch as unknown as string,
+  })
+  if (error) {
+    if (uploaded) await supabase.storage.from(TEMPLATE_BUCKET).remove([uploaded])
+    return { error: error.message }
+  }
+  if (previous) await supabase.storage.from(TEMPLATE_BUCKET).remove([previous])
+  revalidatePath("/coupons/flyers")
+  return { ok: true, id: data as string }
+}
+
+/** Delete a design and its picture. Runs that used it stay, and open without a design. */
+export async function deleteFlyerDesign(id: string): Promise<DesignState> {
+  await requireTenant()
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc("delete_flyer_design", { _id: id })
+  if (error) return { error: error.message }
+  if (data) await supabase.storage.from(TEMPLATE_BUCKET).remove([data as string])
+  revalidatePath("/coupons/flyers")
   return { ok: true, id }
 }

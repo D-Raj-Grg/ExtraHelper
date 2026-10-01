@@ -34,6 +34,38 @@ refund still counted. Same on a second bill (450, 80 back "Wrong order").
 - [ ] Optionally point the web's `setMemberPassword` / `createInviteLogin` at the function so there
       is one implementation. Left as is: both mirror each other line for line today.
 
+## Flyer print runs: unique code + QR per flyer (2026-09-30, web + DB)
+
+Owner wants 100-500 offline flyers, each with its own code and QR placed on a template image.
+
+- [x] `20260930100000_coupon_batches.sql`: `coupon_batches`, `coupons.batch_id`, `create_coupon_batch`
+      (unique single-use codes), `list_coupon_batches`, `get_batch_codes`, `set_batch_active`;
+      `list_coupons` hides batch rows so the web board and the phone list are unchanged.
+- [x] Web `/coupons/flyers`: runs table (printed / redeemed / left, pause), template upload, drag-and-resize
+      editor, PDF (one A4 page per code) + proof page + CSV. 500 pages ≈ 3.5 s, 4.3 MB.
+- [x] Coupons page shows the runs (table) and five state cards (active, redeemed, used up, expired,
+      paused) via `coupon_stats`; the campaign list still hides flyer codes.
+- [x] Coupons / Flyers tabs; Flyers opens with the newest run selected; Print or share step: PDF, proof,
+      CSV, Share PDF, per-flyer share (picture + message), text-only WhatsApp, Shared / Not shared / Redeemed filter.
+- [x] New run is a popup wizard (details, then design); runs can be edited (name, dates) and their design
+      changed later; a run can exist without a design.
+- [ ] **Walk the popup in a browser**: New run, continue, pick/upload a design, place, Save design and
+      finish, then Share. Only the database, build and types are verified.
+- [ ] **Try Save design end to end in a browser**: upload, place, Save, reload, confirm Share still works. Only the database and Storage rules are verified.
+- [ ] **Try the share buttons on a real phone**: the canvas picture and the share sheet have only been
+      type-checked. Safari and Chrome on Android share files; most desktops fall back to saving.
+- [ ] Ideas not built: a public coupon page a guest can open and save as an image; scheduling a run's
+      flyers to a customer list; marking printed flyers as handed out by batch of pages.
+- [ ] **Create the real run under `the-sekuwa-station`** (`2fd2168a…`) before printing. The 100
+      "Dashain Flyers" codes sit in the test tenant `d-raj-a859` (`6a290e99…`); a code only redeems in
+      the tenant that owns it and the QR carries that tenant's slug. Leave the test run or clear it, the owner's call.
+- [ ] **Open the page from the live site before exporting**; a localhost origin is refused for
+      storefront-link QRs (a guest's phone can't open it).
+- [ ] Print one proof and scan it with a phone and the POS before the full run.
+- [x] Designs (template picture + placement + QR settings) are saved per tenant and linked to runs, so any device or login can print or share.
+- [ ] A run's `valid_to` is fixed at creation; there is no edit-run form yet (pause and re-run instead).
+- [ ] Phone: no UI for runs (web only, by choice). Scanning a flyer QR already works.
+
 ## Coupons: flyer codes, guest + staff redemption (2026-09-28, web + DB + Flutter)
 
 Marketing wants "10% off" on flyers and photos. A guest scans the flyer (the QR opens the ordering

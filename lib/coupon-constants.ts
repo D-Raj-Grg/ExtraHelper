@@ -30,6 +30,24 @@ export type CouponRow = {
   last_redeemed_at: string | null
 }
 
+/** One row of `list_coupon_batches`: a print run and how many of it came back. */
+export type CouponBatchRow = {
+  id: string
+  name: string
+  type: CouponType
+  value: number
+  valid_from: string | null
+  valid_to: string | null
+  created_at: string
+  issued: number
+  redeemed: number
+  active: number
+  /** Flyers marked as shared or handed out. */
+  shared: number
+  /** The saved flyer design this run prints with, if one was saved. */
+  design_id: string | null
+}
+
 /** What `public_coupon_preview` returns when the code passes. */
 export type CouponPreview = {
   code: string
@@ -111,6 +129,50 @@ export function couponStatus(
   if (c.valid_to && new Date(c.valid_to).getTime() <= now) return "expired"
   if (c.valid_from && new Date(c.valid_from).getTime() > now) return "scheduled"
   return "active"
+}
+
+/** What `coupon_stats` returns: coupons per state, campaigns and flyer codes together. */
+export type CouponStats = {
+  active: number
+  scheduled: number
+  expired: number
+  used_up: number
+  paused: number
+  redemptions: number
+  discount_given_cents: number
+}
+
+/**
+ * The last day a stored `valid_to` covers. It is kept as the exclusive start of
+ * the next day, so "valid through 25 Oct" reads back as 25 Oct, not the 26th.
+ */
+export function couponEndDay(validTo: string, timeZone: string): string {
+  const last = new Date(new Date(validTo).getTime() - 1)
+  return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone }).format(last)
+}
+
+/**
+ * A stored bound as the `YYYY-MM-DD` a date input holds. A `valid_to` is the
+ * exclusive start of the next day, so pass `lastDay` to read it back as the day
+ * it covers.
+ */
+export function couponDayInput(iso: string | null, timeZone: string, lastDay = false): string {
+  if (!iso) return ""
+  const at = new Date(new Date(iso).getTime() - (lastDay ? 1 : 0))
+  return new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", day: "2-digit", timeZone }).format(at)
+}
+
+/** Today as `YYYY-MM-DD` in the restaurant's time zone. */
+export function todayInZone(timeZone: string, now: Date = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", day: "2-digit", timeZone }).format(now)
+}
+
+/** `YYYY-MM-DD` plus `days`, on the calendar (no time zone involved). */
+export function addDays(day: string, days: number): string {
+  const [y, m, d] = day.split("-").map(Number)
+  const t = new Date(Date.UTC(y, m - 1, d + days))
+  const p = (n: number) => String(n).padStart(2, "0")
+  return `${t.getUTCFullYear()}-${p(t.getUTCMonth() + 1)}-${p(t.getUTCDate())}`
 }
 
 export const COUPON_STATUS_LABEL: Record<CouponStatus, string> = {
