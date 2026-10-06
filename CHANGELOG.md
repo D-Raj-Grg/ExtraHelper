@@ -8,6 +8,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Fixed
+- **Kitchen Display buttons were missing.** The Kitchen Display showed only a status label and Print, with no way to start, ready or serve a dish. The per-dish buttons, the pencil, **Bump all**, cancel and recall are back for anyone with the kitchen-bump permission (and cancel for those who can void). Cashiers can still watch the board but not move dishes.
+
+### Added
+- **Change a whole ticket's status from the Kitchen Display.** The status label at the bottom of each ticket is now a menu, like the one on the POS Kitchen tab: pick New, Cooking, Ready or Served, including going back a step.
+
 ### Added
 - **Flyer defaults and date checks.** A new run starts **today** and ends in **30 days**, and the QR defaults to **Code only** (works at the counter with the POS app; switch to the storefront link per design). **Never expires** leaves the end open. The form checks as you type and keeps **Create run** off until it is right: a name, 1 to 1000 flyers, a 2 to 8 character prefix, a discount above zero (and at most 100%), an end date that is not before the start and not already past. Renaming an expired run still works. The server repeats the past-end check.
 - **New flyer run is a two-step popup, and everything stays editable.** Press **New run**: step 1 is the deal (name, how many, prefix, discount, dates); the run is saved the moment you continue, so closing the popup never loses it. Step 2 is the design: pick a **saved design** from a gallery of thumbnails, or upload a new picture, place the code and QR, and **Save design and finish**. A run with no design says "No design yet" and can be finished later. Each run's **⋯** menu has **Edit name and dates** (the codes, prefix and discount are printed, so they stay fixed; the new dates carry onto every code), **Change design** and **Pause run**. Editing a saved design and pressing Save updates it for every run that uses it; **Save as a new copy** keeps the original. The always-open create form is gone, and the page now has two steps: runs, then print or share.
@@ -17,6 +23,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
   - **Share one by one:** **Share next flyer** hands a picture of that flyer, with its own code and QR, to the phone's share sheet (WhatsApp, Messages, AirDrop). On a computer it saves the picture instead. **Send text on WhatsApp** opens a chat with the offer and your menu link written out, to a number if you type one. Each code is marked **Shared** so you never send the same one twice; filter by Not shared / Shared / Redeemed.
 - **Coupon totals and your flyer runs on the Coupons page.** Five cards sit on top: **Active**, **Redeemed** (with how much has been given away), **Used up**, **Expired** and **Paused**. They count campaign coupons and every printed flyer code together. Below them, a **Flyer print runs** table shows each run with how many flyers were printed, redeemed and are left. The coupon list itself still shows campaigns only, and says so when there are none.
 - **Flyer print runs.** **Coupons → Flyer print runs** makes hundreds of flyers that each carry their own code and QR. Create a run ("Dashain flyers", 300 flyers, 10% off, valid through 25 Oct, dine-in only), upload your flyer image, and drag two boxes onto the blank coupon-code field and the white QR square. Download one PDF with a page per flyer, plus a CSV of the codes. Every code works **once**, so a photographed flyer can't be reused, and the run's table shows printed / redeemed / left. **Pause** a run if a stack of flyers goes missing. Staff scan the QR or type the code at checkout exactly as before; the phone app needs no update. The runs don't crowd the Coupons list.
+
+<details><summary>Technical — KDS permissions</summary>
+
+- `app/(app)/kds/page.tsx` now reads `getMyPermissions(tenantId)` and wraps `KdsBoard` in `PermissionProvider`. The layout's provider only wraps the sidebar, so `useHasPermission("kds.bump")` and `("order.void")` read the empty default set on `/kds` and `canBump`/`canVoid` were always false.
+- `components/kds/ticket-card.tsx`: footer badge becomes a `DropdownMenu` over `KOT_FLOW` calling `onBump(status)` (`set_kot_status` RPC), shown only when `canBump` and not muted.
+
+</details>
 
 <details><summary>Technical — coupon batches, flyer PDF</summary>
 

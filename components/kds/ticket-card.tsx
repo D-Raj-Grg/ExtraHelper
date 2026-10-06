@@ -14,6 +14,7 @@ import {
 } from "lucide-react"
 
 import {
+  KOT_FLOW,
   kotStatusLabel,
   kotStatusMeta,
   nextKotStatus,
@@ -160,10 +161,47 @@ export function TicketCard({
       </ul>
 
       <div className="flex flex-wrap items-center gap-2 border-t pt-2">
-        <Badge className={cn("border-transparent gap-1", KOT_STATUS_STYLE[kot.status] ?? "bg-muted text-foreground")}>
-          <StatusIcon status={kot.status} className="size-3.5" />
-          {kotStatusLabel(kot.status)}
-        </Badge>
+        {canBump && !muted ? (
+          // Same affordance as the POS ticket's status select: jump the whole
+          // ticket to any step, including back when Ready was hit too early.
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  type="button"
+                  variant="outline"
+                  className={cn(
+                    "h-11 gap-1.5 px-2.5",
+                    KOT_STATUS_STYLE[kot.status] ?? "bg-muted text-foreground",
+                  )}
+                  disabled={pending}
+                  aria-label={`Change status of the ${where} ticket, now ${kotStatusLabel(kot.status)}`}
+                />
+              }
+            >
+              <StatusIcon status={kot.status} className="size-3.5" />
+              {kotStatusLabel(kot.status)}
+              <ChevronDownIcon className="size-4" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              {KOT_FLOW.map((s) => (
+                <DropdownMenuItem
+                  key={s}
+                  disabled={s === kot.status}
+                  onClick={() => actions.onBump(s)}
+                >
+                  <StatusIcon status={s} className="size-4" />
+                  {kotStatusLabel(s)}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : (
+          <Badge className={cn("border-transparent gap-1", KOT_STATUS_STYLE[kot.status] ?? "bg-muted text-foreground")}>
+            <StatusIcon status={kot.status} className="size-3.5" />
+            {kotStatusLabel(kot.status)}
+          </Badge>
+        )}
 
         {/* Split button: the station printer is the default; the browser view is
             the escape hatch when the agent is down or a printer isn't set up. */}

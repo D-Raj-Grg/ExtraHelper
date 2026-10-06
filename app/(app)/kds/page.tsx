@@ -1,5 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { requirePermission } from "@/lib/supabase/guards"
+import { getMyPermissions } from "@/lib/supabase/permissions"
+import { PermissionProvider } from "@/components/permission-provider"
 import { KdsBoard } from "@/components/kds-board"
 import { EightySixPanel } from "@/components/eighty-six-panel"
 import { kdsActiveQuery } from "@/lib/kds-constants"
@@ -19,7 +21,8 @@ export default async function KdsPage({
   const { station: stationParam } = await searchParams
   const station = stationParam ?? "all"
 
-  const [{ data: stations }, { data: menuItems }] = await Promise.all([
+  const [permissions, { data: stations }, { data: menuItems }] = await Promise.all([
+    getMyPermissions(tenant.tenantId),
     supabase
       .from("kitchen_stations")
       .select("id, name")
@@ -48,12 +51,17 @@ export default async function KdsPage({
       <div className="mb-3">
         <EightySixPanel items={menuItems ?? []} tenantId={tenant.tenantId} />
       </div>
-      <KdsBoard
-        kots={(kots ?? []) as never}
-        stations={stations ?? []}
-        station={station}
-        tenantId={tenant.tenantId}
-      />
+      {/* The board gates bump/void on client permission hooks, and the only
+          provider in the layout wraps the sidebar — without this the board read
+          an empty set and hid every control from every role. */}
+      <PermissionProvider permissions={permissions}>
+        <KdsBoard
+          kots={(kots ?? []) as never}
+          stations={stations ?? []}
+          station={station}
+          tenantId={tenant.tenantId}
+        />
+      </PermissionProvider>
     </div>
   )
 }
