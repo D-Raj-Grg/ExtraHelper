@@ -9,9 +9,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 ## [Unreleased]
 
 ### Fixed
+- **Printed bills list same-price lines separately when their add-ons differ.** The slip folded two such drinks into one row while the checkout screen kept them apart. Now both agree; totals unchanged. (`lib/print/docs.ts`, `job-render.ts`.)
 - **Kitchen Display buttons were missing.** The Kitchen Display showed only a status label and Print, with no way to start, ready or serve a dish. The per-dish buttons, the pencil, **Bump all**, cancel and recall are back for anyone with the kitchen-bump permission (and cancel for those who can void). Cashiers can still watch the board but not move dishes.
 
 ### Added
+- **Own permission for marking dishes sold out (86).** New key `menu.86` (Menu group). Owner, manager and kitchen get it by default and existing roles were backfilled, so nobody loses the button. `set_item_86` checks the key; the menu 86 buttons and the KDS 86 board follow it. Migration `20260930150000_menu_86_permission`.
 - **Change a whole ticket's status from the Kitchen Display.** The status label at the bottom of each ticket is now a menu, like the one on the POS Kitchen tab: pick New, Cooking, Ready or Served, including going back a step.
 
 ### Added

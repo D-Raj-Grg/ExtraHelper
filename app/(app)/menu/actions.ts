@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
-import { requireRole } from "@/lib/supabase/guards"
+import { requirePermission, requireRole } from "@/lib/supabase/guards"
 
 export type MenuState = { error: string } | { ok: true } | undefined
 
@@ -121,7 +121,7 @@ export async function createItem(
  * used to live in this action guarded nothing against a direct API call.
  */
 export async function toggleItem86(itemId: string, is86: boolean): Promise<MenuState> {
-  await requireRole("owner", "manager", "kitchen")
+  await requirePermission("menu.86")
   const supabase = await createClient()
   const { error } = await supabase.rpc("set_item_86", {
     _item_id: itemId,

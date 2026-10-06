@@ -22,6 +22,7 @@ export default async function MenuPage() {
   // Cached per request — requirePermission above already resolved this set.
   const perms = await getMyPermissions(tenant.tenantId)
   const canViewProfit = perms.includes("profit.view")
+  const can86 = perms.includes("menu.86")
   // Costs live in RLS-gated side tables; without `profit.view` the embed
   // returns no rows, so it is only asked for when it can answer.
   const itemCostEmbed = canViewProfit ? "menu_item_costs(cost_cents), " : ""
@@ -100,6 +101,7 @@ export default async function MenuPage() {
         modifiers={modifiers ?? []}
         combos={(combos ?? []) as never}
         canViewProfit={canViewProfit}
+        can86={can86}
       />
     </PageShell>
   )

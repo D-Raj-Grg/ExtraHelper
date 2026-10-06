@@ -45,12 +45,14 @@ export default async function KdsPage({
       <div className="mb-4">
         <h1 className="text-2xl font-bold">Kitchen Display</h1>
         <p className="text-sm text-muted-foreground">
-          Live tickets · bump when ready. Filter to this screen&apos;s station.
+          Live tickets · tap Ready as each dish is done. Filter to this screen&apos;s station.
         </p>
       </div>
-      <div className="mb-3">
-        <EightySixPanel items={menuItems ?? []} tenantId={tenant.tenantId} />
-      </div>
+      {permissions.includes("menu.86") ? (
+        <div className="mb-3">
+          <EightySixPanel items={menuItems ?? []} tenantId={tenant.tenantId} />
+        </div>
+      ) : null}
       {/* The board gates bump/void on client permission hooks, and the only
           provider in the layout wraps the sidebar — without this the board read
           an empty set and hid every control from every role. */}

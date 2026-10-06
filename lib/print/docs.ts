@@ -283,7 +283,16 @@ export type BillDoc = {
   billShortId: string
   destination: string
   createdAt: string
-  items: { description: string; qty: number; unitPriceCents: number; totalCents: number }[]
+  items: {
+    description: string
+    qty: number
+    unitPriceCents: number
+    totalCents: number
+    /** Null on a synthetic line `recompute_bill` wrote with no order item behind it. */
+    orderItemId?: string | null
+    /** Add-ons on the line; `id` is the menu modifier (or `name:<snapshot>`), part of the grouping key. */
+    modifiers?: { id: string; qty: number }[]
+  }[]
   subtotalCents: number
   serviceChargeCents: number
   taxCents: number
@@ -315,11 +324,15 @@ export type BillDoc = {
  * price each, and thinks they have been charged wrong. The checkout preview
  * groups them; paper has to group them identically or the two documents
  * disagree about a number the guest is holding.
+ *
+ * The key also carries modifiers and adjustability, so two same-price drinks
+ * differing only by an add-on stay on separate rows, as in the Flutter bill.
+ * Display only: quantities and amounts are summed exactly as before.
  */
 export function groupParticulars(items: BillDoc["items"]) {
   const by = new Map<string, { name: string; rate: number; qty: number; amount: number }>()
   for (const it of items) {
-    const key = `${it.description}|${it.unitPriceCents}`
+    const key = particularKey(it)
     const row = by.get(key)
     if (row) {
       row.qty += it.qty
@@ -334,6 +347,18 @@ export function groupParticulars(items: BillDoc["items"]) {
     }
   }
   return [...by.values()]
+}
+
+/**
+ * What makes two lines the same line to a guest. Mirrors `_key` in the Flutter
+ * app's `bill_grouping.dart`: description, unit price, whether the line can be
+ * adjusted (has an order item), and the sorted modifier set as `id×qty`.
+ * Callers that do not supply modifiers or order ids get the old
+ * description-and-price behaviour, since those parts then match for every line.
+ */
+function particularKey(it: BillDoc["items"][number]): string {
+  const mods = (it.modifiers ?? []).map((m) => `${m.id}\u00d7${m.qty}`).sort()
+  return [it.description, it.unitPriceCents, it.orderItemId != null, mods.join(",")].join("|")
 }
 
 

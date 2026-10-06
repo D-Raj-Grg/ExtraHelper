@@ -491,7 +491,7 @@ async function buildBillDoc(
         .maybeSingle(),
       supabase
         .from("bill_items")
-        .select("description, qty, unit_price_cents, total_cents")
+        .select("description, qty, unit_price_cents, total_cents, order_item_id")
         .eq("bill_id", billId)
         .eq("tenant_id", tenant.tenantId),
       supabase
@@ -547,6 +547,33 @@ async function buildBillDoc(
   }[]
   const first = orderRows[0]
 
+  // Modifiers hang off the order item, so they need the ids from the first pass.
+  // Best effort: on failure the lines group by description and price alone.
+  const orderItemIds = (items ?? [])
+    .map((it) => it.order_item_id as string | null)
+    .filter((id): id is string => !!id)
+  const modsByItem = new Map<string, { id: string; qty: number }[]>()
+  if (orderItemIds.length > 0) {
+    const { data: mods } = await supabase
+      .from("order_item_modifiers")
+      .select("modifier_id, name_snapshot, order_item_id, qty")
+      .in("order_item_id", orderItemIds)
+      .eq("tenant_id", tenant.tenantId)
+    for (const m of (mods ?? []) as {
+      modifier_id: string | null
+      name_snapshot: string
+      order_item_id: string
+      qty: number
+    }[]) {
+      const list = modsByItem.get(m.order_item_id) ?? []
+      // Identity is the menu modifier (or its name once deleted) — never the
+      // order_item_modifiers row id, which is unique to one line and would stop
+      // the same add-on on two lines from ever folding.
+      list.push({ id: m.modifier_id ?? `name:${m.name_snapshot}`, qty: m.qty })
+      modsByItem.set(m.order_item_id, list)
+    }
+  }
+
   // One extra round trip, and only when there is a waiter to name.
   let servedBy: string | null = null
   if (first?.waiter_id) {
@@ -577,6 +604,8 @@ async function buildBillDoc(
         qty: it.qty as number,
         unitPriceCents: it.unit_price_cents as number,
         totalCents: it.total_cents as number,
+        orderItemId: (it.order_item_id as string | null) ?? null,
+        modifiers: modsByItem.get(it.order_item_id as string) ?? [],
       })),
       subtotalCents: b.subtotal_cents,
       serviceChargeCents: b.service_charge_cents,

@@ -17,6 +17,7 @@ export function MenuManager({
   modifiers,
   combos,
   canViewProfit,
+  can86,
 }: {
   currency: string
   categories: Category[]
@@ -27,6 +28,8 @@ export function MenuManager({
   combos: Combo[]
   /** `profit.view` — shows the Cost price field on items. */
   canViewProfit: boolean
+  /** `menu.86` — shows the 86 / Un-86 toggle on items. */
+  can86: boolean
 }) {
   return (
     <Tabs defaultValue="items">
@@ -46,6 +49,7 @@ export function MenuManager({
           stations={stations}
           modifiers={modifiers}
           canViewProfit={canViewProfit}
+          can86={can86}
         />
       </TabsContent>
       <TabsContent value="categories">

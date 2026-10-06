@@ -23,6 +23,7 @@ export function ItemsTab({
   stations,
   modifiers,
   canViewProfit,
+  can86,
 }: {
   currency: string
   categories: Category[]
@@ -30,6 +31,7 @@ export function ItemsTab({
   stations: Station[]
   modifiers: Modifier[]
   canViewProfit: boolean
+  can86: boolean
 }) {
   const [query, setQuery] = useState("")
   const [categoryFilter, setCategoryFilter] = useState("all")
@@ -141,7 +143,7 @@ export function ItemsTab({
               <h3 className="mb-2 text-sm font-medium text-muted-foreground">{g.name}</h3>
               <div className="divide-y overflow-hidden rounded-lg border">
                 {g.list.map((item) => (
-                  <ItemRow key={item.id} item={item} currency={currency} onEdit={() => setEditingId(item.id)} />
+                  <ItemRow key={item.id} item={item} currency={currency} can86={can86} onEdit={() => setEditingId(item.id)} />
                 ))}
               </div>
             </div>
@@ -172,7 +174,17 @@ export function ItemsTab({
   )
 }
 
-function ItemRow({ item, currency, onEdit }: { item: Item; currency: string; onEdit: () => void }) {
+function ItemRow({
+  item,
+  currency,
+  can86,
+  onEdit,
+}: {
+  item: Item
+  currency: string
+  can86: boolean
+  onEdit: () => void
+}) {
   const [pending, startTransition] = useTransition()
   const routes =
     item.item_station_routes
@@ -196,19 +208,21 @@ function ItemRow({ item, currency, onEdit }: { item: Item; currency: string; onE
         <Button size="sm" variant="outline" onClick={onEdit} aria-label={`Edit ${item.name}`}>
           Edit
         </Button>
-        <Button
-          size="sm"
-          variant={item.is_86 ? "default" : "outline"}
-          disabled={pending}
-          aria-label={item.is_86 ? `Mark ${item.name} available` : `Mark ${item.name} sold out`}
-          onClick={() =>
-            startTransition(async () => {
-              await toggleItem86(item.id, !item.is_86)
-            })
-          }
-        >
-          {item.is_86 ? "Un-86" : "86"}
-        </Button>
+        {can86 ? (
+          <Button
+            size="sm"
+            variant={item.is_86 ? "default" : "outline"}
+            disabled={pending}
+            aria-label={item.is_86 ? `Mark ${item.name} available` : `Mark ${item.name} sold out`}
+            onClick={() =>
+              startTransition(async () => {
+                await toggleItem86(item.id, !item.is_86)
+              })
+            }
+          >
+            {item.is_86 ? "Un-86" : "86"}
+          </Button>
+        ) : null}
         <Button
           size="sm"
           variant="destructive"
