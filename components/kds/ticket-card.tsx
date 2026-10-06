@@ -95,6 +95,9 @@ export function TicketCard({
   const where = table ? `Table ${table}` : "Takeaway"
   const next = nextKotStatus(kot.status)
   const liveLines = kot.kot_items.filter(isLive)
+  // Every dish voided: nothing left to cook, so the status picker and the
+  // advance button would be controls for work that no longer exists.
+  const allCancelled = kot.kot_items.length > 0 && liveLines.length === 0
   // Hold the open editor by id and derive the row from the live list — storing
   // the row freezes a snapshot, so a Realtime update never reaches the dialog.
   const editingLine = kot.kot_items.find((l) => l.id === editing) ?? null
@@ -161,7 +164,12 @@ export function TicketCard({
       </ul>
 
       <div className="flex flex-wrap items-center gap-2 border-t pt-2">
-        {canBump && !muted ? (
+        {allCancelled ? (
+          <Badge className="border-transparent gap-1 bg-destructive/10 text-destructive">
+            <XIcon className="size-3.5" aria-hidden />
+            Cancelled
+          </Badge>
+        ) : canBump && !muted ? (
           // Same affordance as the POS ticket's status select: jump the whole
           // ticket to any step, including back when Ready was hit too early.
           <DropdownMenu>
@@ -262,6 +270,19 @@ export function TicketCard({
             <Undo2Icon className="size-4" />
             Recall to the board
           </Button>
+        ) : allCancelled && !muted && canBump ? (
+          // Nothing to cook, but the ticket still sits on the board — one tap
+          // clears it (moves it to Served, so it lands in the recall strip).
+          <Button
+            variant="outline"
+            className="h-12 w-full text-base"
+            disabled={pending}
+            onClick={() => actions.onBump("served")}
+          >
+            <XIcon className="size-4" />
+            Clear cancelled ticket
+            <span className="sr-only"> from the board for {where}</span>
+          </Button>
         ) : next && !muted && canBump ? (
           <Button
             className="h-12 w-full text-base"
@@ -269,7 +290,7 @@ export function TicketCard({
             onClick={() => actions.onBump(next)}
           >
             <StatusIcon status={next} />
-            {next === "served" ? "Bump all" : `${kotStatusMeta(next)?.action ?? "Bump"} all`}
+            {next === "served" ? "Mark all served" : `${kotStatusMeta(next)?.action ?? "Update"} all`}
             <span className="sr-only"> dishes on the {where} ticket</span>
           </Button>
         ) : null}
@@ -412,7 +433,7 @@ function TicketLine({
               onClick={() => onAdvance(next)}
             >
               <StatusIcon status={next} />
-              {kotStatusMeta(next)?.action ?? "Bump"}
+              {kotStatusMeta(next)?.action ?? "Update"}
               <span className="sr-only"> {name}</span>
             </Button>
           ) : (
