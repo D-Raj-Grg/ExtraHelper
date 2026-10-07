@@ -22,7 +22,16 @@ type Bill = {
   created_at: string
   restaurant_tables: { label: string } | null
 }
-type Item = { id: string; description: string; qty: number; unit_price_cents: number; total_cents: number }
+type Item = {
+  id: string
+  description: string
+  qty: number
+  unit_price_cents: number
+  total_cents: number
+  order_item_id?: string | null
+  /** Grouping identity per add-on: menu modifier id, or `name:<snapshot>`. */
+  modifiers?: { id: string; qty: number }[]
+}
 type Payment = { id: string; method: string; amount_cents: number }
 
 /** One printed money line. Module scope — see CLAUDE.md. */
@@ -90,6 +99,8 @@ export function ReceiptView({
       qty: it.qty,
       unitPriceCents: it.unit_price_cents,
       totalCents: it.total_cents,
+      orderItemId: it.order_item_id ?? null,
+      modifiers: it.modifiers ?? [],
     })),
   )
   const adjusted = hasBillAdjustments({

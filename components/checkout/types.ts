@@ -38,7 +38,14 @@ export type CheckoutItem = {
   total_cents: number
   /** Per-line discount already applied (cents), for the inline Discount cell. */
   discount_cents: number
-  modifiers: { id: string; name: string; price_cents: number; qty: number }[]
+  modifiers: {
+    id: string
+    /** Menu modifier id, or `name:<snapshot>` once deleted. Grouping identity; `id` is per-line. */
+    identity: string
+    name: string
+    price_cents: number
+    qty: number
+  }[]
 }
 
 export type CheckoutPayment = { id: string; method: string; amount_cents: number }

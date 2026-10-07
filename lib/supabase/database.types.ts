@@ -5030,6 +5030,13 @@ export type Database = {
         Args: { _line_id: string; _qty: number; _unit_cost_cents: number }
         Returns: undefined
       }
+      unavailable_items: {
+        Args: { _tenant: string }
+        Returns: {
+          item_id: string
+          next_label: string | null
+        }[]
+      }
       update_variant: {
         Args: { _name: string; _price_delta_cents: number; _variant_id: string }
         Returns: undefined

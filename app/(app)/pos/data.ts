@@ -77,6 +77,12 @@ export async function loadComposerData(tenantId: string): Promise<PosComposerDat
     supabase.rpc("list_order_staff", { _tenant: tenantId }),
   ])
 
+  // Items outside their availability window right now, on the tenant's clock.
+  // Its own call so a failure only costs the greying-out: the server still
+  // refuses the line, and the menu must never go blank over a hint.
+  const { data: unavailable } = await supabase.rpc("unavailable_items", { _tenant: tenantId })
+  const unavailableById = new Map((unavailable ?? []).map((u) => [u.item_id, u.next_label]))
+
   // Flatten the modifier embed here so the client and the IndexedDB cache see
   // one shape — the cache can't hold a nested join.
   const menuRows = (menu.data ?? []) as unknown as MenuRow[]
@@ -88,6 +94,8 @@ export async function loadComposerData(tenantId: string): Promise<PosComposerDat
     is_veg: m.is_veg,
     image_url: m.image_url,
     category_id: m.category_id,
+    unavailable_now: unavailableById.has(m.id),
+    available_again: unavailableById.get(m.id) ?? null,
     variants: m.item_variants ?? [],
     modifiers: (m.item_modifiers ?? [])
       .map((x) => x.modifiers)

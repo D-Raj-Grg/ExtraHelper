@@ -1,6 +1,6 @@
 "use client"
 
-import { SlidersHorizontalIcon } from "lucide-react"
+import { ClockIcon, SlidersHorizontalIcon } from "lucide-react"
 import { moneyRange } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { itemPriceRange } from "@/components/pos/cart-types"
@@ -47,7 +47,11 @@ export function MenuTile({
   const hasOptions = optionCount > 0
   const inCart = qty > 0
   const soldOut = item.is_86
-  const off = soldOut || disabled
+  // Outside its availability window (server-judged, tenant clock). 86 wins: a
+  // dish that is out of stock says so, not "back at 18:00".
+  const notNow = !soldOut && item.unavailable_now === true
+  const notNowText = item.available_again ? `Back ${item.available_again}` : "Not available now"
+  const off = soldOut || notNow || disabled
 
   // What this dish can actually cost. Not base_price_cents: with variants the
   // picker forces a choice, so the base price alone is a figure no one can
@@ -65,7 +69,7 @@ export function MenuTile({
       aria-expanded={hasOptions ? expanded : undefined}
       aria-label={`${hasOptions ? "Choose options for" : "Add"} ${item.name}, ${priceText}${
         item.is_veg === true ? ", vegetarian" : item.is_veg === false ? ", non-vegetarian" : ""
-      }${soldOut ? ", sold out" : ""}${inCart ? `, ${qty} in order` : ""}`}
+      }${soldOut ? ", sold out" : ""}${notNow ? `, ${notNowText.toLowerCase()}` : ""}${inCart ? `, ${qty} in order` : ""}`}
       className={cn(
         "group relative flex flex-col overflow-hidden rounded-xl border-2 bg-card text-left",
         "transition-[border-color,transform] duration-150 ease-out motion-reduce:transition-none",
@@ -83,7 +87,7 @@ export function MenuTile({
       <span className="relative block aspect-[4/3] w-full overflow-hidden bg-muted">
         <DishThumb
           item={item}
-          grayscale={soldOut}
+          grayscale={soldOut || notNow}
           className={cn(
             // Fixed aspect box above means this can't shift layout.
             item.image_url && "transition-transform duration-200 ease-out motion-reduce:transition-none",
@@ -97,6 +101,13 @@ export function MenuTile({
           </span>
         ) : null}
 
+        {notNow ? (
+          <span className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-muted px-2 py-1 text-center text-xs font-bold text-foreground">
+            <ClockIcon aria-hidden className="size-3.5 shrink-0" />
+            <span className="truncate">{notNowText}</span>
+          </span>
+        ) : null}
+
         {inCart ? (
           <span className="absolute top-2 right-2 flex min-h-7 min-w-7 items-center justify-center rounded-full bg-primary px-2 text-sm font-bold tabular-nums text-primary-foreground shadow-sm">
             {qty}
@@ -105,7 +116,7 @@ export function MenuTile({
 
         {/* Sizes/add-ons were only hinted at by the grey word "options"; an icon
             reads at a glance and survives a rush. */}
-        {hasOptions && !soldOut ? (
+        {hasOptions && !soldOut && !notNow ? (
           <span
             aria-hidden
             className="absolute top-2 left-2 flex size-7 items-center justify-center rounded-full bg-background/90 text-foreground shadow-sm"

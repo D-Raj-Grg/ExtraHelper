@@ -90,7 +90,7 @@ export default async function BillPage({
       orderItemIds.length
         ? supabase
             .from("order_item_modifiers")
-            .select("id, order_item_id, name_snapshot, price_cents, qty")
+            .select("id, modifier_id, order_item_id, name_snapshot, price_cents, qty")
             .in("order_item_id", orderItemIds)
             .eq("tenant_id", tenant.tenantId)
         : Promise.resolve({ data: [] as never[] }),
@@ -161,6 +161,7 @@ export default async function BillPage({
     const list = modsByItem.get(m.order_item_id) ?? []
     list.push({
       id: m.id,
+      identity: m.modifier_id ?? `name:${m.name_snapshot}`,
       name: m.name_snapshot,
       price_cents: m.price_cents,
       qty: m.qty,

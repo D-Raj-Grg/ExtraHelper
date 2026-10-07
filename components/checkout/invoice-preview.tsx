@@ -4,6 +4,7 @@ import { AlertTriangleIcon, CheckCircle2Icon, PrinterIcon } from "lucide-react"
 
 import { amountInWords, formatDateTime, money } from "@/lib/format"
 import { paymentMethodLabel } from "@/lib/payment-constants"
+import { groupParticulars } from "@/lib/print/docs"
 import { Button } from "@/components/ui/button"
 import type {
   CheckoutBill,
@@ -13,28 +14,6 @@ import type {
   CheckoutPayment,
   InvoiceMeta,
 } from "@/components/checkout/types"
-
-/** Same dish at the same rate collapses to one particular, like the printed bill. */
-function groupParticulars(items: CheckoutItem[]) {
-  const by = new Map<string, { key: string; name: string; rate: number; qty: number; amount: number }>()
-  for (const it of items) {
-    const key = `${it.description}|${it.unit_price_cents}`
-    const row = by.get(key)
-    if (row) {
-      row.qty += it.qty
-      row.amount += it.total_cents
-    } else {
-      by.set(key, {
-        key,
-        name: it.description,
-        rate: it.unit_price_cents,
-        qty: it.qty,
-        amount: it.total_cents,
-      })
-    }
-  }
-  return [...by.values()]
-}
 
 /**
  * What will print, rendered live as the cashier works.
@@ -82,7 +61,17 @@ export function CheckoutInvoicePreview({
   onConfirmAndPrint: () => void
   onPrintBill: () => void
 }) {
-  const rows = groupParticulars(items)
+  // The printed slip's own grouping, so screen and paper fold lines identically.
+  const rows = groupParticulars(
+    items.map((it) => ({
+      description: it.description,
+      qty: it.qty,
+      unitPriceCents: it.unit_price_cents,
+      totalCents: it.total_cents,
+      orderItemId: it.order_item_id,
+      modifiers: it.modifiers.map((m) => ({ id: m.identity, qty: m.qty })),
+    })),
+  )
   const due = Math.max(0, bill.total_cents - paidCents)
   const destination = bill.restaurant_tables?.label
     ? `Dine in: Table ${bill.restaurant_tables.label}`
@@ -128,8 +117,8 @@ export function CheckoutInvoicePreview({
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
-              <tr key={r.key}>
+            {rows.map((r, i) => (
+              <tr key={i}>
                 <td className="py-0.5">{r.name}</td>
                 <td className="py-0.5 text-right tabular-nums">{money(r.rate, currency)}</td>
                 <td className="py-0.5 text-right tabular-nums">{r.qty}</td>

@@ -9,10 +9,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 ## [Unreleased]
 
 ### Fixed
+- **On-screen receipt and checkout invoice group lines like the printed slip.** Same-price lines with different add-ons stay separate in `/receipt/[billId]` and the checkout preview; one shared `groupParticulars`, totals unchanged.
 - **Printed bills list same-price lines separately when their add-ons differ.** The slip folded two such drinks into one row while the checkout screen kept them apart. Now both agree; totals unchanged. (`lib/print/docs.ts`, `job-render.ts`.)
 - **Kitchen Display buttons were missing.** The Kitchen Display showed only a status label and Print, with no way to start, ready or serve a dish. The per-dish buttons, the pencil, **Bump all**, cancel and recall are back for anyone with the kitchen-bump permission (and cancel for those who can void). Cashiers can still watch the board but not move dishes.
 
 ### Added
+- **Availability windows are enforced when ordering.** `item_available_now` (tenant timezone, overnight windows, no rows = always available) gates `place_staff_order`, `amend_order_add_item`, `place_qr_order` and `place_online_order` (error 22023, hint `item_unavailable`, names the dish and when it is back); `qr_menu` and `storefront_menu` hide such items; `unavailable_items()` feeds the POS, where the tile greys out with a clock icon and "Back …". Migration `20260930160000_enforce_item_availability`. Per item only; combos are still data only (no combo link on `order_items`).
 - **Own permission for marking dishes sold out (86).** New key `menu.86` (Menu group). Owner, manager and kitchen get it by default and existing roles were backfilled, so nobody loses the button. `set_item_86` checks the key; the menu 86 buttons and the KDS 86 board follow it. Migration `20260930150000_menu_86_permission`.
 - **Change a whole ticket's status from the Kitchen Display.** The status label at the bottom of each ticket is now a menu, like the one on the POS Kitchen tab: pick New, Cooking, Ready or Served, including going back a step.
 

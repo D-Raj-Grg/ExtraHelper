@@ -21,6 +21,14 @@ export type CachedMenuItem = {
   modifiers?: CachedModifier[]
   /** null/absent = unmarked; true = vegetarian; false = non-vegetarian. */
   is_veg?: boolean | null
+  /**
+   * Outside its availability window right now, as judged by the server on the
+   * tenant clock when this menu was loaded. A display hint only — the order RPCs
+   * re-check — so a stale cached value is harmless.
+   */
+  unavailable_now?: boolean
+  /** "today 18:00" / "tomorrow 11:00" / "Tue 18:00": when it can be ordered again. */
+  available_again?: string | null
 }
 export type CachedTable = {
   id: string

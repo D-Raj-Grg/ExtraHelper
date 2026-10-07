@@ -32,8 +32,9 @@ export default async function ReceiptPage({
       .maybeSingle(),
     supabase
       .from("bill_items")
-      .select("id, description, qty, unit_price_cents, total_cents")
-      .eq("bill_id", billId),
+      .select("id, order_item_id, description, qty, unit_price_cents, total_cents")
+      .eq("bill_id", billId)
+      .eq("tenant_id", tenant.tenantId),
     supabase
       .from("payments")
       .select("id, method, amount_cents")
@@ -70,6 +71,29 @@ export default async function ReceiptPage({
 
   if (!bill) notFound()
 
+  // Add-ons hang off the order item. Best effort: if this read fails the lines
+  // group by description, price and adjustability alone.
+  const orderItemIds = (items ?? [])
+    .map((it) => it.order_item_id as string | null)
+    .filter((id): id is string => !!id)
+  const modsByItem = new Map<string, { id: string; qty: number }[]>()
+  if (orderItemIds.length > 0) {
+    const { data: mods } = await supabase
+      .from("order_item_modifiers")
+      .select("modifier_id, name_snapshot, order_item_id, qty")
+      .in("order_item_id", orderItemIds)
+      .eq("tenant_id", tenant.tenantId)
+    for (const m of mods ?? []) {
+      const list = modsByItem.get(m.order_item_id) ?? []
+      list.push({ id: m.modifier_id ?? `name:${m.name_snapshot}`, qty: m.qty })
+      modsByItem.set(m.order_item_id, list)
+    }
+  }
+  const receiptItems = (items ?? []).map((it) => ({
+    ...it,
+    modifiers: it.order_item_id ? (modsByItem.get(it.order_item_id) ?? []) : [],
+  }))
+
   const first = (orders ?? [])[0] as unknown as
     | { waiter_id: string | null; customers: { name: string | null } | null }
     | undefined
@@ -102,7 +126,7 @@ export default async function ReceiptPage({
         currency={tenant.currency}
         timezone={tenant.timezone}
         bill={bill as never}
-        items={items ?? []}
+        items={receiptItems}
         payments={payments ?? []}
         footer={template.footer}
         terms={template.terms}
