@@ -8,6 +8,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Added
+- **Flyers tab and coupon numbers on the mobile app.** App-only change, no web or server change: the phone's Coupons screen now has the Flyers tab (runs, codes, QR, pause/resume, edit, hand-out marks, CSV), the design step of the wizard (upload a picture, place the code and QR), flyer PDFs (whole run, proof, single code) and the stats strip. See `../extrahelper_flutter/CHANGELOG.md` [Unreleased].
+
+<details><summary>Technical</summary>
+
+Uses the existing RPCs `list_flyer_designs`, `save_flyer_design`, `delete_flyer_design`, `coupon_stats`, `list_coupon_batches`, `get_batch_codes`, `create_coupon_batch`, `update_coupon_batch`, `set_batch_active`, `mark_coupon_shared`; no migration, no new permission key.
+
+</details>
+
 ### Fixed
 - **On-screen receipt and checkout invoice group lines like the printed slip.** Same-price lines with different add-ons stay separate in `/receipt/[billId]` and the checkout preview; one shared `groupParticulars`, totals unchanged.
 - **Printed bills list same-price lines separately when their add-ons differ.** The slip folded two such drinks into one row while the checkout screen kept them apart. Now both agree; totals unchanged. (`lib/print/docs.ts`, `job-render.ts`.)
