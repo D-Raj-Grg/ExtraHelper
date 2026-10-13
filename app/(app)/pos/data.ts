@@ -81,7 +81,12 @@ export async function loadComposerData(tenantId: string): Promise<PosComposerDat
   // Its own call so a failure only costs the greying-out: the server still
   // refuses the line, and the menu must never go blank over a hint.
   const { data: unavailable } = await supabase.rpc("unavailable_items", { _tenant: tenantId })
-  const unavailableById = new Map((unavailable ?? []).map((u) => [u.item_id, u.next_label]))
+  const unavailableById = new Map<string, string | null>(
+    ((unavailable ?? []) as { item_id: string; next_label: string | null }[]).map((u) => [
+      u.item_id,
+      u.next_label,
+    ]),
+  )
 
   // Flatten the modifier embed here so the client and the IndexedDB cache see
   // one shape — the cache can't hold a nested join.
