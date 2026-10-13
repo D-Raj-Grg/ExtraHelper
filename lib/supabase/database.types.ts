@@ -3700,6 +3700,13 @@ export type Database = {
           printing_mode: string
           qr_auto_fire: boolean
           receipt_template: Json
+          review_checked: string | null
+          review_contact_phone: string | null
+          review_count: number | null
+          review_enabled: boolean
+          review_listing_url: string | null
+          review_place_id: string | null
+          review_score: number | null
           service_charge: number
           tax_rules: Json
           tenant_id: string
@@ -3719,6 +3726,13 @@ export type Database = {
           printing_mode?: string
           qr_auto_fire?: boolean
           receipt_template?: Json
+          review_checked?: string | null
+          review_contact_phone?: string | null
+          review_count?: number | null
+          review_enabled?: boolean
+          review_listing_url?: string | null
+          review_place_id?: string | null
+          review_score?: number | null
           service_charge?: number
           tax_rules?: Json
           tenant_id: string
@@ -3738,6 +3752,13 @@ export type Database = {
           printing_mode?: string
           qr_auto_fire?: boolean
           receipt_template?: Json
+          review_checked?: string | null
+          review_contact_phone?: string | null
+          review_count?: number | null
+          review_enabled?: boolean
+          review_listing_url?: string | null
+          review_place_id?: string | null
+          review_score?: number | null
           service_charge?: number
           tax_rules?: Json
           tenant_id?: string
@@ -4958,6 +4979,7 @@ export type Database = {
         Returns: string
       }
       start_stock_count: { Args: { _tenant: string }; Returns: string }
+      review_page: { Args: { _slug: string }; Returns: Json }
       storefront_menu: { Args: { _slug: string }; Returns: Json }
       submit_feedback: {
         Args: { _comment: string; _rating: number; _token: string }
