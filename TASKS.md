@@ -360,8 +360,11 @@ Owner (tsshetauda@gmail.com) sent a new 3-page printed menu; the live menu had t
       Egg `1 pc / 2 pc`, Noodles `Single / Double`. Categories mirror the PDF (13).
       **Applied to prod via MCP** after a rollback dry run: 101 → 107 dishes, 14 → 13 categories,
       every dish routed (Grill 4 / Bar 30 / Kitchen rest).
-- [ ] New dishes have no photo yet (Veg Momo, Tass/Choila rows, Wai Wai noodles, Sprite, Old Monk,
-      Ruslan, Barahsinghe…) — they render the monogram placeholder until the owner uploads.
+- [x] Photoless dishes (44) got themed SVG placeholder art via
+      `supabase/scripts/2026-10-17_sekuwa_menu_svgs.mjs` (skewer / plate / momo / bowl / egg /
+      thali / bottle / glass / cup / coal, with the veg circle-vs-triangle mark), uploaded to
+      `menu-images/{tenant}/{item}.svg` and set as `image_url`. A real photo uploaded from /menu
+      replaces the URL as usual. Re-run with `--all` to redraw the SVG ones only — never a photo.
 - [ ] Recipes/BOM for the 38 new dishes are empty — inventory auto-deduct won't fire for them.
 
 ---
