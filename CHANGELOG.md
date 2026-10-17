@@ -9,6 +9,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 ## [Unreleased]
 
 ### Added
+- **Create a login for an invited co-owner.** An Owner-role invite now has **Create login** like any other invite: set or generate a password and they become an active owner at once. Only for invites with no account yet; an existing owner's password still can't be set by another owner.
+
+<details><summary>Technical</summary>
+
+Migration `20261017100000_owner_invite_login` drops the `base_role = 'owner'` refusal from `assert_can_create_invite_login` (the existing-account check stays). `staff-tab.tsx` shows the button for any invite.
+
+</details>
+
 - **A one-page way for a guest to leave you a Google review.** Turn it on in Settings → Reviews, paste your Google listing, and you get a printable QR for the table or the till. A guest who scans it picks a rating, taps what stood out — the food, the service, the wait, the price — and gets a ready-written review they can edit before posting. Every draft is worded differently, so a run of reviews never reads like the same message copied out, which is what gets them removed. The rating and review count from your listing can be shown at the top; leave them blank until you have checked, and nothing is shown rather than a zero. A guest who picks three stars or fewer is asked what could be better instead, and can be offered your phone number — but the button to post on Google is exactly the same as it is at five stars. Steering unhappy guests away from your listing is against Google's rules, so the page does not do it. This is separate from the star feedback on the dine-in QR menu, which stays private to you.
 - **Flyers tab and coupon numbers on the mobile app.** App-only change, no web or server change: the phone's Coupons screen now has the Flyers tab (runs, codes, QR, pause/resume, edit, hand-out marks, CSV), the design step of the wizard (upload a picture, place the code and QR), flyer PDFs (whole run, proof, single code) and the stats strip. See `../extrahelper_flutter/CHANGELOG.md` [Unreleased].
 

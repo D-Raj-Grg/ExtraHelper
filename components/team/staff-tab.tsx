@@ -139,7 +139,7 @@ export function StaffTab({
                             <span className="sr-only"> {m.email}</span>
                           </Button>
                         ) : null}
-                        {canManagePasswords && m.base_role !== "owner" && m.user_id !== currentUserId ? (
+                        {canManagePasswords && (!m.user_id || (m.base_role !== "owner" && m.user_id !== currentUserId)) ? (
                           <PasswordDialog member={m} disabled={pending} />
                         ) : null}
                         <RemoveMemberButton
