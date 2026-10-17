@@ -345,6 +345,27 @@ Google's policy and is the thing this pattern is usually abused for.
 
 ---
 
+## Menu data — full relaunch from `Sekuwa_Station_Menu_Light.pdf` (2026-10-17, data)
+
+Owner (tsshetauda@gmail.com) sent a new 3-page printed menu; the live menu had to match it exactly.
+
+- [x] `supabase/scripts/2026-10-17_sekuwa_menu_light.sql` — one-off tenant-data script (not a
+      migration), hardcoded to tenant `2fd2168a…` (two tenants share the name). Transactional,
+      re-runnable, aborts on any name matching ≠ 1 row. Kept dishes are renamed/repriced **in place**
+      (same id → images, recipes, costs, sales links survive); 38 new dishes inserted; 32 dishes +
+      4 categories hard-deleted (owner's call; `order_items.name_snapshot` keeps bill history, and
+      top-item reports group by line label). Hookah + Coal kept by request. Spirits keep peg
+      variants, only `Full` moved to the bottle price. `is_86` cleared on every listed dish.
+      Sizes: Sekuwa `250 gm / 500 gm / 1 kg`, Momo `Steam / Fry / Jhol` (Kothe, C-Momo dropped),
+      Egg `1 pc / 2 pc`, Noodles `Single / Double`. Categories mirror the PDF (13).
+      **Applied to prod via MCP** after a rollback dry run: 101 → 107 dishes, 14 → 13 categories,
+      every dish routed (Grill 4 / Bar 30 / Kitchen rest).
+- [ ] New dishes have no photo yet (Veg Momo, Tass/Choila rows, Wai Wai noodles, Sprite, Old Monk,
+      Ruslan, Barahsinghe…) — they render the monogram placeholder until the owner uploads.
+- [ ] Recipes/BOM for the 38 new dishes are empty — inventory auto-deduct won't fire for them.
+
+---
+
 ## Menu data — "1 Jir" retired for "250 gm" (2026-09-22, data)
 
 Owner request: drop the `1 Jir` portion from the sekuwa dishes and sell 250 gm instead, at +350 buff,
