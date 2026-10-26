@@ -9,6 +9,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 ## [Unreleased]
 
 ### Added
+- **Reservations and floor/table admin on the mobile app.** The phone now has a Reservations board (create, confirm, seat, no-show, cancel) and a Floors & tables screen (add floor, add table, delete, QR). The web's booking and table actions now run through the same server functions, so a booking made on either side follows the same rules. No web screen changed. See `../extrahelper_flutter/CHANGELOG.md` [Unreleased].
+
+<details><summary>Technical</summary>
+
+Migration `20261026173923_mobile_tables_reservations_rpcs`: new RPCs `create_floor`, `create_table`, `delete_table`, `create_reservation`, `set_reservation_status` (security definer, authenticated only, audit_logs on each). The web server actions now call them too (`createReservation`, `setReservationStatus` in `app/(app)/reservations/actions.ts`; `createFloor`, `createTable`, `deleteTable` in `app/(app)/tables/actions.ts`), so both clients share one set of rules; `lib/supabase/database.types.ts` gained the five signatures. Behaviour changes on the web: a booking reuses the guest by phone instead of adding a customer row each time; party size is capped at 50; reservation status moves are validated server-side (pending → confirmed|cancelled, confirmed → seated|no_show|cancelled); seating goes through the RPC and writes an audit row; deleting a table with an open order is refused. Direct writes to these tables through the API are still allowed by tenant-only RLS — tightening that is a separate change.
+
+</details>
+
 - **Create a login for an invited co-owner.** An Owner-role invite now has **Create login** like any other invite: set or generate a password and they become an active owner at once. Only for invites with no account yet; an existing owner's password still can't be set by another owner.
 
 <details><summary>Technical</summary>
@@ -27,6 +35,14 @@ Uses the existing RPCs `list_flyer_designs`, `save_flyer_design`, `delete_flyer_
 </details>
 
 ### Fixed
+- **A table with a part-paid bill reopens its order instead of starting a new one.** Once a guest had paid part of a bill, tapping the table on the POS board started a second order on a table still mid-payment, and the order screen offered no way back to the bill. The table now shows "Bill unpaid", opens its order, and the order screen has **Finish the bill** for open and part-paid bills.
+
+<details><summary>Technical</summary>
+
+`components/pos/table-tab.tsx`: the unpaid-table map accepts bill status `open` or `partial` (was `open` only). `components/pos/amend-flow.tsx`: the billed footer branch and the "Billed · …" label cover `partial` too, using `billStatusLabel(billStatus)`. A part-paid order still takes no new items (`addable` is unchanged, matching the database). No migration.
+
+</details>
+
 - **On-screen receipt and checkout invoice group lines like the printed slip.** Same-price lines with different add-ons stay separate in `/receipt/[billId]` and the checkout preview; one shared `groupParticulars`, totals unchanged.
 - **Printed bills list same-price lines separately when their add-ons differ.** The slip folded two such drinks into one row while the checkout screen kept them apart. Now both agree; totals unchanged. (`lib/print/docs.ts`, `job-render.ts`.)
 - **Kitchen Display buttons were missing.** The Kitchen Display showed only a status label and Print, with no way to start, ready or serve a dish. The per-dish buttons, the pencil, **Bump all**, cancel and recall are back for anyone with the kitchen-bump permission (and cancel for those who can void). Cashiers can still watch the board but not move dishes.
@@ -217,6 +233,9 @@ Uses the existing RPCs `list_flyer_designs`, `save_flyer_design`, `delete_flyer_
 </details>
 
 ---
+
+### Changed
+- **Mobile: a Bill-requested table opens the order screen, with a Generate bill / Finish the bill button.** App-only; brings the phone in line with the web order modal. See `../extrahelper_flutter/CHANGELOG.md` [Unreleased].
 
 ## [1.0.15] — 2026-09-26 · Expenses, order alerts, and the work since 1.0.14
 

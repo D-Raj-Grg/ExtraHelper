@@ -16,9 +16,10 @@ export async function createFloor(
   if (!name) return { error: "Floor name is required." }
 
   const supabase = await createClient()
-  const { error } = await supabase
-    .from("floors")
-    .insert({ tenant_id: tenant.tenantId, name })
+  const { error } = await supabase.rpc("create_floor", {
+    _tenant: tenant.tenantId,
+    _name: name,
+  })
   if (error) return { error: error.message }
   revalidatePath("/tables")
   return { ok: true }
@@ -39,11 +40,11 @@ export async function createTable(
 
   const supabase = await createClient()
   // qr_token defaults to gen_random_uuid() in the DB — stable per table.
-  const { error } = await supabase.from("restaurant_tables").insert({
-    tenant_id: tenant.tenantId,
-    floor_id: floorId,
-    label,
-    capacity,
+  const { error } = await supabase.rpc("create_table", {
+    _tenant: tenant.tenantId,
+    _label: label,
+    _capacity: capacity,
+    _floor_id: floorId,
   })
   if (error) return { error: error.message }
   revalidatePath("/tables")
@@ -176,13 +177,11 @@ export async function splitTable(
 }
 
 export async function deleteTable(tableId: string): Promise<TablesState> {
-  const tenant = await requireRole("owner", "manager")
+  await requireRole("owner", "manager")
   const supabase = await createClient()
-  const { error } = await supabase
-    .from("restaurant_tables")
-    .delete()
-    .eq("id", tableId)
-    .eq("tenant_id", tenant.tenantId)
+  // The RPC refuses a table that still has an open order — deleting it would
+  // orphan the order from the board while the kitchen is still cooking it.
+  const { error } = await supabase.rpc("delete_table", { _table_id: tableId })
   if (error) return { error: error.message }
   revalidatePath("/tables")
   return { ok: true }

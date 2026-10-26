@@ -121,7 +121,10 @@ export function TableTab({
   const freeTables = new Set(tables.filter((t) => t.state === "free").map((t) => t.id))
   const unpaidByTable = new Map<string, string>()
   for (const o of billed) {
-    if (!o.table_id || o.status !== "billed" || o.bills?.status !== "open") continue
+    // `partial` is still owed: a guest who has paid part of the bill is mid-
+    // payment, and a tap must reopen that order — not start a second one on it.
+    const owed = o.bills?.status === "open" || o.bills?.status === "partial"
+    if (!o.table_id || o.status !== "billed" || !owed) continue
     if (freeTables.has(o.table_id)) continue
     if (orderByTable.has(o.table_id) || unpaidByTable.has(o.table_id)) continue
     unpaidByTable.set(o.table_id, o.id)

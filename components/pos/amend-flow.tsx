@@ -219,11 +219,11 @@ export function AmendFlow({
                 </Button>
               ) : null}
 
-              {detail.status === "billed" && billStatus === "open" ? (
+              {detail.status === "billed" && (billStatus === "open" || billStatus === "partial") ? (
                 <>
                   <p className="flex items-center justify-center gap-1.5 text-sm text-amber-700 dark:text-amber-400">
                     <CircleAlertIcon className="size-4 shrink-0" aria-hidden />
-                    Billed · {billStatusLabel("open").toLowerCase()}
+                    Billed · {billStatusLabel(billStatus).toLowerCase()}
                   </p>
                   {detail.bill_id ? (
                     <Button

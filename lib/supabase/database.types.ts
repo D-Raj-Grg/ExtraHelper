@@ -4221,6 +4221,28 @@ export type Database = {
         Returns: undefined
       }
       create_bill_for_order: { Args: { _order_id: string }; Returns: string }
+      create_floor: { Args: { _name: string; _tenant: string }; Returns: string }
+      create_reservation: {
+        Args: {
+          _name: string
+          _notes: string | null
+          _party: number
+          _phone: string | null
+          _table_id: string | null
+          _tenant: string
+          _when: string
+        }
+        Returns: string
+      }
+      create_table: {
+        Args: {
+          _capacity: number
+          _floor_id: string | null
+          _label: string
+          _tenant: string
+        }
+        Returns: string
+      }
       create_draft_po_from_reorder: {
         Args: { _branch?: string; _tenant: string }
         Returns: number
@@ -4297,6 +4319,7 @@ export type Database = {
       delete_po_line: { Args: { _line_id: string }; Returns: undefined }
       delete_printer: { Args: { _printer_id: string }; Returns: undefined }
       delete_supplier: { Args: { _supplier_id: string }; Returns: undefined }
+      delete_table: { Args: { _table_id: string }; Returns: undefined }
       delete_variant: { Args: { _variant_id: string }; Returns: undefined }
       effective_item_cost_cents: {
         Args: { _item_id: string; _variant_id: string }
@@ -4953,6 +4976,13 @@ export type Database = {
       }
       set_station_printer: {
         Args: { _printer_id: string; _station_id: string }
+        Returns: undefined
+      }
+      set_reservation_status: {
+        Args: {
+          _id: string
+          _status: Database["public"]["Enums"]["reservation_status"]
+        }
         Returns: undefined
       }
       set_stock_count_actual: {

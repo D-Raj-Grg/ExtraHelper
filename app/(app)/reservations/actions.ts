@@ -60,58 +60,44 @@ export async function createReservation(
   if (Number.isNaN(reservedAt.getTime())) return fail("Invalid date/time.")
 
   const supabase = await createClient()
-  // Lightweight customer record (reused by loyalty/CRM later).
-  const { data: customer, error: custErr } = await supabase
-    .from("customers")
-    .insert({ tenant_id: tenant.tenantId, name, phone })
-    .select("id")
-    .single()
-  if (custErr || !customer) return fail(custErr?.message ?? "Could not save guest.")
-
-  const { data: created, error } = await supabase.from("reservations").insert({
-    tenant_id: tenant.tenantId,
-    table_id: tableId,
-    customer_id: customer.id,
-    party_size: party,
-    reserved_at: reservedAt.toISOString(),
-    status: "pending",
-    notes,
-  }).select("id").single()
+  // One RPC finds-or-creates the guest (by phone, so a regular isn't duplicated
+  // on every booking) and books the table, and the mobile app calls the same
+  // one — the rules live in Postgres, not here.
+  const { data: id, error } = await supabase.rpc("create_reservation", {
+    _tenant: tenant.tenantId,
+    _name: name,
+    _phone: phone,
+    _party: party,
+    _when: reservedAt.toISOString(),
+    _table_id: tableId,
+    _notes: notes,
+  })
   if (error) return fail(error.message)
 
   revalidatePath("/reservations")
-  return { ok: true, id: created?.id }
+  return { ok: true, id: id ?? undefined }
 }
 
 export type StatusResult = { error: string } | { ok: true }
 
-/** Advance a reservation's status. Seating also occupies the linked table. */
+/** Advance a reservation's status. Seating also occupies the linked table (in the RPC). */
 export async function setReservationStatus(
   id: string,
   status: ResvStatus,
 ): Promise<StatusResult> {
-  const tenant = await requireRole(...RESV_ROLES)
+  await requireRole(...RESV_ROLES)
   if (!RESV_STATES.includes(status)) return { error: "Invalid status." }
 
   const supabase = await createClient()
-  // Scope to the active tenant: RLS already blocks cross-tenant rows, but this
-  // also prevents a multi-tenant user touching a non-active tenant's rows.
-  const { data: resv, error: readErr } = await supabase
-    .from("reservations")
-    .update({ status })
-    .eq("id", id)
-    .eq("tenant_id", tenant.tenantId)
-    .select("table_id")
-    .single()
-  if (readErr) return { error: readErr.message }
-
-  if (status === "seated" && resv?.table_id) {
-    await supabase
-      .from("restaurant_tables")
-      .update({ state: "occupied" })
-      .eq("id", resv.table_id)
-      .eq("tenant_id", tenant.tenantId)
-  }
+  // `set_reservation_status` owns the rules: which moves are legal (a seated
+  // party can't be cancelled), occupying the table on seat, the audit row, and
+  // the tenant check. A role check in this action never stopped the same update
+  // going through the API.
+  const { error } = await supabase.rpc("set_reservation_status", {
+    _id: id,
+    _status: status,
+  })
+  if (error) return { error: error.message }
 
   revalidatePath("/reservations")
   return { ok: true }
