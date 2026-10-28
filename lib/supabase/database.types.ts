@@ -162,6 +162,7 @@ export type Database = {
         Row: {
           bill_printed_at: string | null
           credit_left_at: string | null
+          cancelled_at: string | null
           bill_printed_total_cents: number | null
           branch_id: string | null
           created_at: string
@@ -182,6 +183,7 @@ export type Database = {
         Insert: {
           bill_printed_at?: string | null
           credit_left_at?: string | null
+          cancelled_at?: string | null
           bill_printed_total_cents?: number | null
           branch_id?: string | null
           created_at?: string
@@ -202,6 +204,7 @@ export type Database = {
         Update: {
           bill_printed_at?: string | null
           credit_left_at?: string | null
+          cancelled_at?: string | null
           bill_printed_total_cents?: number | null
           branch_id?: string | null
           created_at?: string
