@@ -598,6 +598,16 @@ Also fixed incidentally: the old footer rendered **"Generate bill"** on a `cance
       3. `models.dart:379` — keep the three-status getter as `isSettled`, add `isAmendable`.
       4. `order_composer.dart:423` — point the **Cancel order** gate at `isSettled`. Do **not** relax
          it: `cancel_order` still refuses a billed order.
+         **Superseded (2026-10-28):** migration `20261028154242_cancel_billed_order` lets `cancel_order`
+         accept a `billed` order whose bill is `open` with no completed payment (voids the bill, or
+         detaches the order from a merged bill). Flutter composer now gates Cancel on `isAmendable`.
+         Fixes the all-voided billed order that stranded its table.
+         Follow-ups (2026-10-28): `cancel_order` also refuses while a payment is `pending` (webhook would
+         revive the voided bill; webhook now skips `void` bills), reverses `sale` stock movements like
+         `void_order_item` (migration `..155314`), and refuses a credit tab (`bills.credit_left_at`, set by
+         `leave_bill_on_credit`) that still has an amount on it. Bills left on credit before that migration
+         carry no stamp. Also: `record_payment` locks the bill and refuses a cancelled one (`..155724`); voiding a bill releases its coupon use (`..155924`); Flutter checkout screen got a Cancel panel and the web card handles merged bills. **Open:** 8 cancelled orders / 117 lines (1 tenant) cancelled before the stock fix
+         never had stock returned — backfill pending owner's call (stock counts may already be hand-fixed).
       5. `pos_repository.dart:719` — `_friendly` needs an `'already taken a payment'` branch; today
          the raw lowercase Postgres string is shown.
       6. `bill_repository.dart:100-109` already fetches the primary order and throws the `id` away —

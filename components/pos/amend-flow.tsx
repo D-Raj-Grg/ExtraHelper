@@ -3,12 +3,14 @@
 import { useCallback, useState, useTransition } from "react"
 import Link from "next/link"
 import { toast } from "sonner"
-import { CircleAlertIcon, PauseIcon, ReceiptIcon, SendIcon } from "lucide-react"
+import { CircleAlertIcon, PauseIcon, ReceiptIcon, SendIcon, Trash2Icon } from "lucide-react"
 
 import { fireOrder, setOrderDetails } from "@/app/(app)/pos/actions"
 import { generateBill } from "@/app/(app)/bill/actions"
 import { billStatusLabel, orderStatusLabel } from "@/lib/order-constants"
 import { Button } from "@/components/ui/button"
+import { CancelOrderDialog } from "@/components/checkout/cancel-order-card"
+import { useHasPermission } from "@/components/permission-provider"
 import { DishStep } from "@/components/pos/dish-step"
 import { EMPTY_CHECK_IN, type CheckIn } from "@/components/pos/check-in-details"
 import { useAmendCart } from "@/components/pos/use-amend-cart"
@@ -48,6 +50,9 @@ export function AmendFlow({
 }) {
   const [pending, startTransition] = useTransition()
   const cart = useAmendCart(detail, refetch)
+  const [cancelOpen, setCancelOpen] = useState(false)
+  // UX gate only — cancel_order is manager-only server side and says so.
+  const canCancel = useHasPermission("order.void")
 
   // Two different questions, and conflating them is what used to grey out the
   // whole dish grid on any fired order.
@@ -65,6 +70,14 @@ export function AmendFlow({
     detail.status !== "closed" &&
     detail.status !== "cancelled" &&
     (detail.status !== "billed" || billStatus === "open")
+
+  // Billed, bill still open, every dish voided: nothing to pay, and the table
+  // is stuck until the order is cancelled.
+  const cancellable =
+    canCancel &&
+    detail.status === "billed" &&
+    billStatus === "open" &&
+    detail.order_items.every((l) => l.is_void)
 
   const heldCount = cart.lines.filter((l) => l.isHeld).length
   const allHeld = cart.lines.length > 0 && heldCount === cart.lines.length
@@ -242,6 +255,25 @@ export function AmendFlow({
                       <ReceiptIcon />
                       Finish the bill
                     </Button>
+                  ) : null}
+                  {cancellable ? (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="lg"
+                        className="min-h-11 w-full text-destructive"
+                        onClick={() => setCancelOpen(true)}
+                      >
+                        <Trash2Icon />
+                        Cancel order
+                      </Button>
+                      <CancelOrderDialog
+                        orderIds={[detail.id]}
+                        open={cancelOpen}
+                        onOpenChange={setCancelOpen}
+                        onDone={onClose}
+                      />
+                    </>
                   ) : null}
                 </>
               ) : detail.status === "billed" ||

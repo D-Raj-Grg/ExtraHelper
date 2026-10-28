@@ -128,7 +128,7 @@ export default async function BillPage({
       // would carry it to the wrong table.
       supabase
         .from("orders")
-        .select("id")
+        .select("id, status")
         .eq("bill_id", billId)
         .eq("tenant_id", tenant.tenantId),
       // The guest's coupon, if one is on the bill: the Discount row names it
@@ -259,6 +259,9 @@ export default async function BillPage({
         // on the wrong table's ticket, so the control hides and the cashier
         // picks the tab from /pos deliberately.
         orderId={(billOrders ?? []).length === 1 ? ((billOrders![0].id as string) ?? null) : null}
+        cancellableOrderIds={(billOrders ?? [])
+          .filter((o) => o.status === "billed")
+          .map((o) => o.id as string)}
         meta={{
           tenantName: tenant.name,
           timezone: tenant.timezone,

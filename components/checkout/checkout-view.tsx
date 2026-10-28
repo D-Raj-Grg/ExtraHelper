@@ -34,6 +34,7 @@ import { useOffline } from "@/components/offline-sync-provider"
 import { usePrint } from "@/components/print/use-print"
 import { useNewOrder } from "@/components/pos/new-order-provider"
 import { PageHeader } from "@/components/page-header"
+import { CancelOrderCard } from "@/components/checkout/cancel-order-card"
 import { CheckoutCustomerPanel } from "@/components/checkout/customer-panel"
 import { CheckoutInvoicePreview } from "@/components/checkout/invoice-preview"
 import { CheckoutItemsTable, type DiscountUnit } from "@/components/checkout/items-table"
@@ -85,6 +86,7 @@ export function CheckoutView({
   pointsValueCents = 1,
   mergeableOrders = [],
   orderId = null,
+  cancellableOrderIds = [],
 }: {
   currency: string
   bill: CheckoutBill
@@ -106,6 +108,8 @@ export function CheckoutView({
    * Add items control rather than guessing which tab the guest meant.
    */
   orderId?: string | null
+  /** Every order on this bill still in `billed` — what Cancel acts on. */
+  cancellableOrderIds?: string[]
 }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
@@ -477,6 +481,10 @@ export function CheckoutView({
               </CardContent>
             </Card>
           </div>
+
+          {bill.status === "open" && items.length === 0 && cancellableOrderIds.length > 0 && canDiscount ? (
+            <CancelOrderCard orderIds={cancellableOrderIds} />
+          ) : null}
 
           {!settled ? (
             <Card>

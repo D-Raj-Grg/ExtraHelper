@@ -75,10 +75,12 @@ export async function POST(
   if (newStatus === "completed" && payment.bill_id) {
     const { data: bill } = await admin
       .from("bills")
-      .select("id, total_cents, table_id")
+      .select("id, total_cents, table_id, status")
       .eq("id", payment.bill_id)
       .maybeSingle()
-    if (bill) {
+    // A voided bill stays void: reviving it would close a cancelled order and
+    // free a table that may have been re-seated since.
+    if (bill && bill.status !== "void") {
       const { data: paidRows } = await admin
         .from("payments")
         .select("amount_cents")
@@ -92,6 +94,16 @@ export async function POST(
         if (bill.table_id)
           await admin.from("restaurant_tables").update({ state: "free" }).eq("id", bill.table_id)
       }
+    } else if (bill) {
+      // Money landed on a bill that was cancelled. Nothing else shows it, so
+      // leave a trail for whoever reconciles the gateway.
+      await admin.from("audit_logs").insert({
+        tenant_id: payment.tenant_id,
+        action: "payment_on_void_bill",
+        entity_type: "payment",
+        entity_id: payment.id,
+        metadata: { bill_id: bill.id, gateway, reference },
+      })
     }
   }
 
