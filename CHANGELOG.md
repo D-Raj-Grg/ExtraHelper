@@ -8,6 +8,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Changed
+- **Mobile: order screen decluttered** (title no longer truncates, compact category pills, shorter dish tiles, one-row Generate bill + Send). No web change. See `../extrahelper_flutter/CHANGELOG.md` [Unreleased].
+- **Mobile: Floors & tables screen layout polish** (even grid, icon buttons, no wrapped "Delete"). No web change. See `../extrahelper_flutter/CHANGELOG.md` [Unreleased].
+
 ### Fixed
 - **A billed order whose dishes were all voided can now be cancelled, which frees its table.** Voiding the last dish of a billed order used to leave a zero-total bill that could not be paid, so the table stayed occupied with no way out. A manager can now cancel the order: it voids the bill (or, on a bill shared with other orders, just detaches that order) and frees the table. Checkout shows a **Nothing left to bill** card with a Cancel button, merged bills cancel all their orders in turn, and the billed pane on the POS offers the same. Refused, with a readable reason, when payments are on the bill, when a gateway payment is still pending, or when the bill was left on credit and still has an amount on it.
 - **Cancelling an order now returns its ingredient stock.** Cancelling a fired order never reversed the stock the kitchen had deducted, so counts drifted low. It now reverses it the same way a single-dish void does. Orders cancelled before this fix are not corrected; see TASKS.md.
@@ -17,6 +21,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 <details><summary>Technical (cancel billed order)</summary>
 
 Migrations `20261028154242_cancel_billed_order`, `..154728_cancel_billed_order_hardening`, `..155314_cancel_restores_stock_credit_guard`, `..155724_record_payment_refuses_cancelled_bill`, `..155924_cancel_releases_coupon`. The last definition of `cancel_order(_order_id, _reason)` (owner/manager only, unchanged): refuses `closed`/`cancelled`; for a `billed` order locks the order and bill rows and requires the bill `open` with no `completed` or `pending` payment, and no `credit_left_at` stamp while `total_cents > 0`; voids live lines; reverses `sale` stock movements with `adjustment` movements referenced `void:<line id>` (skipping lines already reversed) via one data-modifying CTE; then detaches the order (`bill_id = null`, `recompute_bill`) when other live orders share the bill, or sets the bill `void` and deletes its `discounts` rows with a `coupon_id`, decrementing `coupons.used_count` as `remove_coupon` does; `refresh_table_state`; audit row with `bill_id` and `bill: voided|detached`. `leave_bill_on_credit` now sets new column `bills.credit_left_at` (bills left on credit earlier carry no stamp). `record_payment` takes `select ... for update` on the bill and raises `this bill was cancelled` when `bills.cancelled_at` is set (set only by `cancel_order`; a fully refunded `void` bill is not cancelled and stays payable). Migration `..160710_cancelled_bills_stay_cancelled` adds `bills.cancelled_at` and trigger `trg_bills_cancel_marks`: once set, the bill's status can't leave `void` and `cancelled_at` can't change, for every caller (closes `public_pay_order`, `redeem_points_for_bill`, the webhook and direct writes), and `authenticated`/`anon` roles cannot write `cancelled_at` or `credit_left_at`. Pre-existing and untouched: `bills` RLS is tenant-wide (`tenant_all`), so other columns remain writable through the API. Webhook `app/api/webhooks/[gateway]/route.ts` skips the bill roll-up for `void` bills and inserts a `payment_on_void_bill` audit row. UI: `components/checkout/cancel-order-card.tsx` (`CancelOrderCard`, shared `CancelOrderDialog`), `checkout-view.tsx`, `app/(app)/bill/[billId]/page.tsx` (`cancellableOrderIds`), `components/pos/amend-flow.tsx`; `database.types.ts` gained `bills.credit_left_at`. Known gaps: a `pending` payment that never resolves blocks cancel; the web amend-flow button gates on `order.void` while the server checks the owner/manager role; stock for orders cancelled before the fix is not backfilled (8 orders, 117 lines, one tenant).
+
+</details>
+
+- **Mobile: "Generate bill" no longer stays greyed out** once items are sent to the kitchen (served or not). No web change. See `../extrahelper_flutter/CHANGELOG.md` [Unreleased].
+
+<details><summary>Technical</summary>
+
+Flutter-only fix (`CartController.hasUnsent`); web `amend-flow.tsx` and the billing RPCs were already correct.
 
 </details>
 
