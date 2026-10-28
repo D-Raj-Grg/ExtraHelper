@@ -8,6 +8,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Fixed
+- **A billed order whose payment was refunded in full can now be cancelled.** Before, a part-paid bill with every dish voided could be neither refunded-and-cancelled nor cancelled, which kept its table occupied. Migration `20261028171015_cancel_order_after_full_refund`: `cancel_order` now checks the money still held (payments minus refunds) instead of "any payment ever". Money still held is still refused. Mobile app gets the matching buttons; see `../extrahelper_flutter/CHANGELOG.md`.
+
+### Changed
+- **Mobile: checkout "View bill" button, tighter order screen.** No web change. See `../extrahelper_flutter/CHANGELOG.md` [Unreleased].
+
 ### Changed
 - **Mobile: order screen decluttered** (title no longer truncates, compact category pills, shorter dish tiles, one-row Generate bill + Send). No web change. See `../extrahelper_flutter/CHANGELOG.md` [Unreleased].
 - **Mobile: Floors & tables screen layout polish** (even grid, icon buttons, no wrapped "Delete"). No web change. See `../extrahelper_flutter/CHANGELOG.md` [Unreleased].
