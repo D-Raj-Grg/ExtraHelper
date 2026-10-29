@@ -87,7 +87,20 @@ export const COMPLETED_ORDER_SELECT =
   "id, order_type, status, created_at, guests, table_id, bill_id, " +
   "restaurant_tables!orders_table_id_fkey(label), " +
   "order_items(id, name_snapshot, qty, unit_price_cents, is_void), " +
-  "bills!orders_bill_id_fkey(id, status, total_cents, payments(method, amount_cents, status))"
+  "bills!orders_bill_id_fkey(id, status, total_cents, credit_left_at, payments(method, amount_cents, status))"
+
+/**
+ * A bill left on credit is a debt, not a till item: the table is already free
+ * and the money is chased from Loyalty → Credit (customer drawer → Collect).
+ * Its order stays `billed` for good, so without this it would sit on the
+ * Completed tab as "carried over" forever. Applied after the fetch because a
+ * PostgREST filter on the embedded bill would also drop orders with no bill.
+ */
+export function withoutCreditTabs<T extends { bills: { credit_left_at?: string | null } | null }>(
+  rows: T[],
+): T[] {
+  return rows.filter((o) => !o.bills?.credit_left_at)
+}
 
 /**
  * A busy till closes a few hundred orders a day. Caps the worst case without a

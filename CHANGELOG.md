@@ -9,6 +9,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 ## [Unreleased]
 
 ### Fixed
+- **Bills left on credit no longer sit on the POS Completed tab.** Leaving a bill unpaid keeps its order `billed` for good, so it showed as "carried over" forever even though the table was free and the debt is collected from Loyalty → Credit. They are now hidden there. Bills left on credit before `credit_left_at` existed carry no stamp and still show until they are settled.
+  - Technical: `withoutCreditTabs()` in `lib/pos-constants.ts` filters rows by `bills.credit_left_at` (added to `COMPLETED_ORDER_SELECT`), applied in `app/(app)/pos/data.ts` and the `pos-screen.tsx` refetch. Client-side because a PostgREST filter on the embedded bill would also drop bill-less orders. No schema change.
 - **A billed order whose payment was refunded in full can now be cancelled.** Before, a part-paid bill with every dish voided could be neither refunded-and-cancelled nor cancelled, which kept its table occupied. Migration `20261028171015_cancel_order_after_full_refund`: `cancel_order` now checks the money still held (payments minus refunds) instead of "any payment ever". Money still held is still refused. Mobile app gets the matching buttons; see `../extrahelper_flutter/CHANGELOG.md`.
 
 ### Changed

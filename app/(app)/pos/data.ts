@@ -3,6 +3,7 @@ import { getMyPermissions } from "@/lib/supabase/permissions"
 import {
   ACTIVE_ORDER_STATUSES,
   completedOrdersQuery,
+  withoutCreditTabs,
   kotTabQuery,
   ORDER_CARD_SELECT,
   ORDER_DETAIL_SELECT,
@@ -167,7 +168,7 @@ export async function loadPosData(
     ...composer,
     orders: (orders.data ?? []) as unknown as PosOrderCard[],
     kots: (kots.data ?? []) as unknown as PosKot[],
-    completed: (completed.data ?? []) as unknown as PosCompletedOrder[],
+    completed: withoutCreditTabs((completed.data ?? []) as unknown as PosCompletedOrder[]),
     canCheckout: permissionKeys.includes("checkout.view"),
   }
 }

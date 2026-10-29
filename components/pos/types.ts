@@ -55,6 +55,8 @@ export type PosCompletedOrder = {
     id: string
     status: string
     total_cents: number
+    /** Set when the bill was left on credit; such rows are kept off the tab. */
+    credit_left_at?: string | null
     /** Repeats on every order sharing a merged bill — dedupe by bill id. */
     payments: { method: string; amount_cents: number; status: string }[] | null
   } | null

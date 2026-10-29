@@ -10,6 +10,7 @@ import {
   completedOrdersQuery,
   isKotCompleted,
   ORDER_CARD_SELECT,
+  withoutCreditTabs,
 } from "@/lib/pos-constants"
 import { loadMenuCache, saveMenuCache } from "@/lib/offline/menu-cache"
 import { Badge } from "@/components/ui/badge"
@@ -173,7 +174,7 @@ export function PosScreen({
       timeZone,
       dayCutoffMinutes,
     )
-    if (rows) setCompleted(rows as unknown as PosCompletedOrder[])
+    if (rows) setCompleted(withoutCreditTabs(rows as unknown as PosCompletedOrder[]))
   }, [tenantId, timeZone, dayCutoffMinutes])
 
   // Read through a ref so the Realtime callback doesn't need `tab` in its deps
