@@ -155,6 +155,15 @@ export default async function BillPage({
       : { data: [] }
 
   const paid = (payments ?? []).reduce((s, p) => s + p.amount_cents, 0)
+  // Money still held: only a bill covering its own total can be closed or
+  // refunded from the "nothing left to bill" card, and a refund must not be
+  // counted as still there.
+  const { data: refundRows } = await supabase
+    .from("refunds")
+    .select("amount_cents")
+    .eq("bill_id", billId)
+    .eq("tenant_id", tenant.tenantId)
+  const heldCents = paid - (refundRows ?? []).reduce((s, r) => s + r.amount_cents, 0)
 
   const modsByItem = new Map<string, CheckoutItem["modifiers"]>()
   for (const m of modifiers ?? []) {
@@ -247,6 +256,7 @@ export default async function BillPage({
         payments={payments ?? []}
         charges={charges ?? []}
         paidCents={paid}
+        heldCents={heldCents}
         canDiscount={tenant.role === "owner" || tenant.role === "manager"}
         hasStaffDiscount={(staffDiscount ?? []).length > 0}
         couponCode={(couponRows ?? [])[0]?.coupon_code ?? null}

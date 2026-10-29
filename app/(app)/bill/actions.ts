@@ -342,6 +342,21 @@ export async function leaveOnCredit(billId: string): Promise<BillState> {
   return { ok: true }
 }
 
+/**
+ * Finish a bill that already holds at least its total (every dish voided after
+ * a part payment): the money is kept, any overage becomes tip, the table frees.
+ * The other way out is refundBill, then cancelOrder.
+ */
+export async function closeCoveredBill(billId: string): Promise<BillState> {
+  await requirePermission("payment.take")
+  const supabase = await createClient()
+  const { error } = await supabase.rpc("close_covered_bill", { _bill_id: billId })
+  if (error) return { error: error.message }
+  revalidatePath(`/bill/${billId}`)
+  revalidatePath("/pos")
+  return { ok: true }
+}
+
 /** A guest already in the book, for the customer picker. */
 export type CustomerHit = {
   id: string

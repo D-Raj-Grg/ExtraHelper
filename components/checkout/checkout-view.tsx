@@ -35,6 +35,7 @@ import { usePrint } from "@/components/print/use-print"
 import { useNewOrder } from "@/components/pos/new-order-provider"
 import { PageHeader } from "@/components/page-header"
 import { CancelOrderCard } from "@/components/checkout/cancel-order-card"
+import { CoveredBillCard } from "@/components/checkout/covered-bill-card"
 import { CheckoutCustomerPanel } from "@/components/checkout/customer-panel"
 import { CheckoutInvoicePreview } from "@/components/checkout/invoice-preview"
 import { CheckoutItemsTable, type DiscountUnit } from "@/components/checkout/items-table"
@@ -78,6 +79,7 @@ export function CheckoutView({
   payments,
   charges,
   paidCents,
+  heldCents = 0,
   meta,
   canDiscount = false,
   hasStaffDiscount = false,
@@ -94,6 +96,8 @@ export function CheckoutView({
   payments: CheckoutPayment[]
   charges: CheckoutCharge[]
   paidCents: number
+  /** Payments minus refunds — money still on the bill. */
+  heldCents?: number
   meta: InvoiceMeta
   canDiscount?: boolean
   hasStaffDiscount?: boolean
@@ -123,6 +127,13 @@ export function CheckoutView({
 
   const settled = bill.status === "paid"
   const due = Math.max(0, bill.total_cents - paidCents)
+  // Holds its whole total and then some, with no dish left to bill: payment
+  // can't finish it (a payment of 0 is refused), so it gets its own way out.
+  const covered =
+    (bill.status === "open" || bill.status === "partial") &&
+    items.length === 0 &&
+    heldCents > 0 &&
+    heldCents >= bill.total_cents
 
   // Nothing is locked by printing — a table that orders another round after
   // asking for the bill is normal. What is not normal is charging a guest a
@@ -482,11 +493,24 @@ export function CheckoutView({
             </Card>
           </div>
 
-          {bill.status === "open" && items.length === 0 && cancellableOrderIds.length > 0 && canDiscount ? (
+          {covered ? (
+            <CoveredBillCard
+              billId={bill.id}
+              currency={currency}
+              heldCents={heldCents}
+              canRefund={canDiscount}
+            />
+          ) : null}
+
+          {(bill.status === "open" || bill.status === "void") &&
+          heldCents <= 0 &&
+          items.length === 0 &&
+          cancellableOrderIds.length > 0 &&
+          canDiscount ? (
             <CancelOrderCard orderIds={cancellableOrderIds} />
           ) : null}
 
-          {!settled ? (
+          {covered ? null : !settled ? (
             <Card>
               <CardHeader>
                 <CardTitle>Payment</CardTitle>
