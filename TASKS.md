@@ -365,7 +365,25 @@ Owner (tsshetauda@gmail.com) sent a new 3-page printed menu; the live menu had t
       thali / bottle / glass / cup / coal, with the veg circle-vs-triangle mark), uploaded to
       `menu-images/{tenant}/{item}.svg` and set as `image_url`. A real photo uploaded from /menu
       replaces the URL as usual. Re-run with `--all` to redraw the SVG ones only — never a photo.
-- [ ] Recipes/BOM for the 38 new dishes are empty — inventory auto-deduct won't fire for them.
+- [x] **Handwritten menu (Nov 2026) applied to `the-sekuwa-station` via MCP** (owner
+      tsshetauda@gmail.com): 113 → 200 dishes, 121 variants. Existing rows matched by name and
+      updated in place (ids kept); ~87 new dishes incl. new categories Chowmin / Rice / Daal / Salad /
+      Premium Liquor; items missing from the notebook left untouched. 92 unrouted dishes routed
+      (Sekuwa → Grill, drinks/liquor/cigarette → Bar, rest → Kitchen; Service Charge stays unrouted).
+      Chicken Chilly = 350 (owner decision); Omelet Current + Mix Veg + Buff Sausage double = 430
+      (handwriting read as "2130").
+- [ ] **Run the SVG script for the 93 new photoless dishes** — needs the service-role key from
+      `.env.local`, which the cloud session doesn't have:
+      `node supabase/scripts/2026-10-17_sekuwa_menu_svgs.mjs 2fd2168a-0728-456a-8308-202134599864`.
+      Script now also draws whisky/brand bottles, cigarette packs, tea/coffee cups, rice, daal, chowmin,
+      omelets and mushroom dishes (previously they fell through to the meat plate).
+- [ ] Old items superseded by the new menu are still live and duplicate on POS: `Fried Rice`
+      (variants), `Big Master Wine`, `Khukuri Rum` (no colour), old Wai-Wai / Current noodles
+      (`Current (Boiled)`, `Mix Veg Current`, `Egg Current…`, `Egg Wai Wai…`), `Chicken Khana`. Owner
+      said leave missing items as-is — deactivate once they confirm. Quarter/Half/ML variants of
+      8848 / Old Durbar / Signature still carry old prices (notebook only gave bottle prices).
+- [ ] Recipes/BOM for the 38 new dishes are empty — inventory auto-deduct won't fire for them
+      (and now ~87 more from the Nov 2026 menu).
 
 ---
 
