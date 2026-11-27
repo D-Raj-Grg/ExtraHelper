@@ -5,6 +5,8 @@
  * browser bundle.
  */
 
+import { prepareQuery, scoreMatch } from "@/lib/menu-search"
+
 export type QrVariant = { id: string; name: string; price_delta_cents: number }
 
 export type QrItem = {
@@ -64,10 +66,10 @@ export function cartCount(lines: QrCartLine[]): number {
 
 /** Free-text match over a dish: its own words, plus the category it sits in. */
 export function itemMatches(item: QrItem, categoryName: string, query: string): boolean {
-  const q = query.trim().toLowerCase()
-  if (!q) return true
-  const hay = [item.name, item.description ?? "", categoryName, ...(item.variants ?? []).map((v) => v.name)]
-    .join(" ")
-    .toLowerCase()
-  return q.split(/\s+/).every((word) => hay.includes(word))
+  return (
+    scoreMatch(prepareQuery(query), {
+      name: item.name,
+      extras: [item.description ?? "", categoryName, ...(item.variants ?? []).map((v) => v.name)],
+    }) > 0
+  )
 }

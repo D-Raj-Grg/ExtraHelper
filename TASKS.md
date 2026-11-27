@@ -392,6 +392,13 @@ Owner (tsshetauda@gmail.com) sent a new 3-page printed menu; the live menu had t
       Premium liquor is Full-bottle only (owner choice).
 - [x] Wines/whisky split rows folded into variants: `Big Master Wine` (Fruit Mixed 1600 / Red Wine 1800,
       old row reused so history is kept), `Robertson Wine`, `Johnnie Walker`, `Jack Daniels`, `Glenfiddich`.
+- [x] **Dish search is fuzzy, ranked and category-blind** (`lib/menu-search.ts`, used by the POS grid,
+      the QR menu and /menu). "bigmaster" ↔ "Big Master Wine", prefixes, initials ("bmw"), one-typo
+      ("bigmastar", "cokee"), skipped letters ("chkn"), and variant/category words ("buff" → Tass), best
+      match first. In POS a search ignores the selected category chip — typing "coke" under Hard Drinks
+      now shows Coke, with a status line saying matches come from all categories. Not browser-tested
+      (no node_modules in the cloud session): run `npm run dev`, open /pos → New order, and try
+      "big master", "bigmaster", "bmw", "coke" under Hard Drinks, "chkn", "johny walker".
 - [ ] Still live and possibly duplicating: `Chicken Khana`, old Current / Wai-Wai noodles (`Current (Boiled)`, `Mix Veg Current`,
       `Egg Current…`, `Egg Wai Wai…`). Fried Rice keeps its old `Chicken + Egg` variant (Rs 220, has an
       order) — reprice or retire with the owner.
