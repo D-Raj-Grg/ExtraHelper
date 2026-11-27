@@ -82,6 +82,9 @@ function OptionsForm({
 }) {
   const variants = item.variants ?? []
   const modifiers = item.modifiers ?? []
+  // A drink's note goes to the bar, not a kitchen — say so, so nobody writes
+  // "well done" on a whisky or wonders why a peg note is "a cooking request".
+  const isBar = item.station_kind === "bar"
 
   const [variantId, setVariantId] = useState<string | null>(variants[0]?.id ?? null)
   const [modifierIds, setModifierIds] = useState<string[]>([])
@@ -177,14 +180,20 @@ function OptionsForm({
         ) : null}
 
         <Field>
-          <FieldLabel htmlFor={`notes-${item.id}`}>Add a cooking request (optional)</FieldLabel>
-          <FieldDescription>This goes on the kitchen ticket.</FieldDescription>
+          <FieldLabel htmlFor={`notes-${item.id}`}>
+            {isBar ? "Add a note for the bar (optional)" : "Add a cooking request (optional)"}
+          </FieldLabel>
+          <FieldDescription>
+            {isBar ? "This goes on the bar ticket." : "This goes on the kitchen ticket."}
+          </FieldDescription>
           <Textarea
             id={`notes-${item.id}`}
             rows={3}
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="e.g. Extra spicy, no onions, well done…"
+            placeholder={
+              isBar ? "e.g. On the rocks, no ice, with soda, extra lemon…" : "e.g. Extra spicy, no onions, well done…"
+            }
           />
         </Field>
 

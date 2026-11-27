@@ -399,6 +399,15 @@ Owner (tsshetauda@gmail.com) sent a new 3-page printed menu; the live menu had t
       now shows Coke, with a status line saying matches come from all categories. Not browser-tested
       (no node_modules in the cloud session): run `npm run dev`, open /pos → New order, and try
       "big master", "bigmaster", "bmw", "coke" under Hard Drinks, "chkn", "johny walker".
+- [x] **Peg pricing graded by pour size** (Nov 2026, via MCP): markup over the Full per-ml rate is
+      +35% at 30 ml, +25% at 60, +20% at 90, +10% at 180, +4% at Half, 0% at Full (30/60 rounded to
+      Rs 5, the rest to Rs 10). E.g. Khukuri Red 190 / 350 / 500 / 920 / 1,820 / 3,500. Applied to the nine
+      domestic liquors; premium stays Full-only. Reasoning: pegs cost the bar the most work and spillage,
+      and Old Durbar's Rs 2,900 bottle cost leaves only ~28% margin at the Full price.
+- [x] The options dialog says "Add a note for the bar" (+ bar ticket / bar placeholder) for bar-routed
+      dishes; kitchen dishes keep "cooking request". `station_kind` now rides on each POS menu item
+      (`app/(app)/pos/data.ts` → `CachedMenuItem`, optional so old offline caches still load).
+      Not browser-tested — open a peg (e.g. Khukuri Rum Red) in POS and check the wording.
 - [ ] Still live and possibly duplicating: `Chicken Khana`, old Current / Wai-Wai noodles (`Current (Boiled)`, `Mix Veg Current`,
       `Egg Current…`, `Egg Wai Wai…`). Fried Rice keeps its old `Chicken + Egg` variant (Rs 220, has an
       order) — reprice or retire with the owner.

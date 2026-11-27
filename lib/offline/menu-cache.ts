@@ -27,6 +27,12 @@ export type CachedMenuItem = {
    * re-check — so a stale cached value is harmless.
    */
   unavailable_now?: boolean
+  /**
+   * What kind of station the dish fires to ("bar", "kitchen"…), from its first
+   * route. Only used to word the order note — a drink's note goes to the bar, not
+   * a kitchen. Optional so a blob cached by an older build still deserializes.
+   */
+  station_kind?: string | null
   /** "today 18:00" / "tomorrow 11:00" / "Tue 18:00": when it can be ordered again. */
   available_again?: string | null
 }

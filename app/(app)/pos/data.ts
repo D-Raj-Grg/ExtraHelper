@@ -30,6 +30,7 @@ type MenuRow = {
   category_id: string | null
   item_variants: { id: string; name: string; price_delta_cents: number }[]
   item_modifiers: { modifiers: { id: string; name: string; price_cents: number } | null }[]
+  item_station_routes: { kitchen_stations: { kind: string } | null }[]
 }
 
 /**
@@ -60,7 +61,8 @@ export async function loadComposerData(tenantId: string): Promise<PosComposerDat
       .select(
         "id, name, base_price_cents, is_86, is_veg, image_url, category_id, " +
           "item_variants(id, name, price_delta_cents, sort), " +
-          "item_modifiers(modifiers(id, name, price_cents))",
+          "item_modifiers(modifiers(id, name, price_cents)), " +
+          "item_station_routes(kitchen_stations(kind))",
       )
       .eq("tenant_id", tenantId)
       .eq("is_active", true)
@@ -100,6 +102,7 @@ export async function loadComposerData(tenantId: string): Promise<PosComposerDat
     is_veg: m.is_veg,
     image_url: m.image_url,
     category_id: m.category_id,
+    station_kind: m.item_station_routes?.[0]?.kitchen_stations?.kind ?? null,
     unavailable_now: unavailableById.has(m.id),
     available_again: unavailableById.get(m.id) ?? null,
     variants: m.item_variants ?? [],
