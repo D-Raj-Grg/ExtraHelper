@@ -390,8 +390,9 @@ Owner (tsshetauda@gmail.com) sent a new 3-page printed menu; the live menu had t
       0.04/0.08/0.12/0.24/0.5/1 — before, Old Durbar and 8848 pegs had scale 1, so each peg deducted a
       whole bottle (inventory showed OD −12, 8848 −7.5 bottles; those counts need a stock count).
       Premium liquor is Full-bottle only (owner choice).
-- [ ] Still live and possibly duplicating: `Big Master Wine` (old) beside the two new Bigmaster rows,
-      `Chicken Khana`, old Current / Wai-Wai noodles (`Current (Boiled)`, `Mix Veg Current`,
+- [x] Wines/whisky split rows folded into variants: `Big Master Wine` (Fruit Mixed 1600 / Red Wine 1800,
+      old row reused so history is kept), `Robertson Wine`, `Johnnie Walker`, `Jack Daniels`, `Glenfiddich`.
+- [ ] Still live and possibly duplicating: `Chicken Khana`, old Current / Wai-Wai noodles (`Current (Boiled)`, `Mix Veg Current`,
       `Egg Current…`, `Egg Wai Wai…`). Fried Rice keeps its old `Chicken + Egg` variant (Rs 220, has an
       order) — reprice or retire with the owner.
 - [ ] Inventory for OD / 8848 is negative (−12 / −7.5 bottles) from the old peg scale — do a stock count.
