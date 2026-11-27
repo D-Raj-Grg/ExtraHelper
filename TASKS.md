@@ -365,7 +365,46 @@ Owner (tsshetauda@gmail.com) sent a new 3-page printed menu; the live menu had t
       thali / bottle / glass / cup / coal, with the veg circle-vs-triangle mark), uploaded to
       `menu-images/{tenant}/{item}.svg` and set as `image_url`. A real photo uploaded from /menu
       replaces the URL as usual. Re-run with `--all` to redraw the SVG ones only — never a photo.
-- [ ] Recipes/BOM for the 38 new dishes are empty — inventory auto-deduct won't fire for them.
+- [x] **Handwritten menu (Nov 2026) applied to `the-sekuwa-station` via MCP** (owner
+      tsshetauda@gmail.com): 113 → 200 dishes, 121 variants. Existing rows matched by name and
+      updated in place (ids kept); ~87 new dishes incl. new categories Chowmin / Rice / Daal / Salad /
+      Premium Liquor; items missing from the notebook left untouched. 92 unrouted dishes routed
+      (Sekuwa → Grill, drinks/liquor/cigarette → Bar, rest → Kitchen; Service Charge stays unrouted).
+      Chicken Chilly = 350 (owner decision); Omelet Current + Mix Veg + Buff Sausage double = 430
+      (handwriting read as "2130").
+- [x] **92 new photoless dishes got SVG placeholder art directly via MCP** (no service-role key
+      in the cloud session): a temporary SQL function drew the same families as the script and wrote
+      `data:image/svg+xml;base64,…` into `menu_items.image_url` (~2KB each; function dropped after).
+      Service Charge left without one. A real photo uploaded from /menu replaces it as usual.
+      The script `--all` flag only matches `.svg` Storage URLs, so it will not redraw these.
+- [x] **Variant merge + liquor pegs (Nov 2026, via MCP).** Per-meat / per-style rows folded into one
+      item per dish with option chips: Tass, Choila, Chilly, Shukuti, Sadeko, Khaja Set, Boil, Fry,
+      Roast, Crispy (meat as variant), Chowmin, Fried Rice (existing item reused), Daal, Salad, Aalu,
+      Paneer, Mushroom, Soyabean, Papad, Peanut, Tea. 200 → 135 active dishes. Old rows that have orders
+      were **deactivated, not deleted** (order lines keep their item link); only order-free rows created
+      this session were deleted. Left alone on purpose: Buff/Chicken Sausage, Coke, Veg Wai Wai Sadeko
+      (they have recipes + order history), Momo, Eggs, Current/Wai-Wai noodles (two axes).
+      Domestic liquor (Mustang Gold/Black, Khukuri Red/White/Spiced, 8848, Old Durbar, OD Black
+      Chimney, Signature) now has 30/60/90/180 ml, Half (375) and Full (750): 30 ml = Full/21 rounded up
+      to Rs 5, 60 = 2x, 90 = 3x, 180 = Full/3.8, Half = Full/2. **`recipe_scale` fixed** to
+      0.04/0.08/0.12/0.24/0.5/1 — before, Old Durbar and 8848 pegs had scale 1, so each peg deducted a
+      whole bottle (inventory showed OD −12, 8848 −7.5 bottles; those counts need a stock count).
+      Premium liquor is Full-bottle only (owner choice).
+- [x] Wines/whisky split rows folded into variants: `Big Master Wine` (Fruit Mixed 1600 / Red Wine 1800,
+      old row reused so history is kept), `Robertson Wine`, `Johnnie Walker`, `Jack Daniels`, `Glenfiddich`.
+- [x] **Dish search is fuzzy, ranked and category-blind** (`lib/menu-search.ts`, used by the POS grid,
+      the QR menu and /menu). "bigmaster" ↔ "Big Master Wine", prefixes, initials ("bmw"), one-typo
+      ("bigmastar", "cokee"), skipped letters ("chkn"), and variant/category words ("buff" → Tass), best
+      match first. In POS a search ignores the selected category chip — typing "coke" under Hard Drinks
+      now shows Coke, with a status line saying matches come from all categories. Not browser-tested
+      (no node_modules in the cloud session): run `npm run dev`, open /pos → New order, and try
+      "big master", "bigmaster", "bmw", "coke" under Hard Drinks, "chkn", "johny walker".
+- [ ] Still live and possibly duplicating: `Chicken Khana`, old Current / Wai-Wai noodles (`Current (Boiled)`, `Mix Veg Current`,
+      `Egg Current…`, `Egg Wai Wai…`). Fried Rice keeps its old `Chicken + Egg` variant (Rs 220, has an
+      order) — reprice or retire with the owner.
+- [ ] Inventory for OD / 8848 is negative (−12 / −7.5 bottles) from the old peg scale — do a stock count.
+- [ ] Recipes/BOM for the 38 new dishes are empty — inventory auto-deduct won't fire for them
+      (and now ~87 more from the Nov 2026 menu).
 
 ---
 

@@ -5,6 +5,7 @@ import { useMemo, useState } from "react"
 import { MenuTile } from "@/components/pos/menu-tile"
 import { ItemOptionsDialog } from "@/components/pos/item-options-dialog"
 import { ALL_CATEGORIES } from "@/components/pos/category-chips"
+import { rankMatches } from "@/lib/menu-search"
 import { draftUnitPrice, type CartController } from "@/components/pos/cart-types"
 import type { PosCategory, PosMenuItem } from "@/components/pos/types"
 
@@ -43,16 +44,40 @@ export function DishGrid({
   // <img>, and coming back re-creates it — the photo blanks and re-decodes on
   // every category tap, which is the flicker. Keeping them mounted keeps the
   // decoded image alive for the life of the screen.
-  const shown = useMemo(() => {
-    const q = search.trim().toLowerCase()
+  //
+  // A search looks across every category: someone typing "coke" while the Hard
+  // Drinks chip is selected wants Coke, not an empty grid and a hunt for the
+  // right chip. The chip only narrows the browse view. Matches come back best
+  // first, and the tiles are rendered in that order (not re-ordered with CSS),
+  // so tab order follows what the eye sees.
+  const searching = search.trim().length > 0
+  const { shown, ordered } = useMemo(() => {
     const ids = new Set<string>()
-    for (const m of menu) {
-      if (categoryId !== ALL_CATEGORIES && m.category_id !== categoryId) continue
-      if (q && !m.name.toLowerCase().includes(q)) continue
-      ids.add(m.id)
+    if (!searching) {
+      for (const m of menu) {
+        if (categoryId !== ALL_CATEGORIES && m.category_id !== categoryId) continue
+        ids.add(m.id)
+      }
+      return { shown: ids, ordered: menu }
     }
-    return ids
-  }, [menu, search, categoryId])
+    const categoryName = new Map(categories.map((c) => [c.id, c.name]))
+    const ranked = rankMatches(menu, search, (m) => ({
+      name: m.name,
+      extras: [
+        ...(m.variants ?? []).map((v) => v.name),
+        ...(m.category_id && categoryName.has(m.category_id) ? [categoryName.get(m.category_id)!] : []),
+      ],
+    }))
+    for (const m of ranked) ids.add(m.id)
+    // Matches first, in rank order; everything else stays mounted (hidden) after.
+    return { shown: ids, ordered: [...ranked, ...menu.filter((m) => !ids.has(m.id))] }
+  }, [menu, categories, search, searching, categoryId])
+
+  // The chip is ignored while searching — say so when that changes what's on screen.
+  const selectedCategoryName =
+    categoryId === ALL_CATEGORIES ? null : (categories.find((c) => c.id === categoryId)?.name ?? null)
+  const crossedCategories =
+    searching && selectedCategoryName !== null && menu.some((m) => shown.has(m.id) && m.category_id !== categoryId)
 
   // Derived from the live list, so an 86 mid-order updates the open dialog too.
   const openItem = openId ? (menu.find((m) => m.id === openId) ?? null) : null
@@ -75,9 +100,16 @@ export function DishGrid({
           a search went one keystroke too far. */}
       {shown.size === 0 ? (
         <p className="py-10 text-center text-sm text-muted-foreground">
-          {search.trim()
-            ? `Nothing matching “${search.trim()}”. Try a shorter word, or clear the search.`
+          {searching
+            ? `Nothing matching “${search.trim()}” in any category. Check the spelling, try the first few letters, or clear the search.`
             : "No dishes in this category yet."}
+        </p>
+      ) : null}
+
+      {crossedCategories ? (
+        <p role="status" className="mb-3 text-sm text-muted-foreground">
+          Showing {shown.size} {shown.size === 1 ? "match" : "matches"} from <strong>all categories</strong>, not
+          just {selectedCategoryName}.
         </p>
       ) : null}
 
@@ -89,7 +121,7 @@ export function DishGrid({
           auto-fill counts the columns itself: ~9rem is a comfortable tap target
           for a photo tile, and the count falls out of whatever width there is. */}
       <div className="grid grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] gap-3">
-        {menu.map((item) => (
+        {ordered.map((item) => (
           <MenuTile
             key={item.id}
             item={item}

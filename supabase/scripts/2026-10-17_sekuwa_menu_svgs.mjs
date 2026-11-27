@@ -125,21 +125,39 @@ const glassSoda = (x, y, fill) => `
   <rect x="${x + 20}" y="${y - 230}" width="14" height="200" rx="7" fill="${C.chilli}" transform="rotate(14 ${x + 27} ${y - 130})"/>`
 
 // --- pick a family from the dish name ---------------------------------------
+// Short bottle label: "Jack Daniels Old No. 07" -> "JACK", "100 Pipers" -> "100 PIPERS".
+function bottleLabel(name) {
+  const w = name.split(/\s+/)
+  const s = w[0].length <= 3 && w[1] ? `${w[0]} ${w[1]}` : w[0]
+  return s.toUpperCase().slice(0, 11)
+}
+
+const cigPack = (x, y) => `
+  <rect x="${x - 90}" y="${y - 130}" width="180" height="260" rx="14" fill="${C.plate}" stroke="${C.plateRim}" stroke-width="4"/>
+  <rect x="${x - 90}" y="${y - 130}" width="180" height="70" rx="14" fill="${C.accent}"/>
+  <rect x="${x - 60}" y="${y - 20}" width="120" height="14" rx="7" fill="${C.plateRim}"/>
+  <rect x="${x - 60}" y="${y + 20}" width="80" height="14" rx="7" fill="${C.plateRim}"/>
+  <circle cx="${x}" cy="${y + 90}" r="14" fill="${C.accent2}"/>`
+
 function art(name) {
   const n = name.toLowerCase()
   const x = 400, y = 250
-  if (/coal|hukkha|hookah/.test(n)) return coal(x, y)
+  if (/coal|hukkha|hukkah|hookah/.test(n)) return coal(x, y)
+  if (/shikhar|surya|cigarette/.test(n)) return cigPack(x, y)
   if (/hot water/.test(n)) return cup(x, y)
+  if (/tea|coffee|lemon/.test(n)) return cup(x, y)
   if (/sprite|coke|fanta|xtreme|red bull|lassi|water$/.test(n)) return glassSoda(x, y, /sprite/.test(n) ? "#cfead8" : /xtreme|red bull/.test(n) ? "#f2c66d" : "#e7e2d6")
   if (/wine/.test(n)) return bottle(x, y, "#5c1a2b", "WINE")
-  if (/beer|barahsinghe|tuborg|gorkha/.test(n)) return bottle(x, y, C.bottle, "BEER")
-  if (/rum|vodka|whisky|durbar|signature|ruslan|8848|old monk|khukuri/.test(n)) return bottle(x, y, C.bottle2, name.toUpperCase().slice(0, 11))
+  if (/beer|barahsinghe|tuborg|gorkha|carlsberg|heineken/.test(n)) return bottle(x, y, C.bottle, "BEER")
+  if (/rum|vodka|whisky|durbar|signature|ruslan|8848|old monk|khukuri|mustang|pipers|vat 69|chivas|jameson|jagermeister|jack daniels|johnnie|glenfiddich|absolut/.test(n))
+    return bottle(x, y, C.bottle2, bottleLabel(name))
   if (/momo/.test(n)) return momo(x, y)
-  if (/egg/.test(n) && !/wai wai|current|noodle/.test(n)) return plate(x, y, eggs(x, y - 10))
-  if (/wai wai|current|noodle|chowmein/.test(n)) return bowl(x, y)
+  if (/egg|omelet|pouch/.test(n) && !/wai wai|current|noodle|chowmin|rice/.test(n)) return plate(x, y, eggs(x, y - 10))
+  if (/wai wai|current|noodle|chowmein|chowmin|daal/.test(n)) return bowl(x, y)
   if (/khaja|thali/.test(n)) return thali(x, y)
-  if (/sekuwa|tass|choila|sukuti|bhutan/.test(n)) return plate(x, y, skewer(x, y - 10, 12))
-  if (/pakoda|paneer|soyabean|prawn|papad|peanut|aalu|salad|fry|fries/.test(n) && !/chicken|buff|pork|mutton/.test(n))
+  if (/sekuwa|tass|choila|sukuti|shukuti|bhutan|jibro/.test(n)) return plate(x, y, skewer(x, y - 10, 12))
+  if (/rice/.test(n)) return plate(x, y, chunks(x, y - 5, 6, C.noodle, C.egg))
+  if (/pakoda|paneer|soyabean|prawn|papad|peanut|aalu|salad|fry|fries|mushroom|kaju|matar|popcorn|pop corn/.test(n) && !/chicken|buff|pork|mutton/.test(n))
     return plate(x, y, chunks(x, y - 5, 6, C.noodle, C.accent2))
   return plate(x, y, chunks(x, y - 5, 6, C.meat, C.meat2))
 }

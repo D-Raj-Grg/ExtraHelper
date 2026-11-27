@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react"
 import { SearchIcon } from "lucide-react"
 import { deleteItem, toggleItem86 } from "@/app/(app)/menu/actions"
 import { money } from "@/lib/format"
+import { prepareQuery, scoreMatch } from "@/lib/menu-search"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -47,9 +48,9 @@ export function ItemsTab({
   const editing = editingId === null ? null : (items.find((i) => i.id === editingId) ?? null)
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase()
+    const q = prepareQuery(query)
     return items.filter((i) => {
-      if (q && !i.name.toLowerCase().includes(q)) return false
+      if (scoreMatch(q, { name: i.name }) === 0) return false
       if (soldOutOnly && !i.is_86) return false
       if (categoryFilter === "all") return true
       if (categoryFilter === UNCATEGORIZED) return !i.category_id
