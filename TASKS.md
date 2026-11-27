@@ -408,6 +408,14 @@ Owner (tsshetauda@gmail.com) sent a new 3-page printed menu; the live menu had t
       dishes; kitchen dishes keep "cooking request". `station_kind` now rides on each POS menu item
       (`app/(app)/pos/data.ts` → `CachedMenuItem`, optional so old offline caches still load).
       Not browser-tested — open a peg (e.g. Khukuri Rum Red) in POS and check the wording.
+- [x] **Revised prices applied (notebook round 2, via MCP).** Premium: Jack Daniels 9,000 / 9,500; Johnnie
+      Walker Black 11,000 / Red 7,500 / Double Black 12,500; Glenfiddich 12 = 17,500, 15 = 27,000; Robertson
+      White + Red 2,500; Heineken 700; Absolut Peach 7,500; 100 Pipers 6,500; VAT 69 6,800; Chivas 11,000;
+      Jameson 8,700; Jagermeister 8,500. Domestic Full prices: Khukuri Red 3,000 / White 3,100 / Spiced 3,200,
+      8848 3,200, Old Durbar 3,900, OD Black Chimney 5,100, Mustang Gold 1,600 / Black 1,800, Signature 3,600,
+      Big Master both 1,600 — peg ladders (30/60/90/180/Half) regraded from the new Full with the same
+      markup rule. Owner-confirmed: Heineken 700 (small "Gorkha Pilsner" note ignored), 8848 = 3,200,
+      Mustang 1,600 / 1,800.
 - [ ] Still live and possibly duplicating: `Chicken Khana`, old Current / Wai-Wai noodles (`Current (Boiled)`, `Mix Veg Current`,
       `Egg Current…`, `Egg Wai Wai…`). Fried Rice keeps its old `Chicken + Egg` variant (Rs 220, has an
       order) — reprice or retire with the owner.
