@@ -372,11 +372,11 @@ Owner (tsshetauda@gmail.com) sent a new 3-page printed menu; the live menu had t
       (Sekuwa → Grill, drinks/liquor/cigarette → Bar, rest → Kitchen; Service Charge stays unrouted).
       Chicken Chilly = 350 (owner decision); Omelet Current + Mix Veg + Buff Sausage double = 430
       (handwriting read as "2130").
-- [ ] **Run the SVG script for the 93 new photoless dishes** — needs the service-role key from
-      `.env.local`, which the cloud session doesn't have:
-      `node supabase/scripts/2026-10-17_sekuwa_menu_svgs.mjs 2fd2168a-0728-456a-8308-202134599864`.
-      Script now also draws whisky/brand bottles, cigarette packs, tea/coffee cups, rice, daal, chowmin,
-      omelets and mushroom dishes (previously they fell through to the meat plate).
+- [x] **92 new photoless dishes got SVG placeholder art directly via MCP** (no service-role key
+      in the cloud session): a temporary SQL function drew the same families as the script and wrote
+      `data:image/svg+xml;base64,…` into `menu_items.image_url` (~2KB each; function dropped after).
+      Service Charge left without one. A real photo uploaded from /menu replaces it as usual.
+      The script `--all` flag only matches `.svg` Storage URLs, so it will not redraw these.
 - [ ] Old items superseded by the new menu are still live and duplicate on POS: `Fried Rice`
       (variants), `Big Master Wine`, `Khukuri Rum` (no colour), old Wai-Wai / Current noodles
       (`Current (Boiled)`, `Mix Veg Current`, `Egg Current…`, `Egg Wai Wai…`), `Chicken Khana`. Owner
