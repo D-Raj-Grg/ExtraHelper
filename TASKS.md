@@ -416,9 +416,17 @@ Owner (tsshetauda@gmail.com) sent a new 3-page printed menu; the live menu had t
       Big Master both 1,600 — peg ladders (30/60/90/180/Half) regraded from the new Full with the same
       markup rule. Owner-confirmed: Heineken 700 (small "Gorkha Pilsner" note ignored), 8848 = 3,200,
       Mustang 1,600 / 1,800.
-- [ ] Still live and possibly duplicating: `Chicken Khana`, old Current / Wai-Wai noodles (`Current (Boiled)`, `Mix Veg Current`,
-      `Egg Current…`, `Egg Wai Wai…`). Fried Rice keeps its old `Chicken + Egg` variant (Rs 220, has an
-      order) — reprice or retire with the owner.
+- [x] **Duplicates switched off (11 items, hidden not deleted):** Current (Boiled), Mix Veg Current,
+      Egg Current (Mix Veg), Egg Current w/ Buff Sausage, Mix Wai Wai (Veg), Egg Wai Wai, Sukuti,
+      Sadeko Sukuti, Sadeko Bhutan, Chicken Khana, and the Rs 50 "Lahsun Poleko" (the Rs 100 one stays).
+- [ ] **Recipe gap from that:** Current (Boiled) (1 recipe), Egg Current (Mix Veg) (2) and Egg Current w/
+      Buff Sausage (3) held the recipes; their replacements (`Current (Veg/Non-Veg)`, `Boiled Egg Current +
+      Mix Veg`, `… with Buff Sausage`) have none, so those dishes no longer deduct stock until recipes are
+      copied over.
+- [ ] Fried Rice still carries the old `Chicken + Egg` (220, has an order) and `Buff + Egg` (210) variants.
+- [ ] Not on the notebook, left live: Aalu Pakoda, Paneer Pakoda, Paneer Aalu Pakoda, French Fry Chilly,
+      Veg Momo, Old Monk, Ruslan, Wai Wai (Boiled), Egg Wai Wai w/ Buff / Chicken Sausage, plus the Khaja Set
+      `Mix` / `Veg`, Roast `Buff` and Crispy `Mutton` variants. Ask the owner which are discontinued.
 - [ ] Inventory for OD / 8848 is negative (−12 / −7.5 bottles) from the old peg scale — do a stock count.
 - [ ] Recipes/BOM for the 38 new dishes are empty — inventory auto-deduct won't fire for them
       (and now ~87 more from the Nov 2026 menu).
