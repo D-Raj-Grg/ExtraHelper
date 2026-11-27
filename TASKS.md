@@ -377,11 +377,24 @@ Owner (tsshetauda@gmail.com) sent a new 3-page printed menu; the live menu had t
       `data:image/svg+xml;base64,…` into `menu_items.image_url` (~2KB each; function dropped after).
       Service Charge left without one. A real photo uploaded from /menu replaces it as usual.
       The script `--all` flag only matches `.svg` Storage URLs, so it will not redraw these.
-- [ ] Old items superseded by the new menu are still live and duplicate on POS: `Fried Rice`
-      (variants), `Big Master Wine`, `Khukuri Rum` (no colour), old Wai-Wai / Current noodles
-      (`Current (Boiled)`, `Mix Veg Current`, `Egg Current…`, `Egg Wai Wai…`), `Chicken Khana`. Owner
-      said leave missing items as-is — deactivate once they confirm. Quarter/Half/ML variants of
-      8848 / Old Durbar / Signature still carry old prices (notebook only gave bottle prices).
+- [x] **Variant merge + liquor pegs (Nov 2026, via MCP).** Per-meat / per-style rows folded into one
+      item per dish with option chips: Tass, Choila, Chilly, Shukuti, Sadeko, Khaja Set, Boil, Fry,
+      Roast, Crispy (meat as variant), Chowmin, Fried Rice (existing item reused), Daal, Salad, Aalu,
+      Paneer, Mushroom, Soyabean, Papad, Peanut, Tea. 200 → 135 active dishes. Old rows that have orders
+      were **deactivated, not deleted** (order lines keep their item link); only order-free rows created
+      this session were deleted. Left alone on purpose: Buff/Chicken Sausage, Coke, Veg Wai Wai Sadeko
+      (they have recipes + order history), Momo, Eggs, Current/Wai-Wai noodles (two axes).
+      Domestic liquor (Mustang Gold/Black, Khukuri Red/White/Spiced, 8848, Old Durbar, OD Black
+      Chimney, Signature) now has 30/60/90/180 ml, Half (375) and Full (750): 30 ml = Full/21 rounded up
+      to Rs 5, 60 = 2x, 90 = 3x, 180 = Full/3.8, Half = Full/2. **`recipe_scale` fixed** to
+      0.04/0.08/0.12/0.24/0.5/1 — before, Old Durbar and 8848 pegs had scale 1, so each peg deducted a
+      whole bottle (inventory showed OD −12, 8848 −7.5 bottles; those counts need a stock count).
+      Premium liquor is Full-bottle only (owner choice).
+- [ ] Still live and possibly duplicating: `Big Master Wine` (old) beside the two new Bigmaster rows,
+      `Chicken Khana`, old Current / Wai-Wai noodles (`Current (Boiled)`, `Mix Veg Current`,
+      `Egg Current…`, `Egg Wai Wai…`). Fried Rice keeps its old `Chicken + Egg` variant (Rs 220, has an
+      order) — reprice or retire with the owner.
+- [ ] Inventory for OD / 8848 is negative (−12 / −7.5 bottles) from the old peg scale — do a stock count.
 - [ ] Recipes/BOM for the 38 new dishes are empty — inventory auto-deduct won't fire for them
       (and now ~87 more from the Nov 2026 menu).
 
