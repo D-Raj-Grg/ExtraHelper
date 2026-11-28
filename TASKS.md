@@ -420,8 +420,8 @@ Owner (tsshetauda@gmail.com) sent a new 3-page printed menu; the live menu had t
       Egg Current (Mix Veg), Egg Current w/ Buff Sausage, Mix Wai Wai (Veg), Egg Wai Wai, Sukuti,
       Sadeko Sukuti, Sadeko Bhutan, Chicken Khana, and the Rs 50 "Lahsun Poleko" (the Rs 100 one stays).
 - [x] **Shikhar Ice = Rs 30** (owner correction; I had misread the notebook as 80, it was 25 before).
-      Surya Luxury 35 / Surya Light 40 unchanged. Veg Khaja Set lives on as the `Veg` option (Rs 280) of
-      the merged `Khaja Set`; the old standalone row is hidden.
+      Surya Luxury 35 / Surya Light 40 unchanged. Veg Khaja Set lives on as the `Veg` option of
+      the merged `Khaja Set`, now **Rs 300** (owner, was 280); the old standalone row is hidden.
 - [ ] **Recipe gap from that:** Current (Boiled) (1 recipe), Egg Current (Mix Veg) (2) and Egg Current w/
       Buff Sausage (3) held the recipes; their replacements (`Current (Veg/Non-Veg)`, `Boiled Egg Current +
       Mix Veg`, `… with Buff Sausage`) have none, so those dishes no longer deduct stock until recipes are
